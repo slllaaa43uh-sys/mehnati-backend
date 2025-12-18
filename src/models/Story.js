@@ -16,6 +16,7 @@ const storySchema = new mongoose.Schema({
   },
   media: {
     url: String,
+    publicId: String, // Cloudinary public ID for deletion
     type: {
       type: String,
       enum: ['image', 'video']

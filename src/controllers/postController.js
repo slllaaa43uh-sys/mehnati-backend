@@ -27,11 +27,12 @@ exports.createPost = async (req, res, next) => {
       jobDetails
     } = req.body;
 
-    // Handle media files
+    // Handle media files from Cloudinary
     let media = [];
     if (req.files && req.files.length > 0) {
       media = req.files.map(file => ({
-        url: `/uploads/${file.filename}`,
+        url: file.path, // Cloudinary URL
+        publicId: file.filename, // Cloudinary public ID for deletion
         type: file.mimetype.startsWith('video') ? 'video' : 'image'
       }));
     }

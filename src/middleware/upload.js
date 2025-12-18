@@ -1,17 +1,5 @@
 const multer = require('multer');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
-
-// Storage configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  }
-});
+const { postStorage, avatarStorage, storyStorage } = require('../config/cloudinary');
 
 // File filter
 const fileFilter = (req, file, cb) => {
@@ -31,19 +19,44 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Upload configurations
-const upload = multer({
-  storage,
+// Upload configurations for posts
+const postUpload = multer({
+  storage: postStorage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB max
+    fileSize: 100 * 1024 * 1024 // 100MB max for videos
+  }
+});
+
+// Upload configuration for avatars
+const avatarUpload = multer({
+  storage: avatarStorage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('نوع الملف غير مدعوم. الأنواع المدعومة: صور (JPEG, PNG, WebP)'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max for avatars
+  }
+});
+
+// Upload configuration for stories
+const storyUpload = multer({
+  storage: storyStorage,
+  fileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB max for stories
   }
 });
 
 // Export different upload configurations
 module.exports = {
-  single: upload.single('file'),
-  avatar: upload.single('avatar'),
-  media: upload.array('media', 10), // Max 10 files
-  storyMedia: upload.single('media')
+  single: postUpload.single('file'),
+  avatar: avatarUpload.single('avatar'),
+  media: postUpload.array('media', 10), // Max 10 files
+  storyMedia: storyUpload.single('media')
 };

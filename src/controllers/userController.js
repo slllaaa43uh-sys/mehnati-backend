@@ -52,9 +52,9 @@ exports.updateMe = async (req, res, next) => {
       }
     });
 
-    // Handle avatar upload
+    // Handle avatar upload from Cloudinary
     if (req.file) {
-      updates.avatar = `/uploads/${req.file.filename}`;
+      updates.avatar = req.file.path; // Cloudinary URL
     }
 
     const user = await User.findByIdAndUpdate(

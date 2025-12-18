@@ -12,7 +12,8 @@ exports.createStory = async (req, res, next) => {
     let media = null;
     if (req.file) {
       media = {
-        url: `/uploads/${req.file.filename}`,
+        url: req.file.path, // Cloudinary URL
+        publicId: req.file.filename, // Cloudinary public ID
         type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
       };
     }
