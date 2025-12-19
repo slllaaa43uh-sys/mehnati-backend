@@ -11,11 +11,19 @@ exports.createStory = async (req, res, next) => {
 
     let media = null;
     if (req.file) {
+      // Cloudinary returns the URL in req.file.path
       media = {
-        url: req.file.path, // Cloudinary URL
-        publicId: req.file.filename, // Cloudinary public ID
+        url: req.file.path,
+        publicId: req.file.filename,
         type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
       };
+      
+      // Debug log
+      console.log('Story media uploaded:', {
+        url: media.url,
+        type: media.type,
+        publicId: media.publicId
+      });
     }
 
     const story = await Story.create({
@@ -33,21 +41,24 @@ exports.createStory = async (req, res, next) => {
       story
     });
   } catch (error) {
+    console.error('Error creating story:', error);
     next(error);
   }
 };
 
-// @desc    Get all stories feed (for everyone)
+// @desc    Get all stories feed (PUBLIC - for everyone)
 // @route   GET /api/v1/stories/feed
-// @access  Private
+// @access  Private (needs token to know current user)
 exports.getStoriesFeed = async (req, res, next) => {
   try {
-    // Get ALL stories from last 24 hours (for everyone)
+    // Get ALL stories from last 24 hours (for EVERYONE)
     const stories = await Story.find({
       expiresAt: { $gt: new Date() }
     })
       .populate('user', 'name avatar')
       .sort({ createdAt: -1 });
+
+    console.log(`Found ${stories.length} stories in feed`);
 
     // Group stories by user
     const groupedStories = {};
@@ -58,17 +69,19 @@ exports.getStoriesFeed = async (req, res, next) => {
           user: story.user,
           stories: [],
           hasUnseen: false,
-          isUser: userId === req.user.id
+          isUser: req.user ? userId === req.user.id : false
         };
       }
       groupedStories[userId].stories.push(story);
       
       // Check if story is unseen
-      const hasViewed = story.views.some(
-        v => v.user && v.user.toString() === req.user.id
-      );
-      if (!hasViewed && userId !== req.user.id) {
-        groupedStories[userId].hasUnseen = true;
+      if (req.user) {
+        const hasViewed = story.views.some(
+          v => v.user && v.user.toString() === req.user.id
+        );
+        if (!hasViewed && userId !== req.user.id) {
+          groupedStories[userId].hasUnseen = true;
+        }
       }
     });
 
@@ -83,9 +96,53 @@ exports.getStoriesFeed = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
+      count: stories.length,
       storyGroups
     });
   } catch (error) {
+    console.error('Error fetching stories feed:', error);
+    next(error);
+  }
+};
+
+// @desc    Get ALL stories (PUBLIC endpoint - no auth required)
+// @route   GET /api/v1/stories/all
+// @access  Public
+exports.getAllStories = async (req, res, next) => {
+  try {
+    // Get ALL stories from last 24 hours
+    const stories = await Story.find({
+      expiresAt: { $gt: new Date() }
+    })
+      .populate('user', 'name avatar')
+      .sort({ createdAt: -1 });
+
+    console.log(`Found ${stories.length} total stories`);
+
+    // Group stories by user
+    const groupedStories = {};
+    stories.forEach(story => {
+      const userId = story.user._id.toString();
+      if (!groupedStories[userId]) {
+        groupedStories[userId] = {
+          user: story.user,
+          stories: [],
+          hasUnseen: true,
+          isUser: false
+        };
+      }
+      groupedStories[userId].stories.push(story);
+    });
+
+    const storyGroups = Object.values(groupedStories);
+
+    res.status(200).json({
+      success: true,
+      count: stories.length,
+      storyGroups
+    });
+  } catch (error) {
+    console.error('Error fetching all stories:', error);
     next(error);
   }
 };
@@ -102,11 +159,15 @@ exports.getUserStories = async (req, res, next) => {
       .populate('user', 'name avatar')
       .sort({ createdAt: -1 });
 
+    console.log(`Found ${stories.length} stories for user ${req.params.userId}`);
+
     res.status(200).json({
       success: true,
+      count: stories.length,
       stories
     });
   } catch (error) {
+    console.error('Error fetching user stories:', error);
     next(error);
   }
 };
