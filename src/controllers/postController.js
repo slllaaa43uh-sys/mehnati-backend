@@ -133,6 +133,13 @@ exports.getPosts = async (req, res, next) => {
     const posts = await Post.find(query)
       .populate('user', 'name avatar isVerified')
       .populate('reactions.user', 'name avatar')
+      .populate({
+        path: 'originalPost',
+        populate: {
+          path: 'user',
+          select: 'name avatar isVerified'
+        }
+      })
       .sort({ isFeatured: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -162,7 +169,14 @@ exports.getPost = async (req, res, next) => {
       .populate('user', 'name avatar bio isVerified followersCount')
       .populate('reactions.user', 'name avatar')
       .populate('comments.user', 'name avatar')
-      .populate('comments.replies.user', 'name avatar');
+      .populate('comments.replies.user', 'name avatar')
+      .populate({
+        path: 'originalPost',
+        populate: {
+          path: 'user',
+          select: 'name avatar isVerified'
+        }
+      });
 
     if (!post) {
       return res.status(404).json({
@@ -751,6 +765,125 @@ exports.deleteReply = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'تم حذف الرد بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// @desc    Repost a post
+// @route   POST /api/v1/posts/:id/repost
+// @access  Private
+exports.repostPost = async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    const originalPostId = req.params.id;
+
+    // Find the original post
+    const originalPost = await Post.findById(originalPostId)
+      .populate('user', 'name avatar');
+
+    if (!originalPost) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور الأصلي غير موجود'
+      });
+    }
+
+    // Check if user already reposted this post
+    const existingRepost = await Post.findOne({
+      user: req.user.id,
+      originalPost: originalPostId,
+      isRepost: true
+    });
+
+    if (existingRepost) {
+      return res.status(400).json({
+        success: false,
+        message: 'لقد قمت بإعادة نشر هذا المنشور مسبقاً'
+      });
+    }
+
+    // Create the repost
+    const repost = await Post.create({
+      user: req.user.id,
+      content: content || '',
+      type: 'repost',
+      isRepost: true,
+      originalPost: originalPostId,
+      status: 'approved'
+    });
+
+    // Increment repost count on original post
+    originalPost.repostsCount = (originalPost.repostsCount || 0) + 1;
+    await originalPost.save();
+
+    // Populate user data and original post
+    await repost.populate('user', 'name avatar');
+    await repost.populate({
+      path: 'originalPost',
+      populate: {
+        path: 'user',
+        select: 'name avatar'
+      }
+    });
+
+    // Create notification for original post owner
+    if (originalPost.user._id.toString() !== req.user.id) {
+      await Notification.create({
+        recipient: originalPost.user._id,
+        sender: req.user.id,
+        type: 'repost',
+        post: originalPost._id
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'تمت إعادة النشر بنجاح',
+      post: repost
+    });
+  } catch (error) {
+    console.error('Repost error:', error);
+    next(error);
+  }
+};
+
+// @desc    Undo repost (delete repost)
+// @route   DELETE /api/v1/posts/:id/repost
+// @access  Private
+exports.undoRepost = async (req, res, next) => {
+  try {
+    const originalPostId = req.params.id;
+
+    // Find the user's repost of this post
+    const repost = await Post.findOne({
+      user: req.user.id,
+      originalPost: originalPostId,
+      isRepost: true
+    });
+
+    if (!repost) {
+      return res.status(404).json({
+        success: false,
+        message: 'لم تقم بإعادة نشر هذا المنشور'
+      });
+    }
+
+    // Decrement repost count on original post
+    const originalPost = await Post.findById(originalPostId);
+    if (originalPost) {
+      originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
+      await originalPost.save();
+    }
+
+    // Delete the repost
+    await repost.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إلغاء إعادة النشر'
     });
   } catch (error) {
     next(error);

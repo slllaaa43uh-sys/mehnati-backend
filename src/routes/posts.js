@@ -15,7 +15,9 @@ const {
   deleteReply,
   getShortsForYou,
   getShortsFriends,
-  getUserPosts
+  getUserPosts,
+  repostPost,
+  undoRepost
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -38,5 +40,9 @@ router.post('/:id/comments/:commentId/like', protect, likeComment);
 router.post('/:id/comments/:commentId/replies/:replyId/like', protect, likeReply);
 router.delete('/:id/comments/:commentId', protect, deleteComment);
 router.delete('/:id/comments/:commentId/replies/:replyId', protect, deleteReply);
+
+// Repost routes
+router.post('/:id/repost', protect, repostPost);
+router.delete('/:id/repost', protect, undoRepost);
 
 module.exports = router;

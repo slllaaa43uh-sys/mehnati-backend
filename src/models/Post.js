@@ -33,8 +33,19 @@ const postSchema = new mongoose.Schema({
   // نوع المنشور
   type: {
     type: String,
-    enum: ['general', 'job', 'haraj', 'service'],
+    enum: ['general', 'job', 'haraj', 'service', 'repost'],
     default: 'general'
+  },
+  
+  // إعادة النشر (Repost)
+  isRepost: {
+    type: Boolean,
+    default: false
+  },
+  originalPost: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post',
+    default: null
   },
   
   // التصنيف
@@ -172,6 +183,12 @@ const postSchema = new mongoose.Schema({
     default: 0
   },
   
+  // عدد إعادات النشر
+  repostsCount: {
+    type: Number,
+    default: 0
+  },
+  
   // المشاهدات
   views: {
     type: Number,
@@ -235,6 +252,7 @@ postSchema.index({ isFeatured: 1, createdAt: -1 });
 postSchema.index({ displayPage: 1, createdAt: -1 });
 postSchema.index({ isShort: 1, createdAt: -1 });
 postSchema.index({ status: 1 });
+postSchema.index({ originalPost: 1 }); // Index for reposts
 
 // Virtual for likes count
 postSchema.virtual('likesCount').get(function() {
