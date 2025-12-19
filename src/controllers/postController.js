@@ -2,6 +2,22 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 
+// Helper function to create notification
+const createNotification = async (data) => {
+  try {
+    // Don't create notification if sender is recipient
+    if (data.sender.toString() === data.recipient.toString()) {
+      return null;
+    }
+
+    const notification = await Notification.create(data);
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    return null;
+  }
+};
+
 // @desc    Create new post
 // @route   POST /api/v1/posts
 // @access  Private
@@ -308,15 +324,16 @@ exports.reactToPost = async (req, res, next) => {
       // Add reaction
       post.reactions.push({ user: req.user.id, type });
 
-      // Create notification (if not own post)
-      if (post.user.toString() !== req.user.id) {
-        await Notification.create({
+      // Create notification (if not own post and not a short)
+      if (post.user.toString() !== req.user.id && !post.isShort) {
+        await createNotification({
           recipient: post.user,
           sender: req.user.id,
           type: 'like',
           post: post._id,
           metadata: {
-            postContent: post.content ? post.content.substring(0, 100) : null
+            postContent: post.content ? post.content.substring(0, 100) : null,
+            displayPage: post.displayPage
           }
         });
       }
@@ -364,17 +381,24 @@ exports.addComment = async (req, res, next) => {
     post.comments.push(comment);
     await post.save();
 
-    // Create notification
-    if (post.user.toString() !== req.user.id) {
-      await Notification.create({
+    // Get the new comment's ID
+    const newComment = post.comments[post.comments.length - 1];
+
+    // Create notification (if not own post and not a short)
+    if (post.user.toString() !== req.user.id && !post.isShort) {
+      await createNotification({
         recipient: post.user,
         sender: req.user.id,
         type: 'comment',
         post: post._id,
-        comment: { text: text.trim() },
+        comment: { 
+          text: text.trim(),
+          commentId: newComment._id
+        },
         metadata: {
           commentText: text.trim().substring(0, 100),
-          postContent: post.content ? post.content.substring(0, 50) : null
+          postContent: post.content ? post.content.substring(0, 50) : null,
+          displayPage: post.displayPage
         }
       });
     }
@@ -516,17 +540,29 @@ exports.addReply = async (req, res, next) => {
     comment.replies.push(reply);
     await post.save();
 
-    // Create notification
-    if (comment.user.toString() !== req.user.id) {
-      await Notification.create({
+    // Get the new reply's ID
+    const newReply = comment.replies[comment.replies.length - 1];
+
+    // Create notification for comment owner (if not own comment and not a short)
+    if (comment.user.toString() !== req.user.id && !post.isShort) {
+      await createNotification({
         recipient: comment.user,
         sender: req.user.id,
         type: 'reply',
         post: post._id,
-        comment: { text: text.trim(), commentId: comment._id },
+        comment: { 
+          text: comment.text,
+          commentId: comment._id 
+        },
+        reply: {
+          text: text.trim(),
+          replyId: newReply._id,
+          commentId: comment._id
+        },
         metadata: {
           replyText: text.trim().substring(0, 100),
-          commentText: comment.text ? comment.text.substring(0, 50) : null
+          commentText: comment.text ? comment.text.substring(0, 50) : null,
+          displayPage: post.displayPage
         }
       });
     }
@@ -535,12 +571,12 @@ exports.addReply = async (req, res, next) => {
     await post.populate('comments.replies.user', 'name avatar');
 
     const updatedComment = post.comments.id(commentId);
-    const newReply = updatedComment.replies[updatedComment.replies.length - 1];
+    const populatedReply = updatedComment.replies[updatedComment.replies.length - 1];
 
     res.status(201).json({
       success: true,
       message: 'تم إضافة الرد',
-      reply: newReply
+      reply: populatedReply
     });
   } catch (error) {
     next(error);
@@ -589,16 +625,20 @@ exports.likeComment = async (req, res, next) => {
       // Like
       comment.likes.push({ user: req.user.id });
 
-      // Create notification (if not own comment)
-      if (comment.user.toString() !== req.user.id) {
-        await Notification.create({
+      // Create notification (if not own comment and not a short)
+      if (comment.user.toString() !== req.user.id && !post.isShort) {
+        await createNotification({
           recipient: comment.user,
           sender: req.user.id,
           type: 'comment_like',
           post: post._id,
-          comment: { commentId: comment._id },
+          comment: { 
+            text: comment.text,
+            commentId: comment._id 
+          },
           metadata: {
-            commentText: comment.text ? comment.text.substring(0, 100) : null
+            commentText: comment.text ? comment.text.substring(0, 100) : null,
+            displayPage: post.displayPage
           }
         });
       }
@@ -666,16 +706,25 @@ exports.likeReply = async (req, res, next) => {
       // Like
       reply.likes.push({ user: req.user.id });
 
-      // Create notification (if not own reply)
-      if (reply.user.toString() !== req.user.id) {
-        await Notification.create({
+      // Create notification (if not own reply and not a short)
+      if (reply.user.toString() !== req.user.id && !post.isShort) {
+        await createNotification({
           recipient: reply.user,
           sender: req.user.id,
           type: 'reply_like',
           post: post._id,
-          comment: { commentId: comment._id },
+          comment: { 
+            text: comment.text,
+            commentId: comment._id 
+          },
+          reply: {
+            text: reply.text,
+            replyId: reply._id,
+            commentId: comment._id
+          },
           metadata: {
-            replyText: reply.text ? reply.text.substring(0, 100) : null
+            replyText: reply.text ? reply.text.substring(0, 100) : null,
+            displayPage: post.displayPage
           }
         });
       }
@@ -810,6 +859,14 @@ exports.repostPost = async (req, res, next) => {
       });
     }
 
+    // Don't allow reposting shorts
+    if (originalPost.isShort) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن إعادة نشر الفيديوهات القصيرة'
+      });
+    }
+
     // Check if user already reposted this post
     const existingRepost = await Post.findOne({
       user: req.user.id,
@@ -831,6 +888,7 @@ exports.repostPost = async (req, res, next) => {
       type: 'repost',
       isRepost: true,
       originalPost: originalPostId,
+      displayPage: originalPost.displayPage, // Keep same display page
       status: 'approved'
     });
 
@@ -850,13 +908,14 @@ exports.repostPost = async (req, res, next) => {
 
     // Create notification for original post owner
     if (originalPost.user._id.toString() !== req.user.id) {
-      await Notification.create({
+      await createNotification({
         recipient: originalPost.user._id,
         sender: req.user.id,
         type: 'repost',
         post: originalPost._id,
         metadata: {
-          postContent: originalPost.content ? originalPost.content.substring(0, 100) : null
+          postContent: originalPost.content ? originalPost.content.substring(0, 100) : null,
+          displayPage: originalPost.displayPage
         }
       });
     }

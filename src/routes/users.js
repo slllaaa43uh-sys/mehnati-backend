@@ -8,8 +8,11 @@ const {
   getFollowStatus,
   getSuggestedUsers,
   getNotifications,
+  getUnreadCount,
   markNotificationRead,
+  markAllNotificationsRead,
   deleteNotification,
+  deleteAllNotifications,
   getSections,
   createSection,
   deleteSection
@@ -21,7 +24,10 @@ const upload = require('../middleware/upload');
 router.get('/me', protect, getMe);
 router.put('/me', protect, upload.avatar, updateMe);
 
-// Notifications
+// Notifications - Order matters! More specific routes first
+router.get('/me/notifications/unread-count', protect, getUnreadCount);
+router.put('/me/notifications/read-all', protect, markAllNotificationsRead);
+router.delete('/me/notifications/all', protect, deleteAllNotifications);
 router.get('/me/notifications', protect, getNotifications);
 router.put('/me/notifications/:id/read', protect, markNotificationRead);
 router.delete('/me/notifications/:id', protect, deleteNotification);

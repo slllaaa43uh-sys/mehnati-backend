@@ -222,12 +222,12 @@ exports.getSuggestedUsers = async (req, res, next) => {
 // @access  Private
 exports.getNotifications = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const notifications = await Notification.find({ recipient: req.user.id })
       .populate('sender', 'name avatar')
-      .populate('post', 'title content media')
+      .populate('post', 'title content media displayPage isShort')
       .populate('short', 'title content media')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -238,9 +238,33 @@ exports.getNotifications = async (req, res, next) => {
       isRead: false
     });
 
+    const total = await Notification.countDocuments({ recipient: req.user.id });
+
     res.status(200).json({
       success: true,
       notifications,
+      unreadCount,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get unread notifications count
+// @route   GET /api/v1/users/me/notifications/unread-count
+// @access  Private
+exports.getUnreadCount = async (req, res, next) => {
+  try {
+    const unreadCount = await Notification.countDocuments({
+      recipient: req.user.id,
+      isRead: false
+    });
+
+    res.status(200).json({
+      success: true,
       unreadCount
     });
   } catch (error) {
@@ -275,6 +299,26 @@ exports.markNotificationRead = async (req, res, next) => {
   }
 };
 
+// @desc    Mark all notifications as read (when clicking bell icon)
+// @route   PUT /api/v1/users/me/notifications/read-all
+// @access  Private
+exports.markAllNotificationsRead = async (req, res, next) => {
+  try {
+    const result = await Notification.updateMany(
+      { recipient: req.user.id, isRead: false },
+      { isRead: true, readAt: new Date() }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديد جميع الإشعارات كمقروءة',
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Delete notification
 // @route   DELETE /api/v1/users/me/notifications/:id
 // @access  Private
@@ -295,6 +339,23 @@ exports.deleteNotification = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'تم حذف الإشعار'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete all notifications
+// @route   DELETE /api/v1/users/me/notifications/all
+// @access  Private
+exports.deleteAllNotifications = async (req, res, next) => {
+  try {
+    const result = await Notification.deleteMany({ recipient: req.user.id });
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف جميع الإشعارات',
+      deletedCount: result.deletedCount
     });
   } catch (error) {
     next(error);

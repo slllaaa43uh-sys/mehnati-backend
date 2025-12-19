@@ -15,7 +15,7 @@ exports.getNotifications = async (req, res, next) => {
 
     const notifications = await Notification.find(query)
       .populate('sender', 'name avatar')
-      .populate('post', 'content media')
+      .populate('post', 'content media displayPage isShort')
       .populate('story', 'text media')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -83,26 +83,28 @@ exports.markAsRead = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'تم تحديد الإشعار كمقروء'
+      message: 'تم تحديد الإشعار كمقروء',
+      notification
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Mark all notifications as read
+// @desc    Mark all notifications as read (when clicking bell icon)
 // @route   PUT /api/v1/notifications/read-all
 // @access  Private
 exports.markAllAsRead = async (req, res, next) => {
   try {
-    await Notification.updateMany(
+    const result = await Notification.updateMany(
       { recipient: req.user.id, isRead: false },
       { isRead: true, readAt: new Date() }
     );
 
     res.status(200).json({
       success: true,
-      message: 'تم تحديد جميع الإشعارات كمقروءة'
+      message: 'تم تحديد جميع الإشعارات كمقروءة',
+      modifiedCount: result.modifiedCount
     });
   } catch (error) {
     next(error);
@@ -142,11 +144,41 @@ exports.deleteNotification = async (req, res, next) => {
 // @access  Private
 exports.deleteAllNotifications = async (req, res, next) => {
   try {
-    await Notification.deleteMany({ recipient: req.user.id });
+    const result = await Notification.deleteMany({ recipient: req.user.id });
 
     res.status(200).json({
       success: true,
-      message: 'تم حذف جميع الإشعارات'
+      message: 'تم حذف جميع الإشعارات',
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete multiple notifications
+// @route   DELETE /api/v1/notifications/bulk
+// @access  Private
+exports.deleteBulkNotifications = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'يجب توفير قائمة معرفات الإشعارات'
+      });
+    }
+
+    const result = await Notification.deleteMany({
+      _id: { $in: ids },
+      recipient: req.user.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف الإشعارات المحددة',
+      deletedCount: result.deletedCount
     });
   } catch (error) {
     next(error);
@@ -154,6 +186,7 @@ exports.deleteAllNotifications = async (req, res, next) => {
 };
 
 // Helper function to create notification (used by other controllers)
+// Types: like, comment, reply, comment_like, reply_like, repost, follow, mention, share, story_view
 exports.createNotification = async (data) => {
   try {
     // Don't create notification if sender is recipient
@@ -161,10 +194,38 @@ exports.createNotification = async (data) => {
       return null;
     }
 
+    // Check for duplicate notification within last 5 minutes to prevent spam
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const existingNotification = await Notification.findOne({
+      recipient: data.recipient,
+      sender: data.sender,
+      type: data.type,
+      post: data.post,
+      createdAt: { $gte: fiveMinutesAgo }
+    });
+
+    if (existingNotification) {
+      return existingNotification;
+    }
+
     const notification = await Notification.create(data);
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);
     return null;
+  }
+};
+
+// Helper function to delete notifications when action is undone (unlike, uncomment, etc.)
+exports.deleteNotificationByAction = async (data) => {
+  try {
+    await Notification.deleteOne({
+      recipient: data.recipient,
+      sender: data.sender,
+      type: data.type,
+      post: data.post
+    });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
   }
 };
