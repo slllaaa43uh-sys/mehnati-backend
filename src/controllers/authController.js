@@ -70,6 +70,22 @@ exports.login = async (req, res, next) => {
       });
     }
 
+    // Check if account is deleted
+    if (user.isDeleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'تم حذف حسابك ولا يمكنك الدخول إليه مرة أخرى'
+      });
+    }
+
+    // Check if account is deactivated
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'حسابك معطل. يرجى التواصل مع الدعم'
+      });
+    }
+
     // Check if password matches
     const isMatch = await user.matchPassword(password);
 

@@ -15,14 +15,17 @@ const {
   deleteAllNotifications,
   getSections,
   createSection,
-  deleteSection
+  deleteSection,
+  getTotalLikes,
+  deleteAccount
 } = require('../controllers/userController');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 // Current user routes
 router.get('/me', protect, getMe);
 router.put('/me', protect, upload.avatar, updateMe);
+router.delete('/me/account', protect, deleteAccount);
 
 // Notifications - Order matters! More specific routes first
 router.get('/me/notifications/unread-count', protect, getUnreadCount);
@@ -39,6 +42,9 @@ router.delete('/sections/:sectionId', protect, deleteSection);
 
 // Suggested users
 router.get('/suggested', protect, getSuggestedUsers);
+
+// Total likes for user
+router.get('/:id/total-likes', optionalAuth, getTotalLikes);
 
 // User by ID
 router.get('/:id', getUser);

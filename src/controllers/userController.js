@@ -23,12 +23,20 @@ exports.getUser = async (req, res, next) => {
     const postsCount = await Post.countDocuments({ user: user._id, status: 'approved' });
     const shortsCount = await Post.countDocuments({ user: user._id, isShort: true, status: 'approved' });
 
+    // Calculate total likes on all user's posts
+    const userPosts = await Post.find({ user: user._id, status: 'approved' });
+    let totalLikes = 0;
+    userPosts.forEach(post => {
+      totalLikes += post.reactions ? post.reactions.length : 0;
+    });
+
     res.status(200).json({
       success: true,
       user: {
         ...user.toObject(),
         postsCount,
         shortsCount,
+        totalLikes,
         followersCount: user.followers.length,
         followingCount: user.following.length
       }
@@ -85,11 +93,19 @@ exports.getMe = async (req, res, next) => {
 
     const postsCount = await Post.countDocuments({ user: user._id, status: 'approved' });
 
+    // Calculate total likes on all user's posts
+    const userPosts = await Post.find({ user: user._id, status: 'approved' });
+    let totalLikes = 0;
+    userPosts.forEach(post => {
+      totalLikes += post.reactions ? post.reactions.length : 0;
+    });
+
     res.status(200).json({
       success: true,
       user: {
         ...user.toObject(),
         postsCount,
+        totalLikes,
         followersCount: user.followers.length,
         followingCount: user.following.length
       }
@@ -411,6 +427,123 @@ exports.deleteSection = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'تم حذف القسم'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// @desc    Get total likes count for user
+// @route   GET /api/v1/users/:id/total-likes
+// @access  Public
+exports.getTotalLikes = async (req, res, next) => {
+  try {
+    const userId = req.params.id === 'me' ? req.user?.id : req.params.id;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'معرف المستخدم مطلوب'
+      });
+    }
+
+    // حساب مجموع الإعجابات على جميع منشورات المستخدم
+    const posts = await Post.find({ user: userId, status: 'approved' });
+    
+    let totalLikes = 0;
+    posts.forEach(post => {
+      totalLikes += post.reactions ? post.reactions.length : 0;
+    });
+
+    res.status(200).json({
+      success: true,
+      totalLikes
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete user account and all associated data
+// @route   DELETE /api/v1/users/me/account
+// @access  Private
+exports.deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const Story = require('../models/Story');
+    const Report = require('../models/Report');
+
+    // 1. حذف جميع منشورات المستخدم
+    await Post.deleteMany({ user: userId });
+
+    // 2. حذف جميع القصص
+    await Story.deleteMany({ user: userId });
+
+    // 3. حذف جميع الإشعارات (المرسلة والمستلمة)
+    await Notification.deleteMany({
+      $or: [
+        { recipient: userId },
+        { sender: userId }
+      ]
+    });
+
+    // 4. حذف جميع البلاغات المرسلة من المستخدم
+    await Report.deleteMany({ reporter: userId });
+
+    // 5. حذف تعليقات المستخدم من جميع المنشورات
+    await Post.updateMany(
+      {},
+      { $pull: { comments: { user: userId } } }
+    );
+
+    // 6. حذف ردود المستخدم من جميع التعليقات
+    await Post.updateMany(
+      {},
+      { $pull: { 'comments.$[].replies': { user: userId } } }
+    );
+
+    // 7. حذف إعجابات المستخدم من جميع المنشورات
+    await Post.updateMany(
+      {},
+      { $pull: { reactions: { user: userId } } }
+    );
+
+    // 8. حذف إعجابات المستخدم من التعليقات
+    await Post.updateMany(
+      {},
+      { $pull: { 'comments.$[].likes': { user: userId } } }
+    );
+
+    // 9. إزالة المستخدم من قوائم المتابعين والمتابَعين
+    await User.updateMany(
+      {},
+      { 
+        $pull: { 
+          followers: userId,
+          following: userId 
+        } 
+      }
+    );
+
+    // 10. حذف مشاهدات المستخدم من القصص
+    await Story.updateMany(
+      {},
+      { $pull: { views: { user: userId } } }
+    );
+
+    // 11. تعطيل الحساب بدلاً من حذفه (للحفاظ على السجل)
+    await User.findByIdAndUpdate(userId, {
+      isActive: false,
+      isDeleted: true,
+      deletedAt: new Date(),
+      email: `deleted_${userId}_${Date.now()}@deleted.com`, // تغيير الإيميل لمنع إعادة التسجيل
+      password: 'DELETED_ACCOUNT_' + Date.now() // تغيير كلمة المرور
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف حسابك بنجاح. لا يمكنك الدخول إليه مرة أخرى.'
     });
   } catch (error) {
     next(error);
