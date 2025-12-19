@@ -18,17 +18,7 @@ const reportSchema = new mongoose.Schema({
   reason: {
     type: String,
     required: [true, 'سبب البلاغ مطلوب'],
-    enum: [
-      'spam',
-      'inappropriate',
-      'harassment',
-      'violence',
-      'hate_speech',
-      'false_information',
-      'scam',
-      'copyright',
-      'other'
-    ]
+    maxlength: 1000
   },
   details: {
     type: String,
