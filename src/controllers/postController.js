@@ -133,7 +133,10 @@ exports.getPosts = async (req, res, next) => {
 
     const query = { status: 'approved' };
 
-    if (type) query.type = type;
+    // تضمين المنشورات المعاد نشرها مع المنشورات العادية
+    if (type) {
+      query.type = { $in: [type, 'repost'] };
+    }
     if (category) query.category = category;
     if (scope) query.scope = scope;
     if (country) query.country = country;
@@ -735,16 +738,20 @@ exports.repostPost = async (req, res, next) => {
     });
 
     // إنشاء إشعار: أعاد نشر منشورك
-    await createNotification({
-      recipient: originalPost.user._id,
-      sender: req.user.id,
-      type: 'repost',
-      post: originalPost._id,
-      metadata: {
-        postContent: originalPost.content ? originalPost.content.substring(0, 100) : null,
-        displayPage: originalPost.displayPage
-      }
-    });
+    // التأكد من أن المستلم هو صاحب المنشور الأصلي
+    const recipientId = originalPost.user._id || originalPost.user;
+    if (recipientId) {
+      await createNotification({
+        recipient: recipientId,
+        sender: req.user.id,
+        type: 'repost',
+        post: originalPost._id,
+        metadata: {
+          postContent: originalPost.content ? originalPost.content.substring(0, 100) : null,
+          displayPage: originalPost.displayPage
+        }
+      });
+    }
 
     res.status(201).json({
       success: true,
