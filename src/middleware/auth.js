@@ -40,8 +40,10 @@ exports.protect = async (req, res, next) => {
     }
 
     // Update last seen
-    req.user.lastSeen = new Date();
-    await req.user.save({ validateBeforeSave: false });
+    await User.updateOne(
+      { _id: req.user._id },
+      { $set: { lastSeen: new Date() } }
+    );
 
     next();
   } catch (error) {
