@@ -45,18 +45,31 @@ const avatarStorage = new CloudinaryStorage({
 });
 
 // Storage configuration for stories
+// ENHANCED: Added better transformations and format handling for stories
 const storyStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'mehnati/stories',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov'],
-    resource_type: 'auto',
-    transformation: [
-      {
-        quality: 'auto',
-        fetch_format: 'auto'
-      }
-    ]
+  params: async (req, file) => {
+    const isVideo = file.mimetype.startsWith('video');
+    
+    return {
+      folder: 'mehnati/stories',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov'],
+      resource_type: isVideo ? 'video' : 'image',
+      // Enhanced transformations for better quality and compatibility
+      transformation: isVideo ? [
+        {
+          quality: 'auto:good',
+          fetch_format: 'auto',
+          video_codec: 'auto'
+        }
+      ] : [
+        {
+          quality: 'auto:good',
+          fetch_format: 'auto',
+          flags: 'progressive'
+        }
+      ]
+    };
   }
 });
 

@@ -96,11 +96,43 @@ exports.getStoriesFeed = async (req, res, next) => {
 
 // @desc    Get user stories
 // @route   GET /api/v1/stories/user/:userId
-// @access  Public
+// @access  Private (FIXED: Now requires authentication and checks following status)
 exports.getUserStories = async (req, res, next) => {
   try {
+    const requestedUserId = req.params.userId;
+    const currentUserId = req.user.id;
+
+    // Allow if viewing own stories
+    if (requestedUserId === currentUserId) {
+      const stories = await Story.find({
+        user: requestedUserId,
+        expiresAt: { $gt: new Date() }
+      })
+        .populate('user', 'name avatar')
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json({
+        success: true,
+        stories
+      });
+    }
+
+    // Check if current user follows the requested user
+    const currentUser = await User.findById(currentUserId);
+    const isFollowing = currentUser.following.some(
+      followId => followId.toString() === requestedUserId
+    );
+
+    if (!isFollowing) {
+      return res.status(403).json({
+        success: false,
+        message: 'يجب أن تكون متابعاً لهذا المستخدم لمشاهدة قصصه'
+      });
+    }
+
+    // User is following, return stories
     const stories = await Story.find({
-      user: req.params.userId,
+      user: requestedUserId,
       expiresAt: { $gt: new Date() }
     })
       .populate('user', 'name avatar')
