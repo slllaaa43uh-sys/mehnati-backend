@@ -13,7 +13,18 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['like', 'comment', 'reply', 'follow', 'mention', 'share', 'story_view'],
+    enum: [
+      'like',           // إعجاب بمنشور
+      'comment',        // تعليق على منشور
+      'reply',          // رد على تعليق
+      'comment_like',   // إعجاب بتعليق
+      'reply_like',     // إعجاب برد
+      'repost',         // إعادة نشر منشور
+      'follow',         // متابعة
+      'mention',        // إشارة
+      'share',          // مشاركة
+      'story_view'      // مشاهدة قصة
+    ],
     required: true
   },
   post: {
@@ -32,9 +43,16 @@ const notificationSchema = new mongoose.Schema({
     text: String,
     commentId: mongoose.Schema.Types.ObjectId
   },
+  // نص الإشعار المخصص
   message: {
     type: String,
     default: null
+  },
+  // بيانات إضافية للعرض
+  metadata: {
+    postContent: String,      // جزء من محتوى المنشور
+    commentText: String,      // نص التعليق
+    replyText: String         // نص الرد
   },
   isRead: {
     type: Boolean,
@@ -51,5 +69,6 @@ const notificationSchema = new mongoose.Schema({
 // Indexes
 notificationSchema.index({ recipient: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, isRead: 1 });
+notificationSchema.index({ type: 1 });
 
 module.exports = mongoose.model('Notification', notificationSchema);

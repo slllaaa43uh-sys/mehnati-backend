@@ -314,7 +314,10 @@ exports.reactToPost = async (req, res, next) => {
           recipient: post.user,
           sender: req.user.id,
           type: 'like',
-          post: post._id
+          post: post._id,
+          metadata: {
+            postContent: post.content ? post.content.substring(0, 100) : null
+          }
         });
       }
     }
@@ -368,7 +371,11 @@ exports.addComment = async (req, res, next) => {
         sender: req.user.id,
         type: 'comment',
         post: post._id,
-        comment: { text: text.trim() }
+        comment: { text: text.trim() },
+        metadata: {
+          commentText: text.trim().substring(0, 100),
+          postContent: post.content ? post.content.substring(0, 50) : null
+        }
       });
     }
 
@@ -516,7 +523,11 @@ exports.addReply = async (req, res, next) => {
         sender: req.user.id,
         type: 'reply',
         post: post._id,
-        comment: { text: text.trim() }
+        comment: { text: text.trim(), commentId: comment._id },
+        metadata: {
+          replyText: text.trim().substring(0, 100),
+          commentText: comment.text ? comment.text.substring(0, 50) : null
+        }
       });
     }
 
@@ -584,7 +595,11 @@ exports.likeComment = async (req, res, next) => {
           recipient: comment.user,
           sender: req.user.id,
           type: 'comment_like',
-          post: post._id
+          post: post._id,
+          comment: { commentId: comment._id },
+          metadata: {
+            commentText: comment.text ? comment.text.substring(0, 100) : null
+          }
         });
       }
     }
@@ -657,7 +672,11 @@ exports.likeReply = async (req, res, next) => {
           recipient: reply.user,
           sender: req.user.id,
           type: 'reply_like',
-          post: post._id
+          post: post._id,
+          comment: { commentId: comment._id },
+          metadata: {
+            replyText: reply.text ? reply.text.substring(0, 100) : null
+          }
         });
       }
     }
@@ -835,7 +854,10 @@ exports.repostPost = async (req, res, next) => {
         recipient: originalPost.user._id,
         sender: req.user.id,
         type: 'repost',
-        post: originalPost._id
+        post: originalPost._id,
+        metadata: {
+          postContent: originalPost.content ? originalPost.content.substring(0, 100) : null
+        }
       });
     }
 
