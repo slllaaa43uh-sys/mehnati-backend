@@ -75,7 +75,7 @@ const postSchema = new mongoose.Schema({
   },
   contactMethods: [{
     type: String,
-    enum: ['email', 'phone', 'whatsapp', 'chat']
+    enum: ['email', 'phone', 'whatsapp', 'chat', 'واتساب', 'اتصال', 'بريد إلكتروني']
   }],
   
   // تمييز الإعلان
