@@ -11,6 +11,8 @@ const {
   addReply,
   likeComment,
   likeReply,
+  deleteComment,
+  deleteReply,
   getShortsForYou,
   getShortsFriends,
   getUserPosts
@@ -34,5 +36,7 @@ router.post('/:id/comments', protect, addComment);
 router.post('/:id/comments/:commentId/replies', protect, addReply);
 router.post('/:id/comments/:commentId/like', protect, likeComment);
 router.post('/:id/comments/:commentId/replies/:replyId/like', protect, likeReply);
+router.delete('/:id/comments/:commentId', protect, deleteComment);
+router.delete('/:id/comments/:commentId/replies/:replyId', protect, deleteReply);
 
 module.exports = router;

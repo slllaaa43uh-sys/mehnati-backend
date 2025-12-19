@@ -659,3 +659,100 @@ exports.likeReply = async (req, res, next) => {
     next(error);
   }
 };
+
+
+// @desc    Delete comment
+// @route   DELETE /api/v1/posts/:id/comments/:commentId
+// @access  Private
+exports.deleteComment = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    // Check ownership (comment owner or post owner can delete)
+    if (comment.user.toString() !== req.user.id && post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بحذف هذا التعليق'
+      });
+    }
+
+    comment.deleteOne();
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف التعليق بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete reply
+// @route   DELETE /api/v1/posts/:id/comments/:commentId/replies/:replyId
+// @access  Private
+exports.deleteReply = async (req, res, next) => {
+  try {
+    const { id, commentId, replyId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) {
+      return res.status(404).json({
+        success: false,
+        message: 'الرد غير موجود'
+      });
+    }
+
+    // Check ownership (reply owner, comment owner, or post owner can delete)
+    if (reply.user.toString() !== req.user.id && 
+        comment.user.toString() !== req.user.id && 
+        post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بحذف هذا الرد'
+      });
+    }
+
+    reply.deleteOne();
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف الرد بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
