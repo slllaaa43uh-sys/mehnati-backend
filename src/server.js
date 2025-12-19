@@ -15,6 +15,7 @@ const userRoutes = require('./routes/users');
 const followRoutes = require('./routes/follow');
 const storyRoutes = require('./routes/stories');
 const reportRoutes = require('./routes/reports');
+const uploadRoutes = require('./routes/upload');
 
 // Initialize express app
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/follow', followRoutes);
 app.use('/api/v1/stories', storyRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -57,7 +59,8 @@ app.get('/', (req, res) => {
       users: '/api/v1/users',
       follow: '/api/v1/follow',
       stories: '/api/v1/stories',
-      reports: '/api/v1/reports'
+      reports: '/api/v1/reports',
+      upload: '/api/v1/upload'
     }
   });
 });
