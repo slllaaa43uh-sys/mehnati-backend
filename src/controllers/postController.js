@@ -51,6 +51,14 @@ exports.createPost = async (req, res, next) => {
       }
     }
 
+    // Validate: Must have either content or media
+    if ((!content || content.trim() === '') && media.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'يجب إضافة محتوى نصي أو صور/فيديو'
+      });
+    }
+
     const post = await Post.create({
       user: req.user.id,
       title,

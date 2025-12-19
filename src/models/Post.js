@@ -15,7 +15,7 @@ const postSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: [true, 'المحتوى مطلوب'],
+    default: '',
     maxlength: [5000, 'المحتوى يجب أن لا يتجاوز 5000 حرف']
   },
   
