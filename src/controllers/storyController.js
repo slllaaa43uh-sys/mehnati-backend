@@ -189,3 +189,40 @@ exports.deleteStory = async (req, res, next) => {
     next(error);
   }
 };
+
+
+// @desc    Get story viewers
+// @route   GET /api/v1/stories/:id/viewers
+// @access  Private (only story owner)
+exports.getStoryViewers = async (req, res, next) => {
+  try {
+    const story = await Story.findById(req.params.id)
+      .populate('views.user', 'name avatar');
+
+    if (!story) {
+      return res.status(404).json({
+        success: false,
+        message: 'القصة غير موجودة'
+      });
+    }
+
+    // Only story owner can see viewers
+    if (story.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بمشاهدة قائمة المشاهدين'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      viewsCount: story.views.length,
+      viewers: story.views.map(v => ({
+        user: v.user,
+        viewedAt: v.viewedAt
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
