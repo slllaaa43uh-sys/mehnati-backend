@@ -10,6 +10,8 @@ exports.createStory = async (req, res, next) => {
     const { text, backgroundColor } = req.body;
 
     let media = null;
+    
+    // الطريقة 1: استلام الملف مباشرة عبر multer (FormData)
     if (req.file) {
       // Cloudinary returns the URL in req.file.path
       media = {
@@ -19,7 +21,26 @@ exports.createStory = async (req, res, next) => {
       };
       
       // Debug log
-      console.log('Story media uploaded:', {
+      console.log('Story media uploaded via file:', {
+        url: media.url,
+        type: media.type,
+        publicId: media.publicId
+      });
+    }
+    // الطريقة 2: استلام رابط الوسائط من JSON (بعد الرفع المسبق)
+    else if (req.body.media && req.body.media.url) {
+      const bodyMedia = typeof req.body.media === 'string' 
+        ? JSON.parse(req.body.media) 
+        : req.body.media;
+      
+      media = {
+        url: bodyMedia.url,
+        publicId: bodyMedia.publicId || null,
+        type: bodyMedia.type || 'image'
+      };
+      
+      // Debug log
+      console.log('Story media received via JSON:', {
         url: media.url,
         type: media.type,
         publicId: media.publicId
