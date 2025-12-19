@@ -43,7 +43,7 @@ exports.getUser = async (req, res, next) => {
 // @access  Private
 exports.updateMe = async (req, res, next) => {
   try {
-    const allowedUpdates = ['name', 'bio', 'phone', 'country', 'city', 'avatar'];
+    const allowedUpdates = ['name', 'bio', 'phone', 'country', 'city', 'avatar', 'website'];
     const updates = {};
 
     allowedUpdates.forEach(field => {

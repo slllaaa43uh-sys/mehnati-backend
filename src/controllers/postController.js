@@ -142,6 +142,11 @@ exports.getPosts = async (req, res, next) => {
     } = req.query;
 
     const query = { status: 'approved' };
+    
+    // استبعاد المنشورات المخفية من قبل المستخدم الحالي
+    if (req.user) {
+      query.hiddenBy = { $ne: req.user.id };
+    }
 
     // المنشورات المعاد نشرها تظهر في الصفحة الرئيسية فقط
     // إذا كان الطلب للصفحة الرئيسية أو بدون فلتر، نضمن المنشورات المعاد نشرها
@@ -994,6 +999,123 @@ exports.getUserPosts = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       posts
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// @desc    Hide post from user's feed
+// @route   POST /api/v1/posts/:id/hide
+// @access  Private
+exports.hidePost = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    // التحقق من أن المستخدم لم يخفِ المنشور مسبقاً
+    const alreadyHidden = post.hiddenBy.some(
+      userId => userId.toString() === req.user.id
+    );
+
+    if (alreadyHidden) {
+      return res.status(400).json({
+        success: false,
+        message: 'المنشور مخفي بالفعل'
+      });
+    }
+
+    post.hiddenBy.push(req.user.id);
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إخفاء المنشور'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Unhide post from user's feed
+// @route   DELETE /api/v1/posts/:id/hide
+// @access  Private
+exports.unhidePost = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    post.hiddenBy = post.hiddenBy.filter(
+      userId => userId.toString() !== req.user.id
+    );
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إظهار المنشور'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update job status (open, negotiating, hired)
+// @route   PUT /api/v1/posts/:id/job-status
+// @access  Private (owner only)
+exports.updateJobStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    
+    if (!['open', 'negotiating', 'hired'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'حالة غير صالحة. الحالات المتاحة: open, negotiating, hired'
+      });
+    }
+
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    // التحقق من أن المستخدم هو صاحب المنشور
+    if (post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بتعديل هذا المنشور'
+      });
+    }
+
+    post.jobStatus = status;
+    await post.save();
+
+    const statusMessages = {
+      'open': 'المنشور مفتوح للتقديم',
+      'negotiating': 'قيد المفاوضة',
+      'hired': 'تم التوظيف'
+    };
+
+    res.status(200).json({
+      success: true,
+      message: statusMessages[status],
+      jobStatus: status
     });
   } catch (error) {
     next(error);

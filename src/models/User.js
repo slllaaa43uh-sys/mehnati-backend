@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
     maxlength: [500, 'النبذة يجب أن لا تتجاوز 500 حرف'],
     default: ''
   },
+  website: {
+    type: String,
+    default: null
+  },
   phone: {
     type: String,
     default: null

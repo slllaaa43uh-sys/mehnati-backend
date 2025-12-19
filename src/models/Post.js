@@ -112,6 +112,19 @@ const postSchema = new mongoose.Schema({
     default: false
   },
   
+  // حالة التوظيف (للوظائف)
+  jobStatus: {
+    type: String,
+    enum: ['open', 'negotiating', 'hired'],
+    default: 'open'
+  },
+  
+  // المستخدمون الذين أخفوا هذا المنشور
+  hiddenBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  
   // التفاعلات
   reactions: [{
     user: {

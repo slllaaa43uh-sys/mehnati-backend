@@ -17,7 +17,10 @@ const {
   getShortsFriends,
   getUserPosts,
   repostPost,
-  undoRepost
+  undoRepost,
+  hidePost,
+  unhidePost,
+  updateJobStatus
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -44,5 +47,12 @@ router.delete('/:id/comments/:commentId/replies/:replyId', protect, deleteReply)
 // Repost routes
 router.post('/:id/repost', protect, repostPost);
 router.delete('/:id/repost', protect, undoRepost);
+
+// Hide post routes
+router.post('/:id/hide', protect, hidePost);
+router.delete('/:id/hide', protect, unhidePost);
+
+// Job status route
+router.put('/:id/job-status', protect, updateJobStatus);
 
 module.exports = router;
