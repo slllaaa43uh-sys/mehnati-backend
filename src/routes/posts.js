@@ -8,6 +8,9 @@ const {
   deletePost,
   reactToPost,
   addComment,
+  addReply,
+  likeComment,
+  likeReply,
   getShortsForYou,
   getShortsFriends,
   getUserPosts
@@ -28,5 +31,8 @@ router.put('/:id', protect, updatePost);
 router.delete('/:id', protect, deletePost);
 router.post('/:id/react', protect, reactToPost);
 router.post('/:id/comments', protect, addComment);
+router.post('/:id/comments/:commentId/replies', protect, addReply);
+router.post('/:id/comments/:commentId/like', protect, likeComment);
+router.post('/:id/comments/:commentId/replies/:replyId/like', protect, likeReply);
 
 module.exports = router;

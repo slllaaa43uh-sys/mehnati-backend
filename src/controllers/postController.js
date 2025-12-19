@@ -454,3 +454,208 @@ exports.getUserPosts = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Add reply to comment
+// @route   POST /api/v1/posts/:id/comments/:commentId/replies
+// @access  Private
+exports.addReply = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+    const { text } = req.body;
+
+    if (!text || text.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'نص الرد مطلوب'
+      });
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = {
+      user: req.user.id,
+      text: text.trim(),
+      likes: []
+    };
+
+    comment.replies.push(reply);
+    await post.save();
+
+    // Create notification
+    if (comment.user.toString() !== req.user.id) {
+      await Notification.create({
+        recipient: comment.user,
+        sender: req.user.id,
+        type: 'reply',
+        post: post._id,
+        comment: { text: text.trim() }
+      });
+    }
+
+    // Populate the new reply
+    await post.populate('comments.replies.user', 'name avatar');
+
+    const updatedComment = post.comments.id(commentId);
+    const newReply = updatedComment.replies[updatedComment.replies.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إضافة الرد',
+      reply: newReply
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Like/Unlike comment
+// @route   POST /api/v1/posts/:id/comments/:commentId/like
+// @access  Private
+exports.likeComment = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    // Initialize likes array if not exists
+    if (!comment.likes) {
+      comment.likes = [];
+    }
+
+    // Check if already liked
+    const existingLike = comment.likes.find(
+      like => like.user.toString() === req.user.id
+    );
+
+    if (existingLike) {
+      // Unlike
+      comment.likes = comment.likes.filter(
+        like => like.user.toString() !== req.user.id
+      );
+    } else {
+      // Like
+      comment.likes.push({ user: req.user.id });
+
+      // Create notification (if not own comment)
+      if (comment.user.toString() !== req.user.id) {
+        await Notification.create({
+          recipient: comment.user,
+          sender: req.user.id,
+          type: 'comment_like',
+          post: post._id
+        });
+      }
+    }
+
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      isLiked: !existingLike,
+      likesCount: comment.likes.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Like/Unlike reply
+// @route   POST /api/v1/posts/:id/comments/:commentId/replies/:replyId/like
+// @access  Private
+exports.likeReply = async (req, res, next) => {
+  try {
+    const { id, commentId, replyId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) {
+      return res.status(404).json({
+        success: false,
+        message: 'الرد غير موجود'
+      });
+    }
+
+    // Initialize likes array if not exists
+    if (!reply.likes) {
+      reply.likes = [];
+    }
+
+    // Check if already liked
+    const existingLike = reply.likes.find(
+      like => like.user.toString() === req.user.id
+    );
+
+    if (existingLike) {
+      // Unlike
+      reply.likes = reply.likes.filter(
+        like => like.user.toString() !== req.user.id
+      );
+    } else {
+      // Like
+      reply.likes.push({ user: req.user.id });
+
+      // Create notification (if not own reply)
+      if (reply.user.toString() !== req.user.id) {
+        await Notification.create({
+          recipient: reply.user,
+          sender: req.user.id,
+          type: 'reply_like',
+          post: post._id
+        });
+      }
+    }
+
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      isLiked: !existingLike,
+      likesCount: reply.likes.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};

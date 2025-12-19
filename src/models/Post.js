@@ -129,12 +129,32 @@ const postSchema = new mongoose.Schema({
       required: true,
       maxlength: 1000
     },
+    likes: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
     replies: [{
       user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
       },
       text: String,
+      likes: [{
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User'
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now
+        }
+      }],
       createdAt: {
         type: Date,
         default: Date.now
