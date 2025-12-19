@@ -13,9 +13,7 @@ const upload = require('../middleware/upload');
 
 router.post('/', protect, upload.storyMedia, createStory);
 router.get('/feed', protect, getStoriesFeed);
-// FIXED: Added protect middleware to ensure only authenticated users can view stories
-// and added following check in controller
-router.get('/user/:userId', protect, getUserStories);
+router.get('/user/:userId', getUserStories); // Public - للجميع
 router.post('/:id/view', protect, viewStory);
 router.get('/:id/viewers', protect, getStoryViewers);
 router.delete('/:id', protect, deleteStory);

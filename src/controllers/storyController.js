@@ -37,17 +37,13 @@ exports.createStory = async (req, res, next) => {
   }
 };
 
-// @desc    Get stories feed (from followed users)
+// @desc    Get all stories feed (for everyone)
 // @route   GET /api/v1/stories/feed
 // @access  Private
 exports.getStoriesFeed = async (req, res, next) => {
   try {
-    const currentUser = await User.findById(req.user.id);
-    const following = [...currentUser.following, req.user.id]; // Include own stories
-
-    // Get stories from last 24 hours
+    // Get ALL stories from last 24 hours (for everyone)
     const stories = await Story.find({
-      user: { $in: following },
       expiresAt: { $gt: new Date() }
     })
       .populate('user', 'name avatar')
@@ -96,43 +92,11 @@ exports.getStoriesFeed = async (req, res, next) => {
 
 // @desc    Get user stories
 // @route   GET /api/v1/stories/user/:userId
-// @access  Private (FIXED: Now requires authentication and checks following status)
+// @access  Public - للجميع
 exports.getUserStories = async (req, res, next) => {
   try {
-    const requestedUserId = req.params.userId;
-    const currentUserId = req.user.id;
-
-    // Allow if viewing own stories
-    if (requestedUserId === currentUserId) {
-      const stories = await Story.find({
-        user: requestedUserId,
-        expiresAt: { $gt: new Date() }
-      })
-        .populate('user', 'name avatar')
-        .sort({ createdAt: -1 });
-
-      return res.status(200).json({
-        success: true,
-        stories
-      });
-    }
-
-    // Check if current user follows the requested user
-    const currentUser = await User.findById(currentUserId);
-    const isFollowing = currentUser.following.some(
-      followId => followId.toString() === requestedUserId
-    );
-
-    if (!isFollowing) {
-      return res.status(403).json({
-        success: false,
-        message: 'يجب أن تكون متابعاً لهذا المستخدم لمشاهدة قصصه'
-      });
-    }
-
-    // User is following, return stories
     const stories = await Story.find({
-      user: requestedUserId,
+      user: req.params.userId,
       expiresAt: { $gt: new Date() }
     })
       .populate('user', 'name avatar')
