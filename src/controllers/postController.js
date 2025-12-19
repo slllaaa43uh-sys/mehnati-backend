@@ -9,14 +9,24 @@ const Notification = require('../models/Notification');
  */
 const createNotification = async (data) => {
   try {
-    // لا تنشئ إشعار إذا كان المرسل هو المستلم
-    if (data.sender.toString() === data.recipient.toString()) {
+    // التحقق من وجود البيانات المطلوبة
+    if (!data.recipient || !data.sender || !data.type) {
+      console.error('Missing required notification data:', { recipient: data.recipient, sender: data.sender, type: data.type });
       return null;
     }
+    
+    // لا تنشئ إشعار إذا كان المرسل هو المستلم
+    if (data.sender.toString() === data.recipient.toString()) {
+      console.log('Skipping notification: sender is recipient');
+      return null;
+    }
+    
+    console.log('Creating notification:', { type: data.type, recipient: data.recipient, sender: data.sender });
     const notification = await Notification.create(data);
+    console.log('Notification created successfully:', notification._id);
     return notification;
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.error('Error creating notification:', error.message);
     return null;
   }
 };
@@ -133,15 +143,25 @@ exports.getPosts = async (req, res, next) => {
 
     const query = { status: 'approved' };
 
-    // تضمين المنشورات المعاد نشرها مع المنشورات العادية
-    if (type) {
-      query.type = { $in: [type, 'repost'] };
+    // المنشورات المعاد نشرها تظهر في الصفحة الرئيسية فقط
+    // إذا كان الطلب للصفحة الرئيسية أو بدون فلتر، نضمن المنشورات المعاد نشرها
+    if (!displayPage || displayPage === 'home') {
+      // للصفحة الرئيسية: نجلب المنشورات العادية + المعاد نشرها
+      query.$or = [
+        { type: { $ne: 'repost' } },
+        { type: 'repost', displayPage: 'home' }
+      ];
+    } else {
+      // للصفحات الأخرى (الحراج/الوظائف): لا نعرض المنشورات المعاد نشرها
+      query.type = { $ne: 'repost' };
+      query.displayPage = { $in: [displayPage, 'all'] };
     }
+    
+    if (type && type !== 'repost') query.type = type;
     if (category) query.category = category;
     if (scope) query.scope = scope;
     if (country) query.country = country;
     if (city && city !== 'كل المدن') query.city = city;
-    if (displayPage) query.displayPage = { $in: [displayPage, 'all'] };
     if (isShort !== undefined) query.isShort = isShort === 'true';
     if (isFeatured !== undefined) query.isFeatured = isFeatured === 'true';
     if (userId) query.user = userId;
@@ -715,13 +735,14 @@ exports.repostPost = async (req, res, next) => {
       });
     }
 
+    // المنشورات المعاد نشرها تظهر في الصفحة الرئيسية فقط
     const repost = await Post.create({
       user: req.user.id,
       content: content || '',
       type: 'repost',
       isRepost: true,
       originalPost: originalPostId,
-      displayPage: originalPost.displayPage,
+      displayPage: 'home', // المنشورات المعاد نشرها تظهر في الرئيسية فقط
       status: 'approved'
     });
 
