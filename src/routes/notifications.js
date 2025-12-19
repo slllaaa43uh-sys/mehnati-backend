@@ -6,33 +6,42 @@ const {
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  deleteAllNotifications,
-  deleteBulkNotifications
+  deleteAllNotifications
 } = require('../controllers/notificationController');
 const { protect } = require('../middleware/auth');
 
-// All routes are protected
+// جميع المسارات محمية
 router.use(protect);
 
-// Get notifications with pagination
+/**
+ * ============================================
+ * نقاط نهاية الإشعارات الجديدة
+ * ============================================
+ * 
+ * GET    /api/v1/notifications              - جلب جميع الإشعارات
+ * GET    /api/v1/notifications/unread-count - جلب عدد الإشعارات غير المقروءة
+ * PUT    /api/v1/notifications/read-all     - تحديد جميع الإشعارات كمقروءة
+ * PUT    /api/v1/notifications/:id/read     - تحديد إشعار واحد كمقروء
+ * DELETE /api/v1/notifications/all          - حذف جميع الإشعارات
+ * DELETE /api/v1/notifications/:id          - حذف إشعار واحد
+ */
+
+// جلب الإشعارات
 router.get('/', getNotifications);
 
-// Get unread count (for bell icon badge)
+// جلب عدد الإشعارات غير المقروءة (للعداد)
 router.get('/unread-count', getUnreadCount);
 
-// Mark all as read (when clicking bell icon)
+// تحديد جميع الإشعارات كمقروءة
 router.put('/read-all', markAllAsRead);
 
-// Mark single notification as read
+// تحديد إشعار واحد كمقروء
 router.put('/:id/read', markAsRead);
 
-// Delete all notifications
+// حذف جميع الإشعارات
 router.delete('/all', deleteAllNotifications);
 
-// Delete multiple notifications (bulk)
-router.delete('/bulk', deleteBulkNotifications);
-
-// Delete single notification
+// حذف إشعار واحد
 router.delete('/:id', deleteNotification);
 
 module.exports = router;

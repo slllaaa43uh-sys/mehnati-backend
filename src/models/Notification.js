@@ -1,35 +1,44 @@
 const mongoose = require('mongoose');
 
+/**
+ * ============================================
+ * نموذج الإشعارات
+ * ============================================
+ * 
+ * أنواع الإشعارات:
+ * - like: أعجب بمنشورك
+ * - comment: علق على منشورك
+ * - reply: رد على تعليقك
+ * - comment_like: أعجب بتعليقك
+ * - reply_like: أعجب بردك
+ * - repost: أعاد نشر منشورك
+ * - follow: تابعك
+ */
+
 const notificationSchema = new mongoose.Schema({
+  // المستلم (صاحب الإشعار)
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
+  // المرسل (من قام بالفعل)
   sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
+  // نوع الإشعار
   type: {
     type: String,
     enum: [
-      'like',           // إعجاب بمنشور
-      'comment',        // تعليق على منشور
-      'reply',          // رد على تعليق
-      'comment_like',   // إعجاب بتعليق
-      'reply_like',     // إعجاب برد
-      'repost',         // إعادة نشر منشور
-      'follow',         // متابعة
-      'mention',        // إشارة
-      'share',          // مشاركة
-      'story_view',     // مشاهدة قصة
-      // أنواع الشورتس (لا تُستخدم حالياً)
-      'short_like',
-      'short_comment',
-      'short_reply',
-      'short_comment_like',
-      'short_reply_like'
+      'like',           // أعجب بمنشورك
+      'comment',        // علق على منشورك
+      'reply',          // رد على تعليقك
+      'comment_like',   // أعجب بتعليقك
+      'reply_like',     // أعجب بردك
+      'repost',         // أعاد نشر منشورك
+      'follow'          // تابعك
     ],
     required: true
   },
@@ -38,38 +47,23 @@ const notificationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Post'
   },
-  // الشورت المرتبط (للفيديوهات القصيرة)
-  short: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Post'
-  },
-  // القصة المرتبطة
-  story: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Story'
-  },
-  // معلومات التعليق
+  // معلومات التعليق (للإشعارات المتعلقة بالتعليقات)
   comment: {
-    text: String,
-    commentId: mongoose.Schema.Types.ObjectId
+    commentId: mongoose.Schema.Types.ObjectId,
+    text: String
   },
-  // معلومات الرد
+  // معلومات الرد (للإشعارات المتعلقة بالردود)
   reply: {
-    text: String,
     replyId: mongoose.Schema.Types.ObjectId,
-    commentId: mongoose.Schema.Types.ObjectId
-  },
-  // نص الإشعار المخصص
-  message: {
-    type: String,
-    default: null
+    commentId: mongoose.Schema.Types.ObjectId,
+    text: String
   },
   // بيانات إضافية للعرض
   metadata: {
     postContent: String,      // جزء من محتوى المنشور
     commentText: String,      // نص التعليق
     replyText: String,        // نص الرد
-    displayPage: String       // صفحة عرض المنشور (home, jobs, haraj)
+    displayPage: String       // صفحة العرض (home, jobs, haraj)
   },
   // حالة القراءة
   isRead: {
@@ -84,10 +78,9 @@ const notificationSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better query performance
+// فهارس لتحسين الأداء
 notificationSchema.index({ recipient: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, isRead: 1 });
 notificationSchema.index({ type: 1 });
-notificationSchema.index({ sender: 1, recipient: 1, type: 1, post: 1 }); // للتحقق من التكرار
 
 module.exports = mongoose.model('Notification', notificationSchema);

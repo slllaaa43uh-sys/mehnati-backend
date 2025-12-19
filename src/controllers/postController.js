@@ -2,14 +2,17 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 
-// Helper function to create notification
+/**
+ * ============================================
+ * دالة مساعدة لإنشاء الإشعارات
+ * ============================================
+ */
 const createNotification = async (data) => {
   try {
-    // Don't create notification if sender is recipient
+    // لا تنشئ إشعار إذا كان المرسل هو المستلم
     if (data.sender.toString() === data.recipient.toString()) {
       return null;
     }
-
     const notification = await Notification.create(data);
     return notification;
   } catch (error) {
@@ -47,8 +50,8 @@ exports.createPost = async (req, res, next) => {
     let media = [];
     if (req.files && req.files.length > 0) {
       media = req.files.map(file => ({
-        url: file.path, // Cloudinary URL
-        publicId: file.filename, // Cloudinary public ID for deletion
+        url: file.path,
+        publicId: file.filename,
         type: file.mimetype.startsWith('video') ? 'video' : 'image'
       }));
     }
@@ -97,7 +100,6 @@ exports.createPost = async (req, res, next) => {
       jobDetails
     });
 
-    // Populate user data
     await post.populate('user', 'name avatar');
 
     res.status(201).json({
@@ -129,7 +131,6 @@ exports.getPosts = async (req, res, next) => {
       userId
     } = req.query;
 
-    // Build query
     const query = { status: 'approved' };
 
     if (type) query.type = type;
@@ -142,10 +143,8 @@ exports.getPosts = async (req, res, next) => {
     if (isFeatured !== undefined) query.isFeatured = isFeatured === 'true';
     if (userId) query.user = userId;
 
-    // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Execute query
     const posts = await Post.find(query)
       .populate('user', 'name avatar isVerified')
       .populate('reactions.user', 'name avatar')
@@ -160,7 +159,6 @@ exports.getPosts = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Get total count
     const total = await Post.countDocuments(query);
 
     res.status(200).json({
@@ -201,7 +199,6 @@ exports.getPost = async (req, res, next) => {
       });
     }
 
-    // Increment views
     post.views += 1;
     await post.save();
 
@@ -228,7 +225,6 @@ exports.updatePost = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (post.user.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -236,7 +232,6 @@ exports.updatePost = async (req, res, next) => {
       });
     }
 
-    // Update fields
     const allowedUpdates = [
       'title', 'content', 'category', 'scope', 'country', 'city',
       'location', 'contactEmail', 'contactPhone', 'contactMethods',
@@ -276,7 +271,6 @@ exports.deletePost = async (req, res, next) => {
       });
     }
 
-    // Check ownership
     if (post.user.toString() !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -295,6 +289,11 @@ exports.deletePost = async (req, res, next) => {
   }
 };
 
+/**
+ * ============================================
+ * الإعجاب بالمنشور - إشعار: أعجب بمنشورك
+ * ============================================
+ */
 // @desc    Like/Unlike post
 // @route   POST /api/v1/posts/:id/react
 // @access  Private
@@ -310,22 +309,21 @@ exports.reactToPost = async (req, res, next) => {
       });
     }
 
-    // Check if already reacted
     const existingReaction = post.reactions.find(
       r => r.user.toString() === req.user.id
     );
 
     if (existingReaction) {
-      // Remove reaction (unlike)
+      // إلغاء الإعجاب
       post.reactions = post.reactions.filter(
         r => r.user.toString() !== req.user.id
       );
     } else {
-      // Add reaction
+      // إضافة إعجاب
       post.reactions.push({ user: req.user.id, type });
 
-      // Create notification (if not own post and not a short)
-      if (post.user.toString() !== req.user.id && !post.isShort) {
+      // إنشاء إشعار: أعجب بمنشورك (فقط للمنشورات العادية، ليس الشورتس)
+      if (!post.isShort) {
         await createNotification({
           recipient: post.user,
           sender: req.user.id,
@@ -351,6 +349,11 @@ exports.reactToPost = async (req, res, next) => {
   }
 };
 
+/**
+ * ============================================
+ * التعليق على المنشور - إشعار: علق على منشورك
+ * ============================================
+ */
 // @desc    Add comment to post
 // @route   POST /api/v1/posts/:id/comments
 // @access  Private
@@ -381,19 +384,18 @@ exports.addComment = async (req, res, next) => {
     post.comments.push(comment);
     await post.save();
 
-    // Get the new comment's ID
     const newComment = post.comments[post.comments.length - 1];
 
-    // Create notification (if not own post and not a short)
-    if (post.user.toString() !== req.user.id && !post.isShort) {
+    // إنشاء إشعار: علق على منشورك (فقط للمنشورات العادية، ليس الشورتس)
+    if (!post.isShort) {
       await createNotification({
         recipient: post.user,
         sender: req.user.id,
         type: 'comment',
         post: post._id,
-        comment: { 
-          text: text.trim(),
-          commentId: newComment._id
+        comment: {
+          commentId: newComment._id,
+          text: text.trim()
         },
         metadata: {
           commentText: text.trim().substring(0, 100),
@@ -403,13 +405,483 @@ exports.addComment = async (req, res, next) => {
       });
     }
 
-    // Populate the new comment
     await post.populate('comments.user', 'name avatar');
 
     res.status(201).json({
       success: true,
       message: 'تم إضافة التعليق',
       comment: post.comments[post.comments.length - 1]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ============================================
+ * الرد على التعليق - إشعار: رد على تعليقك
+ * ============================================
+ */
+// @desc    Add reply to comment
+// @route   POST /api/v1/posts/:id/comments/:commentId/replies
+// @access  Private
+exports.addReply = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+    const { text } = req.body;
+
+    if (!text || text.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'نص الرد مطلوب'
+      });
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = {
+      user: req.user.id,
+      text: text.trim(),
+      likes: []
+    };
+
+    comment.replies.push(reply);
+    await post.save();
+
+    const newReply = comment.replies[comment.replies.length - 1];
+
+    // إنشاء إشعار: رد على تعليقك (فقط للمنشورات العادية، ليس الشورتس)
+    if (!post.isShort) {
+      await createNotification({
+        recipient: comment.user,
+        sender: req.user.id,
+        type: 'reply',
+        post: post._id,
+        comment: {
+          commentId: comment._id,
+          text: comment.text
+        },
+        reply: {
+          replyId: newReply._id,
+          commentId: comment._id,
+          text: text.trim()
+        },
+        metadata: {
+          replyText: text.trim().substring(0, 100),
+          commentText: comment.text ? comment.text.substring(0, 50) : null,
+          displayPage: post.displayPage
+        }
+      });
+    }
+
+    await post.populate('comments.replies.user', 'name avatar');
+
+    const updatedComment = post.comments.id(commentId);
+    const populatedReply = updatedComment.replies[updatedComment.replies.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إضافة الرد',
+      reply: populatedReply
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ============================================
+ * الإعجاب بالتعليق - إشعار: أعجب بتعليقك
+ * ============================================
+ */
+// @desc    Like/Unlike comment
+// @route   POST /api/v1/posts/:id/comments/:commentId/like
+// @access  Private
+exports.likeComment = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    if (!comment.likes) {
+      comment.likes = [];
+    }
+
+    const existingLike = comment.likes.find(
+      like => like.user.toString() === req.user.id
+    );
+
+    if (existingLike) {
+      // إلغاء الإعجاب
+      comment.likes = comment.likes.filter(
+        like => like.user.toString() !== req.user.id
+      );
+    } else {
+      // إضافة إعجاب
+      comment.likes.push({ user: req.user.id });
+
+      // إنشاء إشعار: أعجب بتعليقك (فقط للمنشورات العادية، ليس الشورتس)
+      if (!post.isShort) {
+        await createNotification({
+          recipient: comment.user,
+          sender: req.user.id,
+          type: 'comment_like',
+          post: post._id,
+          comment: {
+            commentId: comment._id,
+            text: comment.text
+          },
+          metadata: {
+            commentText: comment.text ? comment.text.substring(0, 100) : null,
+            displayPage: post.displayPage
+          }
+        });
+      }
+    }
+
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      isLiked: !existingLike,
+      likesCount: comment.likes.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ============================================
+ * الإعجاب بالرد - إشعار: أعجب بردك
+ * ============================================
+ */
+// @desc    Like/Unlike reply
+// @route   POST /api/v1/posts/:id/comments/:commentId/replies/:replyId/like
+// @access  Private
+exports.likeReply = async (req, res, next) => {
+  try {
+    const { id, commentId, replyId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) {
+      return res.status(404).json({
+        success: false,
+        message: 'الرد غير موجود'
+      });
+    }
+
+    if (!reply.likes) {
+      reply.likes = [];
+    }
+
+    const existingLike = reply.likes.find(
+      like => like.user.toString() === req.user.id
+    );
+
+    if (existingLike) {
+      // إلغاء الإعجاب
+      reply.likes = reply.likes.filter(
+        like => like.user.toString() !== req.user.id
+      );
+    } else {
+      // إضافة إعجاب
+      reply.likes.push({ user: req.user.id });
+
+      // إنشاء إشعار: أعجب بردك (فقط للمنشورات العادية، ليس الشورتس)
+      if (!post.isShort) {
+        await createNotification({
+          recipient: reply.user,
+          sender: req.user.id,
+          type: 'reply_like',
+          post: post._id,
+          comment: {
+            commentId: comment._id,
+            text: comment.text
+          },
+          reply: {
+            replyId: reply._id,
+            commentId: comment._id,
+            text: reply.text
+          },
+          metadata: {
+            replyText: reply.text ? reply.text.substring(0, 100) : null,
+            displayPage: post.displayPage
+          }
+        });
+      }
+    }
+
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      isLiked: !existingLike,
+      likesCount: reply.likes.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ============================================
+ * إعادة النشر - إشعار: أعاد نشر منشورك
+ * ============================================
+ */
+// @desc    Repost a post
+// @route   POST /api/v1/posts/:id/repost
+// @access  Private
+exports.repostPost = async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    const originalPostId = req.params.id;
+
+    const originalPost = await Post.findById(originalPostId)
+      .populate('user', 'name avatar');
+
+    if (!originalPost) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور الأصلي غير موجود'
+      });
+    }
+
+    // لا تسمح بإعادة نشر الشورتس
+    if (originalPost.isShort) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن إعادة نشر الفيديوهات القصيرة'
+      });
+    }
+
+    const existingRepost = await Post.findOne({
+      user: req.user.id,
+      originalPost: originalPostId,
+      isRepost: true
+    });
+
+    if (existingRepost) {
+      return res.status(400).json({
+        success: false,
+        message: 'لقد قمت بإعادة نشر هذا المنشور مسبقاً'
+      });
+    }
+
+    const repost = await Post.create({
+      user: req.user.id,
+      content: content || '',
+      type: 'repost',
+      isRepost: true,
+      originalPost: originalPostId,
+      displayPage: originalPost.displayPage,
+      status: 'approved'
+    });
+
+    originalPost.repostsCount = (originalPost.repostsCount || 0) + 1;
+    await originalPost.save();
+
+    await repost.populate('user', 'name avatar');
+    await repost.populate({
+      path: 'originalPost',
+      populate: {
+        path: 'user',
+        select: 'name avatar'
+      }
+    });
+
+    // إنشاء إشعار: أعاد نشر منشورك
+    await createNotification({
+      recipient: originalPost.user._id,
+      sender: req.user.id,
+      type: 'repost',
+      post: originalPost._id,
+      metadata: {
+        postContent: originalPost.content ? originalPost.content.substring(0, 100) : null,
+        displayPage: originalPost.displayPage
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'تمت إعادة النشر بنجاح',
+      post: repost
+    });
+  } catch (error) {
+    console.error('Repost error:', error);
+    next(error);
+  }
+};
+
+// @desc    Undo repost (delete repost)
+// @route   DELETE /api/v1/posts/:id/repost
+// @access  Private
+exports.undoRepost = async (req, res, next) => {
+  try {
+    const originalPostId = req.params.id;
+
+    const repost = await Post.findOne({
+      user: req.user.id,
+      originalPost: originalPostId,
+      isRepost: true
+    });
+
+    if (!repost) {
+      return res.status(404).json({
+        success: false,
+        message: 'لم تقم بإعادة نشر هذا المنشور'
+      });
+    }
+
+    const originalPost = await Post.findById(originalPostId);
+    if (originalPost) {
+      originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
+      await originalPost.save();
+    }
+
+    await repost.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إلغاء إعادة النشر'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete comment
+// @route   DELETE /api/v1/posts/:id/comments/:commentId
+// @access  Private
+exports.deleteComment = async (req, res, next) => {
+  try {
+    const { id, commentId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    if (comment.user.toString() !== req.user.id && post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بحذف هذا التعليق'
+      });
+    }
+
+    comment.deleteOne();
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف التعليق بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete reply
+// @route   DELETE /api/v1/posts/:id/comments/:commentId/replies/:replyId
+// @access  Private
+exports.deleteReply = async (req, res, next) => {
+  try {
+    const { id, commentId, replyId } = req.params;
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: 'التعليق غير موجود'
+      });
+    }
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) {
+      return res.status(404).json({
+        success: false,
+        message: 'الرد غير موجود'
+      });
+    }
+
+    if (reply.user.toString() !== req.user.id && 
+        comment.user.toString() !== req.user.id && 
+        post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بحذف هذا الرد'
+      });
+    }
+
+    reply.deleteOne();
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف الرد بنجاح'
     });
   } catch (error) {
     next(error);
@@ -494,477 +966,6 @@ exports.getUserPosts = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       posts
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Add reply to comment
-// @route   POST /api/v1/posts/:id/comments/:commentId/replies
-// @access  Private
-exports.addReply = async (req, res, next) => {
-  try {
-    const { id, commentId } = req.params;
-    const { text } = req.body;
-
-    if (!text || text.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'نص الرد مطلوب'
-      });
-    }
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور غير موجود'
-      });
-    }
-
-    const comment = post.comments.id(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'التعليق غير موجود'
-      });
-    }
-
-    const reply = {
-      user: req.user.id,
-      text: text.trim(),
-      likes: []
-    };
-
-    comment.replies.push(reply);
-    await post.save();
-
-    // Get the new reply's ID
-    const newReply = comment.replies[comment.replies.length - 1];
-
-    // Create notification for comment owner (if not own comment and not a short)
-    if (comment.user.toString() !== req.user.id && !post.isShort) {
-      await createNotification({
-        recipient: comment.user,
-        sender: req.user.id,
-        type: 'reply',
-        post: post._id,
-        comment: { 
-          text: comment.text,
-          commentId: comment._id 
-        },
-        reply: {
-          text: text.trim(),
-          replyId: newReply._id,
-          commentId: comment._id
-        },
-        metadata: {
-          replyText: text.trim().substring(0, 100),
-          commentText: comment.text ? comment.text.substring(0, 50) : null,
-          displayPage: post.displayPage
-        }
-      });
-    }
-
-    // Populate the new reply
-    await post.populate('comments.replies.user', 'name avatar');
-
-    const updatedComment = post.comments.id(commentId);
-    const populatedReply = updatedComment.replies[updatedComment.replies.length - 1];
-
-    res.status(201).json({
-      success: true,
-      message: 'تم إضافة الرد',
-      reply: populatedReply
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Like/Unlike comment
-// @route   POST /api/v1/posts/:id/comments/:commentId/like
-// @access  Private
-exports.likeComment = async (req, res, next) => {
-  try {
-    const { id, commentId } = req.params;
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور غير موجود'
-      });
-    }
-
-    const comment = post.comments.id(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'التعليق غير موجود'
-      });
-    }
-
-    // Initialize likes array if not exists
-    if (!comment.likes) {
-      comment.likes = [];
-    }
-
-    // Check if already liked
-    const existingLike = comment.likes.find(
-      like => like.user.toString() === req.user.id
-    );
-
-    if (existingLike) {
-      // Unlike
-      comment.likes = comment.likes.filter(
-        like => like.user.toString() !== req.user.id
-      );
-    } else {
-      // Like
-      comment.likes.push({ user: req.user.id });
-
-      // Create notification (if not own comment and not a short)
-      if (comment.user.toString() !== req.user.id && !post.isShort) {
-        await createNotification({
-          recipient: comment.user,
-          sender: req.user.id,
-          type: 'comment_like',
-          post: post._id,
-          comment: { 
-            text: comment.text,
-            commentId: comment._id 
-          },
-          metadata: {
-            commentText: comment.text ? comment.text.substring(0, 100) : null,
-            displayPage: post.displayPage
-          }
-        });
-      }
-    }
-
-    await post.save();
-
-    res.status(200).json({
-      success: true,
-      isLiked: !existingLike,
-      likesCount: comment.likes.length
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Like/Unlike reply
-// @route   POST /api/v1/posts/:id/comments/:commentId/replies/:replyId/like
-// @access  Private
-exports.likeReply = async (req, res, next) => {
-  try {
-    const { id, commentId, replyId } = req.params;
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور غير موجود'
-      });
-    }
-
-    const comment = post.comments.id(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'التعليق غير موجود'
-      });
-    }
-
-    const reply = comment.replies.id(replyId);
-    if (!reply) {
-      return res.status(404).json({
-        success: false,
-        message: 'الرد غير موجود'
-      });
-    }
-
-    // Initialize likes array if not exists
-    if (!reply.likes) {
-      reply.likes = [];
-    }
-
-    // Check if already liked
-    const existingLike = reply.likes.find(
-      like => like.user.toString() === req.user.id
-    );
-
-    if (existingLike) {
-      // Unlike
-      reply.likes = reply.likes.filter(
-        like => like.user.toString() !== req.user.id
-      );
-    } else {
-      // Like
-      reply.likes.push({ user: req.user.id });
-
-      // Create notification (if not own reply and not a short)
-      if (reply.user.toString() !== req.user.id && !post.isShort) {
-        await createNotification({
-          recipient: reply.user,
-          sender: req.user.id,
-          type: 'reply_like',
-          post: post._id,
-          comment: { 
-            text: comment.text,
-            commentId: comment._id 
-          },
-          reply: {
-            text: reply.text,
-            replyId: reply._id,
-            commentId: comment._id
-          },
-          metadata: {
-            replyText: reply.text ? reply.text.substring(0, 100) : null,
-            displayPage: post.displayPage
-          }
-        });
-      }
-    }
-
-    await post.save();
-
-    res.status(200).json({
-      success: true,
-      isLiked: !existingLike,
-      likesCount: reply.likes.length
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-
-// @desc    Delete comment
-// @route   DELETE /api/v1/posts/:id/comments/:commentId
-// @access  Private
-exports.deleteComment = async (req, res, next) => {
-  try {
-    const { id, commentId } = req.params;
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور غير موجود'
-      });
-    }
-
-    const comment = post.comments.id(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'التعليق غير موجود'
-      });
-    }
-
-    // Check ownership (comment owner or post owner can delete)
-    if (comment.user.toString() !== req.user.id && post.user.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'غير مصرح لك بحذف هذا التعليق'
-      });
-    }
-
-    comment.deleteOne();
-    await post.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'تم حذف التعليق بنجاح'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Delete reply
-// @route   DELETE /api/v1/posts/:id/comments/:commentId/replies/:replyId
-// @access  Private
-exports.deleteReply = async (req, res, next) => {
-  try {
-    const { id, commentId, replyId } = req.params;
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور غير موجود'
-      });
-    }
-
-    const comment = post.comments.id(commentId);
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'التعليق غير موجود'
-      });
-    }
-
-    const reply = comment.replies.id(replyId);
-    if (!reply) {
-      return res.status(404).json({
-        success: false,
-        message: 'الرد غير موجود'
-      });
-    }
-
-    // Check ownership (reply owner, comment owner, or post owner can delete)
-    if (reply.user.toString() !== req.user.id && 
-        comment.user.toString() !== req.user.id && 
-        post.user.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'غير مصرح لك بحذف هذا الرد'
-      });
-    }
-
-    reply.deleteOne();
-    await post.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'تم حذف الرد بنجاح'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-
-// @desc    Repost a post
-// @route   POST /api/v1/posts/:id/repost
-// @access  Private
-exports.repostPost = async (req, res, next) => {
-  try {
-    const { content } = req.body;
-    const originalPostId = req.params.id;
-
-    // Find the original post
-    const originalPost = await Post.findById(originalPostId)
-      .populate('user', 'name avatar');
-
-    if (!originalPost) {
-      return res.status(404).json({
-        success: false,
-        message: 'المنشور الأصلي غير موجود'
-      });
-    }
-
-    // Don't allow reposting shorts
-    if (originalPost.isShort) {
-      return res.status(400).json({
-        success: false,
-        message: 'لا يمكن إعادة نشر الفيديوهات القصيرة'
-      });
-    }
-
-    // Check if user already reposted this post
-    const existingRepost = await Post.findOne({
-      user: req.user.id,
-      originalPost: originalPostId,
-      isRepost: true
-    });
-
-    if (existingRepost) {
-      return res.status(400).json({
-        success: false,
-        message: 'لقد قمت بإعادة نشر هذا المنشور مسبقاً'
-      });
-    }
-
-    // Create the repost
-    const repost = await Post.create({
-      user: req.user.id,
-      content: content || '',
-      type: 'repost',
-      isRepost: true,
-      originalPost: originalPostId,
-      displayPage: originalPost.displayPage, // Keep same display page
-      status: 'approved'
-    });
-
-    // Increment repost count on original post
-    originalPost.repostsCount = (originalPost.repostsCount || 0) + 1;
-    await originalPost.save();
-
-    // Populate user data and original post
-    await repost.populate('user', 'name avatar');
-    await repost.populate({
-      path: 'originalPost',
-      populate: {
-        path: 'user',
-        select: 'name avatar'
-      }
-    });
-
-    // Create notification for original post owner
-    if (originalPost.user._id.toString() !== req.user.id) {
-      await createNotification({
-        recipient: originalPost.user._id,
-        sender: req.user.id,
-        type: 'repost',
-        post: originalPost._id,
-        metadata: {
-          postContent: originalPost.content ? originalPost.content.substring(0, 100) : null,
-          displayPage: originalPost.displayPage
-        }
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'تمت إعادة النشر بنجاح',
-      post: repost
-    });
-  } catch (error) {
-    console.error('Repost error:', error);
-    next(error);
-  }
-};
-
-// @desc    Undo repost (delete repost)
-// @route   DELETE /api/v1/posts/:id/repost
-// @access  Private
-exports.undoRepost = async (req, res, next) => {
-  try {
-    const originalPostId = req.params.id;
-
-    // Find the user's repost of this post
-    const repost = await Post.findOne({
-      user: req.user.id,
-      originalPost: originalPostId,
-      isRepost: true
-    });
-
-    if (!repost) {
-      return res.status(404).json({
-        success: false,
-        message: 'لم تقم بإعادة نشر هذا المنشور'
-      });
-    }
-
-    // Decrement repost count on original post
-    const originalPost = await Post.findById(originalPostId);
-    if (originalPost) {
-      originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
-      await originalPost.save();
-    }
-
-    // Delete the repost
-    await repost.deleteOne();
-
-    res.status(200).json({
-      success: true,
-      message: 'تم إلغاء إعادة النشر'
     });
   } catch (error) {
     next(error);
