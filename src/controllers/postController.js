@@ -979,10 +979,15 @@ exports.getShortsForYou = async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // بناء الاستعلام مع فلترة الخصوصية
+    // نقبل الفيديوهات العامة أو التي لم يتم تعيين خصوصيتها (للتوافق مع الفيديوهات القديمة)
     const query = { 
       isShort: true, 
       status: 'approved',
-      privacy: 'public' // فقط الفيديوهات العامة
+      $or: [
+        { privacy: 'public' },
+        { privacy: { $exists: false } },
+        { privacy: null }
+      ]
     };
 
     // فلترة حسب التصنيف (حراج/وظائف)
@@ -1020,7 +1025,8 @@ exports.getShortsForYou = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
-      shorts: shortsWithSettings
+      posts: shortsWithSettings,
+      shorts: shortsWithSettings // للتوافق مع الإصدارات القديمة
     });
   } catch (error) {
     next(error);
@@ -1039,11 +1045,16 @@ exports.getShortsFriends = async (req, res, next) => {
     const following = user.following;
 
     // بناء الاستعلام - الأصدقاء يمكنهم رؤية الفيديوهات العامة والخاصة بالأصدقاء
+    // نقبل أيضاً الفيديوهات التي لم يتم تعيين خصوصيتها (للتوافق مع الفيديوهات القديمة)
     const query = {
       isShort: true,
       status: 'approved',
       user: { $in: following },
-      privacy: { $in: ['public', 'friends'] }
+      $or: [
+        { privacy: { $in: ['public', 'friends'] } },
+        { privacy: { $exists: false } },
+        { privacy: null }
+      ]
     };
 
     // فلترة حسب التصنيف
@@ -1081,7 +1092,8 @@ exports.getShortsFriends = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
-      shorts: shortsWithSettings
+      posts: shortsWithSettings,
+      shorts: shortsWithSettings // للتوافق مع الإصدارات القديمة
     });
   } catch (error) {
     next(error);
@@ -1259,10 +1271,15 @@ exports.getShortsByCategory = async (req, res, next) => {
       });
     }
 
+    // نقبل الفيديوهات العامة أو التي لم يتم تعيين خصوصيتها
     const query = { 
       isShort: true, 
       status: 'approved',
-      privacy: 'public',
+      $or: [
+        { privacy: 'public' },
+        { privacy: { $exists: false } },
+        { privacy: null }
+      ],
       category: { $regex: new RegExp(category, 'i') }
     };
 
@@ -1295,7 +1312,8 @@ exports.getShortsByCategory = async (req, res, next) => {
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
       category,
-      shorts: shortsWithSettings
+      posts: shortsWithSettings,
+      shorts: shortsWithSettings // للتوافق مع الإصدارات القديمة
     });
   } catch (error) {
     next(error);
@@ -1378,7 +1396,8 @@ exports.getMyShorts = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
-      shorts: shortsWithSettings
+      posts: shortsWithSettings,
+      shorts: shortsWithSettings // للتوافق مع الإصدارات القديمة
     });
   } catch (error) {
     next(error);
