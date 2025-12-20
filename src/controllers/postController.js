@@ -39,6 +39,7 @@ exports.createPost = async (req, res, next) => {
     const {
       title,
       content,
+      text, // الواجهة الأمامية ترسل text بدلاً من content
       type,
       category,
       scope,
@@ -59,7 +60,9 @@ exports.createPost = async (req, res, next) => {
       privacy,
       allowComments,
       allowDownloads,
-      allowRepost
+      allowDownload, // الواجهة الأمامية ترسل allowDownload
+      allowRepost,
+      allowDuet // الواجهة الأمامية ترسل allowDuet بدلاً من allowRepost
     } = req.body;
 
     // Handle media files from Cloudinary
@@ -98,8 +101,11 @@ exports.createPost = async (req, res, next) => {
       }
     }
 
+    // دمج content و text (الواجهة الأمامية ترسل text)
+    const finalContent = content || text || '';
+
     // Validate: Must have either content or media
-    if ((!content || content.trim() === '') && media.length === 0) {
+    if ((!finalContent || finalContent.trim() === '') && media.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'يجب إضافة محتوى نصي أو صور/فيديو'
@@ -110,7 +116,7 @@ exports.createPost = async (req, res, next) => {
     const postData = {
       user: req.user.id,
       title,
-      content,
+      content: finalContent, // استخدام finalContent الذي يدمج content و text
       media,
       type: type || 'general',
       category,
@@ -131,13 +137,23 @@ exports.createPost = async (req, res, next) => {
 
     // إضافة حقول الشورتس إذا كان المنشور فيديو قصير
     if (isShort === true || isShort === 'true') {
-      postData.attractiveTitle = attractiveTitle || null;
+      postData.attractiveTitle = attractiveTitle || title || null;
       postData.privacy = privacy || 'public';
+      // قبول allowComments أو القيمة الافتراضية true
       postData.allowComments = allowComments !== undefined ? (allowComments === true || allowComments === 'true') : true;
-      postData.allowDownloads = allowDownloads !== undefined ? (allowDownloads === true || allowDownloads === 'true') : true;
-      postData.allowRepost = allowRepost !== undefined ? (allowRepost === true || allowRepost === 'true') : true;
+      // قبول allowDownloads أو allowDownload (الواجهة الأمامية ترسل allowDownload)
+      const finalAllowDownloads = allowDownloads !== undefined ? allowDownloads : allowDownload;
+      postData.allowDownloads = finalAllowDownloads !== undefined ? (finalAllowDownloads === true || finalAllowDownloads === 'true') : true;
+      // قبول allowRepost أو allowDuet (الواجهة الأمامية ترسل allowDuet)
+      const finalAllowRepost = allowRepost !== undefined ? allowRepost : allowDuet;
+      postData.allowRepost = finalAllowRepost !== undefined ? (finalAllowRepost === true || finalAllowRepost === 'true') : true;
+      
+      // معالجة غلاف الفيديو - قبوله من coverImage أو من media[0].thumbnail
       if (coverImage) {
         postData.coverImage = coverImage;
+      } else if (media.length > 0 && media[0].thumbnail) {
+        // الواجهة الأمامية ترسل الغلاف في media[0].thumbnail
+        postData.coverImage = { url: media[0].thumbnail };
       }
     }
 
