@@ -112,6 +112,59 @@ const postSchema = new mongoose.Schema({
     default: false
   },
   
+  // ============================================
+  // إعدادات الشورتس (Shorts Settings)
+  // ============================================
+  
+  // عنوان جذاب للشورتس
+  attractiveTitle: {
+    type: String,
+    trim: true,
+    maxlength: [150, 'العنوان الجذاب يجب أن لا يتجاوز 150 حرف'],
+    default: null
+  },
+  
+  // إعدادات الخصوصية للشورتس
+  privacy: {
+    type: String,
+    enum: ['public', 'private', 'friends'],
+    default: 'public'
+  },
+  
+  // السماح بالتعليقات
+  allowComments: {
+    type: Boolean,
+    default: true
+  },
+  
+  // السماح بالتنزيلات
+  allowDownloads: {
+    type: Boolean,
+    default: true
+  },
+  
+  // السماح بإعادة النشر/الدويت
+  allowRepost: {
+    type: Boolean,
+    default: true
+  },
+  
+  // غلاف الفيديو (صورة مصغرة مخصصة)
+  coverImage: {
+    url: {
+      type: String,
+      default: null
+    },
+    publicId: {
+      type: String,
+      default: null
+    }
+  },
+  
+  // ============================================
+  // نهاية إعدادات الشورتس
+  // ============================================
+  
   // حالة التوظيف (للوظائف)
   jobStatus: {
     type: String,
@@ -266,6 +319,8 @@ postSchema.index({ displayPage: 1, createdAt: -1 });
 postSchema.index({ isShort: 1, createdAt: -1 });
 postSchema.index({ status: 1 });
 postSchema.index({ originalPost: 1 }); // Index for reposts
+postSchema.index({ privacy: 1 }); // Index for privacy filtering
+postSchema.index({ isShort: 1, privacy: 1, createdAt: -1 }); // Compound index for shorts with privacy
 
 // Virtual for likes count
 postSchema.virtual('likesCount').get(function() {

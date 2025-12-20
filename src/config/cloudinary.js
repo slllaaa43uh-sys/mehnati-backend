@@ -47,9 +47,29 @@ const storyStorage = new CloudinaryStorage({
   }
 });
 
+// Storage configuration for video covers (shorts thumbnails)
+const coverStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'mehnati/covers',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    resource_type: 'image',
+    transformation: [
+      {
+        width: 720,
+        height: 1280,
+        crop: 'fill',
+        gravity: 'center',
+        quality: 'auto:good'
+      }
+    ]
+  }
+});
+
 module.exports = {
   cloudinary,
   postStorage,
   avatarStorage,
-  storyStorage
+  storyStorage,
+  coverStorage
 };

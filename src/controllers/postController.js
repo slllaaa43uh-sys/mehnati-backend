@@ -53,7 +53,13 @@ exports.createPost = async (req, res, next) => {
       isShort,
       price,
       currency,
-      jobDetails
+      jobDetails,
+      // حقول الشورتس الجديدة
+      attractiveTitle,
+      privacy,
+      allowComments,
+      allowDownloads,
+      allowRepost
     } = req.body;
 
     // Handle media files from Cloudinary
@@ -80,6 +86,18 @@ exports.createPost = async (req, res, next) => {
       }
     }
 
+    // معالجة غلاف الفيديو (coverImage) إذا تم إرساله
+    let coverImage = null;
+    if (req.body.coverImage) {
+      try {
+        coverImage = typeof req.body.coverImage === 'string'
+          ? JSON.parse(req.body.coverImage)
+          : req.body.coverImage;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+
     // Validate: Must have either content or media
     if ((!content || content.trim() === '') && media.length === 0) {
       return res.status(400).json({
@@ -88,7 +106,8 @@ exports.createPost = async (req, res, next) => {
       });
     }
 
-    const post = await Post.create({
+    // إنشاء بيانات المنشور
+    const postData = {
       user: req.user.id,
       title,
       content,
@@ -108,7 +127,21 @@ exports.createPost = async (req, res, next) => {
       price,
       currency,
       jobDetails
-    });
+    };
+
+    // إضافة حقول الشورتس إذا كان المنشور فيديو قصير
+    if (isShort === true || isShort === 'true') {
+      postData.attractiveTitle = attractiveTitle || null;
+      postData.privacy = privacy || 'public';
+      postData.allowComments = allowComments !== undefined ? (allowComments === true || allowComments === 'true') : true;
+      postData.allowDownloads = allowDownloads !== undefined ? (allowDownloads === true || allowDownloads === 'true') : true;
+      postData.allowRepost = allowRepost !== undefined ? (allowRepost === true || allowRepost === 'true') : true;
+      if (coverImage) {
+        postData.coverImage = coverImage;
+      }
+    }
+
+    const post = await Post.create(postData);
 
     await post.populate('user', 'name avatar');
 
@@ -394,6 +427,14 @@ exports.addComment = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'المنشور غير موجود'
+      });
+    }
+
+    // التحقق من إعداد السماح بالتعليقات (للشورتس)
+    if (post.isShort && post.allowComments === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'التعليقات غير مسموح بها على هذا الفيديو'
       });
     }
 
@@ -719,8 +760,16 @@ exports.repostPost = async (req, res, next) => {
       });
     }
 
-    // لا تسمح بإعادة نشر الشورتس
+    // التحقق من إعداد السماح بإعادة النشر (للشورتس)
     if (originalPost.isShort) {
+      // التحقق من إعداد allowRepost
+      if (originalPost.allowRepost === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'إعادة النشر غير مسموح بها على هذا الفيديو'
+        });
+      }
+      // الشورتس لا يمكن إعادة نشرها بالطريقة التقليدية
       return res.status(400).json({
         success: false,
         message: 'لا يمكن إعادة نشر الفيديوهات القصيرة'
@@ -926,19 +975,52 @@ exports.deleteReply = async (req, res, next) => {
 // @access  Public
 exports.getShortsForYou = async (req, res, next) => {
   try {
-    const { limit = 10, page = 1 } = req.query;
+    const { limit = 10, page = 1, category } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const shorts = await Post.find({ isShort: true, status: 'approved' })
+    // بناء الاستعلام مع فلترة الخصوصية
+    const query = { 
+      isShort: true, 
+      status: 'approved',
+      privacy: 'public' // فقط الفيديوهات العامة
+    };
+
+    // فلترة حسب التصنيف (حراج/وظائف)
+    if (category) {
+      query.category = category;
+    }
+
+    const shorts = await Post.find(query)
       .populate('user', 'name avatar isVerified')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .select('+attractiveTitle +privacy +allowComments +allowDownloads +allowRepost +coverImage +views');
+
+    // تحويل البيانات لتضمين الحقول الجديدة
+    const shortsWithSettings = shorts.map(short => {
+      const shortObj = short.toObject();
+      return {
+        ...shortObj,
+        attractiveTitle: shortObj.attractiveTitle || null,
+        privacy: shortObj.privacy || 'public',
+        allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
+        allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
+        allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
+        coverImage: shortObj.coverImage || null,
+        views: shortObj.views || 0
+      };
+    });
+
+    const total = await Post.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: shorts.length,
-      shorts
+      count: shortsWithSettings.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      shorts: shortsWithSettings
     });
   } catch (error) {
     next(error);
@@ -950,24 +1032,56 @@ exports.getShortsForYou = async (req, res, next) => {
 // @access  Private
 exports.getShortsFriends = async (req, res, next) => {
   try {
-    const { limit = 10 } = req.query;
+    const { limit = 10, page = 1, category } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const user = await User.findById(req.user.id);
     const following = user.following;
 
-    const shorts = await Post.find({
+    // بناء الاستعلام - الأصدقاء يمكنهم رؤية الفيديوهات العامة والخاصة بالأصدقاء
+    const query = {
       isShort: true,
       status: 'approved',
-      user: { $in: following }
-    })
+      user: { $in: following },
+      privacy: { $in: ['public', 'friends'] }
+    };
+
+    // فلترة حسب التصنيف
+    if (category) {
+      query.category = category;
+    }
+
+    const shorts = await Post.find(query)
       .populate('user', 'name avatar isVerified')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit));
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select('+attractiveTitle +privacy +allowComments +allowDownloads +allowRepost +coverImage +views');
+
+    // تحويل البيانات لتضمين الحقول الجديدة
+    const shortsWithSettings = shorts.map(short => {
+      const shortObj = short.toObject();
+      return {
+        ...shortObj,
+        attractiveTitle: shortObj.attractiveTitle || null,
+        privacy: shortObj.privacy || 'public',
+        allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
+        allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
+        allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
+        coverImage: shortObj.coverImage || null,
+        views: shortObj.views || 0
+      };
+    });
+
+    const total = await Post.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: shorts.length,
-      shorts
+      count: shortsWithSettings.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      shorts: shortsWithSettings
     });
   } catch (error) {
     next(error);
@@ -1116,6 +1230,225 @@ exports.updateJobStatus = async (req, res, next) => {
       success: true,
       message: statusMessages[status],
       jobStatus: status
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ============================================
+// دوال الشورتس الجديدة
+// ============================================
+
+// @desc    Get shorts by category (haraj/jobs)
+// @route   GET /api/v1/posts/shorts/category/:category
+// @access  Public
+exports.getShortsByCategory = async (req, res, next) => {
+  try {
+    const { category } = req.params;
+    const { limit = 10, page = 1 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // التحقق من صحة التصنيف
+    const validCategories = ['haraj', 'jobs', 'الحراج', 'الوظائف'];
+    if (!validCategories.includes(category.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: 'تصنيف غير صالح. التصنيفات المتاحة: haraj, jobs'
+      });
+    }
+
+    const query = { 
+      isShort: true, 
+      status: 'approved',
+      privacy: 'public',
+      category: { $regex: new RegExp(category, 'i') }
+    };
+
+    const shorts = await Post.find(query)
+      .populate('user', 'name avatar isVerified')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const shortsWithSettings = shorts.map(short => {
+      const shortObj = short.toObject();
+      return {
+        ...shortObj,
+        attractiveTitle: shortObj.attractiveTitle || null,
+        privacy: shortObj.privacy || 'public',
+        allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
+        allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
+        allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
+        coverImage: shortObj.coverImage || null,
+        views: shortObj.views || 0
+      };
+    });
+
+    const total = await Post.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: shortsWithSettings.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      category,
+      shorts: shortsWithSettings
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Increment view count for a short
+// @route   POST /api/v1/posts/:id/view
+// @access  Public
+exports.incrementShortView = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'الفيديو غير موجود'
+      });
+    }
+
+    if (!post.isShort) {
+      return res.status(400).json({
+        success: false,
+        message: 'هذا ليس فيديو قصير'
+      });
+    }
+
+    // زيادة عدد المشاهدات
+    post.views = (post.views || 0) + 1;
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      views: post.views
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get my shorts (private shorts for the owner)
+// @route   GET /api/v1/posts/shorts/my
+// @access  Private
+exports.getMyShorts = async (req, res, next) => {
+  try {
+    const { limit = 10, page = 1 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const query = { 
+      isShort: true, 
+      status: 'approved',
+      user: req.user.id
+    };
+
+    const shorts = await Post.find(query)
+      .populate('user', 'name avatar isVerified')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const shortsWithSettings = shorts.map(short => {
+      const shortObj = short.toObject();
+      return {
+        ...shortObj,
+        attractiveTitle: shortObj.attractiveTitle || null,
+        privacy: shortObj.privacy || 'public',
+        allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
+        allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
+        allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
+        coverImage: shortObj.coverImage || null,
+        views: shortObj.views || 0
+      };
+    });
+
+    const total = await Post.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: shortsWithSettings.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      shorts: shortsWithSettings
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update short settings
+// @route   PUT /api/v1/posts/:id/short-settings
+// @access  Private (owner only)
+exports.updateShortSettings = async (req, res, next) => {
+  try {
+    const {
+      attractiveTitle,
+      privacy,
+      allowComments,
+      allowDownloads,
+      allowRepost,
+      coverImage
+    } = req.body;
+
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'الفيديو غير موجود'
+      });
+    }
+
+    if (!post.isShort) {
+      return res.status(400).json({
+        success: false,
+        message: 'هذا ليس فيديو قصير'
+      });
+    }
+
+    // التحقق من أن المستخدم هو صاحب الفيديو
+    if (post.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بتعديل هذا الفيديو'
+      });
+    }
+
+    // تحديث الإعدادات
+    if (attractiveTitle !== undefined) post.attractiveTitle = attractiveTitle;
+    if (privacy !== undefined && ['public', 'private', 'friends'].includes(privacy)) {
+      post.privacy = privacy;
+    }
+    if (allowComments !== undefined) post.allowComments = allowComments;
+    if (allowDownloads !== undefined) post.allowDownloads = allowDownloads;
+    if (allowRepost !== undefined) post.allowRepost = allowRepost;
+    if (coverImage !== undefined) post.coverImage = coverImage;
+
+    await post.save();
+    await post.populate('user', 'name avatar isVerified');
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث إعدادات الفيديو بنجاح',
+      post: {
+        ...post.toObject(),
+        attractiveTitle: post.attractiveTitle,
+        privacy: post.privacy,
+        allowComments: post.allowComments,
+        allowDownloads: post.allowDownloads,
+        allowRepost: post.allowRepost,
+        coverImage: post.coverImage,
+        views: post.views
+      }
     });
   } catch (error) {
     next(error);

@@ -20,22 +20,37 @@ const {
   undoRepost,
   hidePost,
   unhidePost,
-  updateJobStatus
+  updateJobStatus,
+  // دوال الشورتس الجديدة
+  getShortsByCategory,
+  incrementShortView,
+  getMyShorts,
+  updateShortSettings
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 // Public routes
 router.get('/', optionalAuth, getPosts);
+
+// Shorts routes (must be before /:id to avoid conflicts)
 router.get('/shorts/for-you', optionalAuth, getShortsForYou);
 router.get('/shorts/friends', protect, getShortsFriends);
+router.get('/shorts/my', protect, getMyShorts);
+router.get('/shorts/category/:category', optionalAuth, getShortsByCategory);
+
+// User posts
 router.get('/user/:userId', optionalAuth, getUserPosts);
+
+// Single post (must be after specific routes)
 router.get('/:id', optionalAuth, getPost);
 
 // Protected routes
 router.post('/', protect, upload.media, createPost);
 router.put('/:id', protect, updatePost);
 router.delete('/:id', protect, deletePost);
+
+// Reactions and comments
 router.post('/:id/react', protect, reactToPost);
 router.post('/:id/comments', protect, addComment);
 router.post('/:id/comments/:commentId/replies', protect, addReply);
@@ -54,5 +69,9 @@ router.delete('/:id/hide', protect, unhidePost);
 
 // Job status route
 router.put('/:id/job-status', protect, updateJobStatus);
+
+// Shorts specific routes
+router.post('/:id/view', optionalAuth, incrementShortView);
+router.put('/:id/short-settings', protect, updateShortSettings);
 
 module.exports = router;

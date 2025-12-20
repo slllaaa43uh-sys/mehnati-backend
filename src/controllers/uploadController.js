@@ -59,6 +59,31 @@ exports.uploadSingle = async (req, res, next) => {
   }
 };
 
+// @desc    Upload video cover image
+// @route   POST /api/v1/upload/cover
+// @access  Private
+exports.uploadCover = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'لم يتم رفع صورة الغلاف'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم رفع غلاف الفيديو بنجاح',
+      cover: {
+        url: req.file.path,
+        publicId: req.file.filename
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Delete file from cloudinary
 // @route   DELETE /api/v1/upload/:publicId
 // @access  Private
