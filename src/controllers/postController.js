@@ -399,8 +399,23 @@ exports.reactToPost = async (req, res, next) => {
       // إضافة إعجاب
       post.reactions.push({ user: req.user.id, type });
 
-      // إنشاء إشعار: أعجب بمنشورك (فقط للمنشورات العادية، ليس الشورتس)
-      if (!post.isShort) {
+      // إنشاء إشعار: أعجب بمنشورك أو أعجب بفيديوهك
+      if (post.isShort) {
+        // إشعار للشورتس
+        const videoMedia = post.media?.find(m => m.type === 'video') || post.media?.[0];
+        await createNotification({
+          recipient: post.user,
+          sender: req.user.id,
+          type: 'short_like',
+          post: post._id,
+          metadata: {
+            shortTitle: post.attractiveTitle || post.content?.substring(0, 50) || null,
+            shortThumbnail: videoMedia?.thumbnail || post.coverImage?.url || null,
+            isShort: true
+          }
+        });
+      } else {
+        // إشعار للمنشورات العادية
         await createNotification({
           recipient: post.user,
           sender: req.user.id,
@@ -471,8 +486,28 @@ exports.addComment = async (req, res, next) => {
 
     const newComment = post.comments[post.comments.length - 1];
 
-    // إنشاء إشعار: علق على منشورك (فقط للمنشورات العادية، ليس الشورتس)
-    if (!post.isShort) {
+    // إنشاء إشعار: علق على منشورك أو علق على فيديوهك
+    if (post.isShort) {
+      // إشعار للشورتس
+      const videoMedia = post.media?.find(m => m.type === 'video') || post.media?.[0];
+      await createNotification({
+        recipient: post.user,
+        sender: req.user.id,
+        type: 'short_comment',
+        post: post._id,
+        comment: {
+          commentId: newComment._id,
+          text: text.trim()
+        },
+        metadata: {
+          commentText: text.trim().substring(0, 100),
+          shortTitle: post.attractiveTitle || post.content?.substring(0, 50) || null,
+          shortThumbnail: videoMedia?.thumbnail || post.coverImage?.url || null,
+          isShort: true
+        }
+      });
+    } else {
+      // إشعار للمنشورات العادية
       await createNotification({
         recipient: post.user,
         sender: req.user.id,
@@ -549,8 +584,34 @@ exports.addReply = async (req, res, next) => {
 
     const newReply = comment.replies[comment.replies.length - 1];
 
-    // إنشاء إشعار: رد على تعليقك (فقط للمنشورات العادية، ليس الشورتس)
-    if (!post.isShort) {
+    // إنشاء إشعار: رد على تعليقك
+    if (post.isShort) {
+      // إشعار للشورتس
+      const videoMedia = post.media?.find(m => m.type === 'video') || post.media?.[0];
+      await createNotification({
+        recipient: comment.user,
+        sender: req.user.id,
+        type: 'short_reply',
+        post: post._id,
+        comment: {
+          commentId: comment._id,
+          text: comment.text
+        },
+        reply: {
+          replyId: newReply._id,
+          commentId: comment._id,
+          text: text.trim()
+        },
+        metadata: {
+          replyText: text.trim().substring(0, 100),
+          commentText: comment.text ? comment.text.substring(0, 50) : null,
+          shortTitle: post.attractiveTitle || post.content?.substring(0, 50) || null,
+          shortThumbnail: videoMedia?.thumbnail || post.coverImage?.url || null,
+          isShort: true
+        }
+      });
+    } else {
+      // إشعار للمنشورات العادية
       await createNotification({
         recipient: comment.user,
         sender: req.user.id,
@@ -633,8 +694,28 @@ exports.likeComment = async (req, res, next) => {
       // إضافة إعجاب
       comment.likes.push({ user: req.user.id });
 
-      // إنشاء إشعار: أعجب بتعليقك (فقط للمنشورات العادية، ليس الشورتس)
-      if (!post.isShort) {
+      // إنشاء إشعار: أعجب بتعليقك
+      if (post.isShort) {
+        // إشعار للشورتس
+        const videoMedia = post.media?.find(m => m.type === 'video') || post.media?.[0];
+        await createNotification({
+          recipient: comment.user,
+          sender: req.user.id,
+          type: 'short_comment_like',
+          post: post._id,
+          comment: {
+            commentId: comment._id,
+            text: comment.text
+          },
+          metadata: {
+            commentText: comment.text ? comment.text.substring(0, 100) : null,
+            shortTitle: post.attractiveTitle || post.content?.substring(0, 50) || null,
+            shortThumbnail: videoMedia?.thumbnail || post.coverImage?.url || null,
+            isShort: true
+          }
+        });
+      } else {
+        // إشعار للمنشورات العادية
         await createNotification({
           recipient: comment.user,
           sender: req.user.id,
@@ -717,8 +798,33 @@ exports.likeReply = async (req, res, next) => {
       // إضافة إعجاب
       reply.likes.push({ user: req.user.id });
 
-      // إنشاء إشعار: أعجب بردك (فقط للمنشورات العادية، ليس الشورتس)
-      if (!post.isShort) {
+      // إنشاء إشعار: أعجب بردك
+      if (post.isShort) {
+        // إشعار للشورتس
+        const videoMedia = post.media?.find(m => m.type === 'video') || post.media?.[0];
+        await createNotification({
+          recipient: reply.user,
+          sender: req.user.id,
+          type: 'short_reply_like',
+          post: post._id,
+          comment: {
+            commentId: comment._id,
+            text: comment.text
+          },
+          reply: {
+            replyId: reply._id,
+            commentId: comment._id,
+            text: reply.text
+          },
+          metadata: {
+            replyText: reply.text ? reply.text.substring(0, 100) : null,
+            shortTitle: post.attractiveTitle || post.content?.substring(0, 50) || null,
+            shortThumbnail: videoMedia?.thumbnail || post.coverImage?.url || null,
+            isShort: true
+          }
+        });
+      } else {
+        // إشعار للمنشورات العادية
         await createNotification({
           recipient: reply.user,
           sender: req.user.id,

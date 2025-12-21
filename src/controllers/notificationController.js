@@ -2,8 +2,27 @@ const Notification = require('../models/Notification');
 
 /**
  * ============================================
- * نقاط نهاية الإشعارات الجديدة
+ * نقاط نهاية الإشعارات
  * ============================================
+ * 
+ * أنواع الإشعارات المدعومة:
+ * 
+ * للمنشورات العادية:
+ * - like: أعجب بمنشورك
+ * - comment: علق على منشورك
+ * - reply: رد على تعليقك
+ * - comment_like: أعجب بتعليقك
+ * - reply_like: أعجب بردك
+ * - repost: أعاد نشر منشورك
+ * - follow: تابعك
+ * 
+ * للشورتس (الفيديوهات القصيرة):
+ * - short_like: أعجب بفيديوهك
+ * - short_comment: علق على فيديوهك
+ * - short_reply: رد على تعليقك (في الشورتس)
+ * - short_comment_like: أعجب بتعليقك (في الشورتس)
+ * - short_reply_like: أعجب بردك (في الشورتس)
+ * - short_repost: أعاد نشر فيديوهك
  */
 
 // @desc    جلب جميع الإشعارات
@@ -16,10 +35,27 @@ exports.getNotifications = async (req, res, next) => {
 
     const notifications = await Notification.find({ recipient: req.user.id })
       .populate('sender', 'name avatar')
-      .populate('post', 'content media displayPage isShort')
+      .populate('post', 'content media displayPage isShort attractiveTitle coverImage')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+    // تحويل الإشعارات لتضمين بيانات إضافية للواجهة الأمامية
+    const formattedNotifications = notifications.map(notif => {
+      const notification = notif.toObject();
+      
+      // إضافة معلومات الشورتس إذا كان الإشعار متعلق بشورتس
+      if (notification.post && notification.post.isShort) {
+        const videoMedia = notification.post.media?.find(m => m.type === 'video') || notification.post.media?.[0];
+        notification.short = {
+          _id: notification.post._id,
+          thumbnail: videoMedia?.thumbnail || notification.post.coverImage?.url || null,
+          title: notification.post.attractiveTitle || notification.post.content?.substring(0, 50) || null
+        };
+      }
+      
+      return notification;
+    });
 
     const total = await Notification.countDocuments({ recipient: req.user.id });
     const unreadCount = await Notification.countDocuments({
@@ -29,7 +65,7 @@ exports.getNotifications = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      notifications,
+      notifications: formattedNotifications,
       unreadCount,
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
