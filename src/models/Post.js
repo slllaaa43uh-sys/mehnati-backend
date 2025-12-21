@@ -255,6 +255,12 @@ const postSchema = new mongoose.Schema({
     default: 0
   },
   
+  // قائمة المستخدمين الذين أعادوا نشر الشورتس (للفيديوهات القصيرة فقط)
+  repostedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  
   // المشاهدات
   views: {
     type: Number,

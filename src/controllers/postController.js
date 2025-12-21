@@ -882,22 +882,68 @@ exports.repostPost = async (req, res, next) => {
       });
     }
 
-    // التحقق من إعداد السماح بإعادة النشر (للشورتس)
-    if (originalPost.isShort) {
-      // التحقق من إعداد allowRepost
-      if (originalPost.allowRepost === false) {
-        return res.status(403).json({
-          success: false,
-          message: 'إعادة النشر غير مسموح بها على هذا الفيديو'
-        });
-      }
-      // الشورتس لا يمكن إعادة نشرها بالطريقة التقليدية
-      return res.status(400).json({
+    // التحقق من إعداد السماح بإعادة النشر
+    if (originalPost.isShort && originalPost.allowRepost === false) {
+      return res.status(403).json({
         success: false,
-        message: 'لا يمكن إعادة نشر الفيديوهات القصيرة'
+        message: 'إعادة النشر غير مسموح بها على هذا الفيديو'
       });
     }
 
+    // ============================================
+    // إعادة نشر الشورتس (مثل تيك توك)
+    // لا يتم إنشاء منشور جديد، فقط زيادة العداد لتقوية ظهور الفيديو
+    // ============================================
+    if (originalPost.isShort) {
+      // التحقق من عدم إعادة النشر مسبقاً
+      if (!originalPost.repostedBy) {
+        originalPost.repostedBy = [];
+      }
+      
+      const alreadyReposted = originalPost.repostedBy.some(
+        userId => userId.toString() === req.user.id
+      );
+      
+      if (alreadyReposted) {
+        return res.status(400).json({
+          success: false,
+          message: 'لقد قمت بإعادة نشر هذا الفيديو مسبقاً'
+        });
+      }
+      
+      // إضافة المستخدم إلى قائمة من أعادوا النشر
+      originalPost.repostedBy.push(req.user.id);
+      originalPost.repostsCount = (originalPost.repostsCount || 0) + 1;
+      await originalPost.save();
+      
+      // إنشاء إشعار: أعاد نشر فيديوهك
+      const recipientId = originalPost.user._id || originalPost.user;
+      if (recipientId) {
+        const videoMedia = originalPost.media?.find(m => m.type === 'video') || originalPost.media?.[0];
+        await createNotification({
+          recipient: recipientId,
+          sender: req.user.id,
+          type: 'short_repost',
+          post: originalPost._id,
+          metadata: {
+            shortTitle: originalPost.attractiveTitle || originalPost.content?.substring(0, 50) || null,
+            shortThumbnail: videoMedia?.thumbnail || originalPost.coverImage?.url || null,
+            isShort: true
+          }
+        });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: 'تمت إعادة النشر بنجاح',
+        repostsCount: originalPost.repostsCount,
+        isReposted: true
+      });
+    }
+
+    // ============================================
+    // إعادة نشر المنشورات العادية (الطريقة التقليدية)
+    // ============================================
     const existingRepost = await Post.findOne({
       user: req.user.id,
       originalPost: originalPostId,
@@ -918,7 +964,7 @@ exports.repostPost = async (req, res, next) => {
       type: 'repost',
       isRepost: true,
       originalPost: originalPostId,
-      displayPage: 'home', // المنشورات المعاد نشرها تظهر في الرئيسية فقط
+      displayPage: 'home',
       status: 'approved'
     });
 
@@ -935,7 +981,6 @@ exports.repostPost = async (req, res, next) => {
     });
 
     // إنشاء إشعار: أعاد نشر منشورك
-    // التأكد من أن المستلم هو صاحب المنشور الأصلي
     const recipientId = originalPost.user._id || originalPost.user;
     if (recipientId) {
       await createNotification({
@@ -967,7 +1012,52 @@ exports.repostPost = async (req, res, next) => {
 exports.undoRepost = async (req, res, next) => {
   try {
     const originalPostId = req.params.id;
+    const originalPost = await Post.findById(originalPostId);
+    
+    if (!originalPost) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
 
+    // ============================================
+    // إلغاء إعادة نشر الشورتس
+    // ============================================
+    if (originalPost.isShort) {
+      if (!originalPost.repostedBy) {
+        originalPost.repostedBy = [];
+      }
+      
+      const hasReposted = originalPost.repostedBy.some(
+        userId => userId.toString() === req.user.id
+      );
+      
+      if (!hasReposted) {
+        return res.status(404).json({
+          success: false,
+          message: 'لم تقم بإعادة نشر هذا الفيديو'
+        });
+      }
+      
+      // إزالة المستخدم من قائمة من أعادوا النشر
+      originalPost.repostedBy = originalPost.repostedBy.filter(
+        userId => userId.toString() !== req.user.id
+      );
+      originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
+      await originalPost.save();
+      
+      return res.status(200).json({
+        success: true,
+        message: 'تم إلغاء إعادة النشر',
+        repostsCount: originalPost.repostsCount,
+        isReposted: false
+      });
+    }
+
+    // ============================================
+    // إلغاء إعادة نشر المنشورات العادية
+    // ============================================
     const repost = await Post.findOne({
       user: req.user.id,
       originalPost: originalPostId,
@@ -981,11 +1071,8 @@ exports.undoRepost = async (req, res, next) => {
       });
     }
 
-    const originalPost = await Post.findById(originalPostId);
-    if (originalPost) {
-      originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
-      await originalPost.save();
-    }
+    originalPost.repostsCount = Math.max(0, (originalPost.repostsCount || 1) - 1);
+    await originalPost.save();
 
     await repost.deleteOne();
 
