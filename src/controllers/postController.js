@@ -279,9 +279,14 @@ exports.getPost = async (req, res, next) => {
     post.views += 1;
     await post.save();
 
+    // تحويل المنشور لكائن وإضافة حقول إضافية للتوافق مع الواجهة الأمامية
+    const postObj = post.toObject();
+    postObj.likes = post.reactions ? post.reactions.length : 0;
+    postObj.commentsCount = post.comments ? post.comments.length : 0;
+
     res.status(200).json({
       success: true,
-      post
+      post: postObj
     });
   } catch (error) {
     next(error);
@@ -1677,6 +1682,64 @@ exports.updateShortSettings = async (req, res, next) => {
         coverImage: post.coverImage,
         views: post.views
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ============================================
+// دالة جلب التعليقات
+// ============================================
+
+// @desc    Get comments for a post
+// @route   GET /api/v1/posts/:id/comments
+// @access  Public
+exports.getComments = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id)
+      .populate('comments.user', 'name avatar')
+      .populate('comments.likes.user', 'name avatar')
+      .populate('comments.replies.user', 'name avatar')
+      .populate('comments.replies.likes.user', 'name avatar');
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'المنشور غير موجود'
+      });
+    }
+
+    // تحويل التعليقات لتضمين عدد الإعجابات والردود
+    const formattedComments = post.comments.map(comment => {
+      const commentObj = comment.toObject();
+      return {
+        _id: commentObj._id,
+        text: commentObj.text,
+        user: commentObj.user,
+        createdAt: commentObj.createdAt,
+        likes: commentObj.likes || [],
+        likesCount: commentObj.likes ? commentObj.likes.length : 0,
+        repliesCount: commentObj.replies ? commentObj.replies.length : 0,
+        replies: (commentObj.replies || []).map(reply => ({
+          _id: reply._id,
+          text: reply.text,
+          user: reply.user,
+          createdAt: reply.createdAt,
+          likes: reply.likes || [],
+          likesCount: reply.likes ? reply.likes.length : 0
+        }))
+      };
+    });
+
+    // ترتيب التعليقات من الأحدث للأقدم
+    formattedComments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.status(200).json({
+      success: true,
+      comments: formattedComments,
+      count: formattedComments.length
     });
   } catch (error) {
     next(error);

@@ -8,6 +8,7 @@ const {
   deletePost,
   reactToPost,
   addComment,
+  getComments,
   addReply,
   likeComment,
   likeReply,
@@ -52,6 +53,7 @@ router.delete('/:id', protect, deletePost);
 
 // Reactions and comments
 router.post('/:id/react', protect, reactToPost);
+router.get('/:id/comments', optionalAuth, getComments);
 router.post('/:id/comments', protect, addComment);
 router.post('/:id/comments/:commentId/replies', protect, addReply);
 router.post('/:id/comments/:commentId/like', protect, likeComment);
