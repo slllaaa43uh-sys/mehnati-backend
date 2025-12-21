@@ -284,6 +284,16 @@ exports.getPost = async (req, res, next) => {
     postObj.likes = post.reactions ? post.reactions.length : 0;
     postObj.commentsCount = post.comments ? post.comments.length : 0;
 
+    // إضافة حقول إعدادات الشورتس بشكل صريح إذا كان المنشور شورتس
+    if (postObj.isShort) {
+      postObj.attractiveTitle = postObj.attractiveTitle || null;
+      postObj.privacy = postObj.privacy || 'public';
+      postObj.allowComments = postObj.allowComments !== undefined ? postObj.allowComments : true;
+      postObj.allowDownloads = postObj.allowDownloads !== undefined ? postObj.allowDownloads : true;
+      postObj.allowRepost = postObj.allowRepost !== undefined ? postObj.allowRepost : true;
+      postObj.coverImage = postObj.coverImage || null;
+    }
+
     res.status(200).json({
       success: true,
       post: postObj
@@ -1331,14 +1341,33 @@ exports.getUserPosts = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // معالجة المنشورات لإضافة حقول إعدادات الشورتس بشكل صريح
+    const postsWithSettings = posts.map(post => {
+      const postObj = post.toObject();
+      // إذا كان المنشور شورتس، نضيف حقول الإعدادات بشكل صريح
+      if (postObj.isShort) {
+        return {
+          ...postObj,
+          attractiveTitle: postObj.attractiveTitle || null,
+          privacy: postObj.privacy || 'public',
+          allowComments: postObj.allowComments !== undefined ? postObj.allowComments : true,
+          allowDownloads: postObj.allowDownloads !== undefined ? postObj.allowDownloads : true,
+          allowRepost: postObj.allowRepost !== undefined ? postObj.allowRepost : true,
+          coverImage: postObj.coverImage || null,
+          views: postObj.views || 0
+        };
+      }
+      return postObj;
+    });
+
     const total = await Post.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: posts.length,
+      count: postsWithSettings.length,
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
-      posts
+      posts: postsWithSettings
     });
   } catch (error) {
     next(error);
