@@ -1374,6 +1374,14 @@ exports.getUserPosts = async (req, res, next) => {
       const postObj = post.toObject();
       // إذا كان المنشور شورتس، نضيف حقول الإعدادات بشكل صريح
       if (postObj.isShort) {
+        // سجل للتدقيق - يمكن حذفه لاحقاً
+        console.log('getUserPosts - Short settings from DB:', {
+          postId: postObj._id,
+          allowComments: postObj.allowComments,
+          allowDownloads: postObj.allowDownloads,
+          allowRepost: postObj.allowRepost
+        });
+        
         return {
           ...postObj,
           attractiveTitle: postObj.attractiveTitle || null,
