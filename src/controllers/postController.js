@@ -139,14 +139,42 @@ exports.createPost = async (req, res, next) => {
     if (isShort === true || isShort === 'true') {
       postData.attractiveTitle = attractiveTitle || title || null;
       postData.privacy = privacy || 'public';
-      // قبول allowComments أو القيمة الافتراضية true
-      postData.allowComments = allowComments !== undefined ? (allowComments === true || allowComments === 'true') : true;
+      
+      // دالة مساعدة لتحويل القيم إلى boolean بشكل صحيح
+      const parseBoolean = (value, defaultValue = true) => {
+        if (value === undefined || value === null) return defaultValue;
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') {
+          if (value.toLowerCase() === 'true') return true;
+          if (value.toLowerCase() === 'false') return false;
+        }
+        return defaultValue;
+      };
+      
+      // قبول allowComments - التعامل مع true/false و 'true'/'false'
+      postData.allowComments = parseBoolean(allowComments, true);
+      
       // قبول allowDownloads أو allowDownload (الواجهة الأمامية ترسل allowDownload)
       const finalAllowDownloads = allowDownloads !== undefined ? allowDownloads : allowDownload;
-      postData.allowDownloads = finalAllowDownloads !== undefined ? (finalAllowDownloads === true || finalAllowDownloads === 'true') : true;
+      postData.allowDownloads = parseBoolean(finalAllowDownloads, true);
+      
       // قبول allowRepost أو allowDuet (الواجهة الأمامية ترسل allowDuet)
       const finalAllowRepost = allowRepost !== undefined ? allowRepost : allowDuet;
-      postData.allowRepost = finalAllowRepost !== undefined ? (finalAllowRepost === true || finalAllowRepost === 'true') : true;
+      postData.allowRepost = parseBoolean(finalAllowRepost, true);
+      
+      // سجل للتدقيق - يمكن حذفه لاحقاً
+      console.log('Shorts settings received:', {
+        allowComments: req.body.allowComments,
+        allowDownloads: req.body.allowDownloads,
+        allowDownload: req.body.allowDownload,
+        allowRepost: req.body.allowRepost,
+        allowDuet: req.body.allowDuet,
+        parsed: {
+          allowComments: postData.allowComments,
+          allowDownloads: postData.allowDownloads,
+          allowRepost: postData.allowRepost
+        }
+      });
       
       // معالجة غلاف الفيديو - قبوله من coverImage أو من media[0].thumbnail
       if (coverImage) {
