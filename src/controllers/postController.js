@@ -1,6 +1,7 @@
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { getRecommendedShorts, updateSingleVideoScore, updateUserInterestProfile } = require('../services/recommendationService');
 
 /**
  * ============================================
@@ -474,6 +475,12 @@ exports.reactToPost = async (req, res, next) => {
 
     await post.save();
 
+    // تحديث تقييم الفيديو وملف اهتمامات المستخدم (للشورتس)
+    if (post.isShort && !existingReaction) {
+      await updateSingleVideoScore(post._id);
+      await updateUserInterestProfile(req.user.id, post._id, 'LIKE');
+    }
+
     res.status(200).json({
       success: true,
       isLiked: !existingReaction,
@@ -569,6 +576,12 @@ exports.addComment = async (req, res, next) => {
     }
 
     await post.populate('comments.user', 'name avatar');
+
+    // تحديث تقييم الفيديو وملف اهتمامات المستخدم (للشورتس)
+    if (post.isShort) {
+      await updateSingleVideoScore(post._id);
+      await updateUserInterestProfile(req.user.id, post._id, 'COMMENT');
+    }
 
     res.status(201).json({
       success: true,
@@ -1401,6 +1414,12 @@ exports.hidePost = async (req, res, next) => {
     post.hiddenBy.push(req.user.id);
     await post.save();
 
+    // تحديث تقييم الفيديو وملف اهتمامات المستخدم (للشورتس)
+    if (post.isShort) {
+      await updateSingleVideoScore(post._id);
+      await updateUserInterestProfile(req.user.id, post._id, 'HIDE');
+    }
+
     res.status(200).json({
       success: true,
       message: 'تم إخفاء المنشور'
@@ -1584,6 +1603,9 @@ exports.incrementShortView = async (req, res, next) => {
     // زيادة عدد المشاهدات
     post.views = (post.views || 0) + 1;
     await post.save();
+
+    // تحديث تقييم الفيديو بعد كل مشاهدة
+    await updateSingleVideoScore(post._id);
 
     res.status(200).json({
       success: true,
@@ -1772,30 +1794,3 @@ exports.getComments = async (req, res, next) => {
   }
 };
 
-/**
- * ============================================
- * معالجة تفاعلات الشورتس (مشاهدة، تخطي)
- * ============================================
- */
-const { handleWatchInteraction, handleExplicitInteraction } = require("../services/recommendationService");
-
-exports.handleShortInteraction = async (req, res, next) => {
-  try {
-    const { watchTime, videoDuration, action } = req.body;
-    const postId = req.params.id;
-    const userId = req.user.id;
-
-    if (action === 'NOT_INTERESTED') {
-        await handleExplicitInteraction(postId, userId, 'NOT_INTERESTED');
-    } else {
-        if (typeof watchTime !== 'number' || typeof videoDuration !== 'number') {
-            return res.status(400).json({ success: false, message: 'watchTime and videoDuration are required.' });
-        }
-        await handleWatchInteraction(postId, userId, watchTime, videoDuration);
-    }
-
-    res.status(200).json({ success: true, message: 'Interaction recorded.' });
-  } catch (error) {
-    next(error);
-  }
-};

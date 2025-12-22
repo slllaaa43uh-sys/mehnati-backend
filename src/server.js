@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
+const { setupCronJob } = require('./cron/recommendationCron');
 
 // Route files
 const authRoutes = require('./routes/auth');
@@ -23,6 +24,9 @@ const app = express();
 
 // Connect to database
 connectDB();
+
+// Setup recommendation cron job (updates scores every 30 minutes)
+setupCronJob(30);
 
 // Middleware
 app.use(helmet({
