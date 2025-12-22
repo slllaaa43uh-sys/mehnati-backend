@@ -76,4 +76,7 @@ router.put('/:id/job-status', protect, updateJobStatus);
 router.post('/:id/view', optionalAuth, incrementShortView);
 router.put('/:id/short-settings', protect, updateShortSettings);
 
+// Route for shorts interactions
+router.post("/shorts/:id/interaction", protect, postController.handleShortInteraction);
+
 module.exports = router;

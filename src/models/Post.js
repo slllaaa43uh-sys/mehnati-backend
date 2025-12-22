@@ -165,6 +165,26 @@ const postSchema = new mongoose.Schema({
   // نهاية إعدادات الشورتس
   // ============================================
   
+    // ============================================
+  // قسم التوصية والانتشار (Recommendation & Propagation)
+  // ============================================
+  recommendation: {
+    score: { type: Number, default: 0, index: true }, // التقييم الحالي للفيديو
+    positivePoints: { type: Number, default: 0 },
+    negativePoints: { type: Number, default: 0 },
+    watchTimeTotal: { type: Number, default: 0 },
+    fullWatchCount: { type: Number, default: 0 },
+    shareCount: { type: Number, default: 0 },
+    followCount: { type: Number, default: 0 },
+    commentCount: { type: Number, default: 0 },
+    likeCount: { type: Number, default: 0 },
+    skipCount: { type: Number, default: 0 },
+    propagationTier: { type: Number, default: 0, index: true },
+    lastTestedAt: { type: Date, default: Date.now }
+  },
+
+  videoDuration: { type: Number, default: 0 },
+
   // حالة التوظيف (للوظائف)
   jobStatus: {
     type: String,

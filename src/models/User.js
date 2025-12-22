@@ -89,6 +89,14 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  interestProfile: {
+    interactedCategories: { type: Map, of: Number, default: {} },
+    interactedCreators: { type: Map, of: Number, default: {} },
+    fullyWatchedVideos: [mongoose.Schema.Types.ObjectId],
+    skippedVideos: [mongoose.Schema.Types.ObjectId],
+    hiddenCreators: [mongoose.Schema.Types.ObjectId]
+  },
+
   lastSeen: {
     type: Date,
     default: Date.now

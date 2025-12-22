@@ -1227,58 +1227,19 @@ exports.deleteReply = async (req, res, next) => {
 // @access  Public
 exports.getShortsForYou = async (req, res, next) => {
   try {
-    const { limit = 10, page = 1, category } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const userId = req.user ? req.user.id : null;
+    const { limit = 10, page = 1 } = req.query;
 
-    // بناء الاستعلام مع فلترة الخصوصية
-    // نقبل الفيديوهات العامة أو التي لم يتم تعيين خصوصيتها (للتوافق مع الفيديوهات القديمة)
-    const query = { 
-      isShort: true, 
-      status: 'approved',
-      $or: [
-        { privacy: 'public' },
-        { privacy: { $exists: false } },
-        { privacy: null }
-      ]
-    };
-
-    // فلترة حسب التصنيف (حراج/وظائف)
-    if (category) {
-      query.category = category;
-    }
-
-    const shorts = await Post.find(query)
-      .populate('user', 'name avatar isVerified')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .select('+attractiveTitle +privacy +allowComments +allowDownloads +allowRepost +coverImage +views');
-
-    // تحويل البيانات لتضمين الحقول الجديدة
-    const shortsWithSettings = shorts.map(short => {
-      const shortObj = short.toObject();
-      return {
-        ...shortObj,
-        attractiveTitle: shortObj.attractiveTitle || null,
-        privacy: shortObj.privacy || 'public',
-        allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
-        allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
-        allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
-        coverImage: shortObj.coverImage || null,
-        views: shortObj.views || 0
-      };
-    });
-
-    const total = await Post.countDocuments(query);
+    const result = await getRecommendedShorts(userId, page, limit);
 
     res.status(200).json({
       success: true,
-      count: shortsWithSettings.length,
-      total,
-      totalPages: Math.ceil(total / parseInt(limit)),
-      currentPage: parseInt(page),
-      posts: shortsWithSettings,
-      shorts: shortsWithSettings // للتوافق مع الإصدارات القديمة
+      count: result.posts.length,
+      total: result.total,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      posts: result.posts,
+      shorts: result.posts // للتوافق
     });
   } catch (error) {
     next(error);
@@ -1806,6 +1767,34 @@ exports.getComments = async (req, res, next) => {
       comments: formattedComments,
       count: formattedComments.length
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ============================================
+ * معالجة تفاعلات الشورتس (مشاهدة، تخطي)
+ * ============================================
+ */
+const { handleWatchInteraction, handleExplicitInteraction } = require("../services/recommendationService");
+
+exports.handleShortInteraction = async (req, res, next) => {
+  try {
+    const { watchTime, videoDuration, action } = req.body;
+    const postId = req.params.id;
+    const userId = req.user.id;
+
+    if (action === 'NOT_INTERESTED') {
+        await handleExplicitInteraction(postId, userId, 'NOT_INTERESTED');
+    } else {
+        if (typeof watchTime !== 'number' || typeof videoDuration !== 'number') {
+            return res.status(400).json({ success: false, message: 'watchTime and videoDuration are required.' });
+        }
+        await handleWatchInteraction(postId, userId, watchTime, videoDuration);
+    }
+
+    res.status(200).json({ success: true, message: 'Interaction recorded.' });
   } catch (error) {
     next(error);
   }
