@@ -15,12 +15,11 @@ function extractCloudinaryPublicId(url) {
   if (!url || !url.includes('cloudinary.com')) return null;
   
   try {
-    // مثال: https://res.cloudinary.com/dkj9e4low/image/upload/v1766433887/mehnati/posts/zg2fcq0mshnzr1hmmfwx.jpg
     const parts = url.split('/upload/');
     if (parts.length !== 2) return null;
     
     let path = parts[1];
-    // إزالة version إذا وجد (v1234567890/)
+    // إزالة version إذا وجد
     path = path.replace(/^v\d+\//, '');
     // إزالة امتداد الملف
     path = path.replace(/\.[^/.]+$/, '');
@@ -33,8 +32,6 @@ function extractCloudinaryPublicId(url) {
 
 /**
  * الحصول على base URL لـ Cloudinary من رابط صورة
- * @param {string} url - رابط Cloudinary
- * @returns {string} - base URL
  */
 function getCloudinaryBaseUrl(url) {
   if (!url || !url.includes('cloudinary.com')) return null;
@@ -44,14 +41,11 @@ function getCloudinaryBaseUrl(url) {
 
 /**
  * إنشاء صورة مجمعة (Collage) من عدة صور باستخدام Cloudinary overlays
- * تدعم 2، 3، أو 4 صور
- * @param {Array} imageUrls - مصفوفة روابط الصور
- * @returns {string} - رابط الصورة المجمعة
+ * تدعم 2، 3، أو 4 صور بشكل شبكي
  */
 function createCollageUrl(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return null;
   if (imageUrls.length === 1) {
-    // صورة واحدة - تحسينها فقط
     return optimizeImageForOG(imageUrls[0]);
   }
   
@@ -69,24 +63,20 @@ function createCollageUrl(imageUrls) {
   
   if (publicIds.length === 2) {
     // صورتين جنباً إلى جنب (600x630 لكل صورة)
-    const halfWidth = finalWidth / 2;
+    const halfWidth = 600;
     transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
       `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${finalHeight},g_auto/fl_layer_apply,g_east`;
-  } else if (publicIds.length === 3) {
-    // صورة كبيرة على اليسار (600x630) وصورتين صغيرتين على اليمين (600x315 لكل واحدة)
-    const halfWidth = finalWidth / 2;
-    const halfHeight = finalHeight / 2;
+  } else if (publicIds.length >= 3) {
+    // 3 صور أو أكثر: صورة كبيرة على اليسار + صورتين على اليمين
+    // الصورة الأولى: 600x630 (نصف العرض، كامل الارتفاع)
+    // الصورة الثانية: 600x315 (أعلى اليمين)
+    // الصورة الثالثة: 600x315 (أسفل اليمين)
+    const halfWidth = 600;
+    const halfHeight = 315;
+    
     transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
       `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_north_east/` +
       `l_${publicIds[2]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_east`;
-  } else {
-    // 4 صور أو أكثر - شبكة 2x2 (600x315 لكل صورة)
-    const halfWidth = finalWidth / 2;
-    const halfHeight = finalHeight / 2;
-    transformation = `c_fill,w_${halfWidth},h_${halfHeight},g_auto/` +
-      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_north_east/` +
-      `l_${publicIds[2]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_west/` +
-      `l_${publicIds[3] || publicIds[0]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_east`;
   }
   
   // استخراج مسار الصورة الأولى
@@ -98,8 +88,6 @@ function createCollageUrl(imageUrls) {
 
 /**
  * تحسين صورة واحدة لـ Open Graph
- * @param {string} imageUrl - رابط الصورة
- * @returns {string} - رابط الصورة المحسنة
  */
 function optimizeImageForOG(imageUrl) {
   if (!imageUrl || !imageUrl.includes('cloudinary.com')) return imageUrl;
@@ -115,20 +103,29 @@ function optimizeImageForOG(imageUrl) {
 
 /**
  * الحصول على صورة مصغرة من فيديو Cloudinary
- * عن طريق تغيير الامتداد إلى jpg واستخدام so_0 للإطار الأول
- * @param {string} videoUrl - رابط الفيديو
- * @returns {string} - رابط الصورة المصغرة
+ * بشكل طولي (9:16) مع أيقونة تشغيل
  */
 function getVideoThumbnail(videoUrl) {
   if (!videoUrl) return null;
   
-  // إذا كان الفيديو من Cloudinary
   if (videoUrl.includes('cloudinary.com')) {
-    // تحويل video/upload إلى video/upload/so_0,c_fill,w_1200,h_630,g_auto
-    // وتغيير الامتداد إلى jpg
-    let thumbnailUrl = videoUrl
-      .replace('/video/upload/', '/video/upload/so_0,c_fill,w_1200,h_630,g_auto/')
-      .replace(/\.(mp4|webm|mov|avi)$/i, '.jpg');
+    // استخراج base URL و path
+    const parts = videoUrl.split('/video/upload/');
+    if (parts.length !== 2) return null;
+    
+    const baseUrl = parts[0] + '/video/upload/';
+    let path = parts[1];
+    path = path.replace(/^v\d+\//, '');
+    
+    // إنشاء صورة مصغرة طولية (720x1280) مع أيقونة تشغيل
+    // so_0 = الإطار الأول
+    // c_fill,w_720,h_1280 = أبعاد طولية
+    // l_text:Arial_80_bold:▶,co_white,o_80 = أيقونة تشغيل
+    const thumbnailUrl = baseUrl + 
+      'so_0,c_fill,w_720,h_1280,g_auto/' +
+      'l_text:Arial_120_bold:%E2%96%B6,co_white,o_70/' +
+      'fl_layer_apply,g_center/' +
+      path.replace(/\.(mp4|webm|mov|avi)$/i, '.jpg');
     
     return thumbnailUrl;
   }
@@ -138,10 +135,6 @@ function getVideoThumbnail(videoUrl) {
 
 /**
  * إنشاء صورة Open Graph محسنة للمشاركة
- * @param {Array} media - مصفوفة الوسائط
- * @param {string} baseUrl - الرابط الأساسي
- * @param {Object} coverImage - صورة الغلاف إذا وجدت
- * @returns {string} - رابط صورة OG
  */
 function getOptimizedOgImage(media, baseUrl, coverImage = null) {
   if (!media || media.length === 0) {
@@ -153,14 +146,12 @@ function getOptimizedOgImage(media, baseUrl, coverImage = null) {
   
   // إذا كان هناك فيديو
   if (videos.length > 0) {
-    // أولوية: صورة الغلاف المخصصة > الصورة المصغرة المحفوظة > توليد من الفيديو
     if (coverImage && coverImage.url) {
-      return optimizeImageForOG(coverImage.url);
+      return getVideoThumbnailWithPlay(coverImage.url);
     }
     if (videos[0].thumbnail) {
-      return optimizeImageForOG(videos[0].thumbnail);
+      return getVideoThumbnailWithPlay(videos[0].thumbnail);
     }
-    // توليد صورة مصغرة من الفيديو
     const generatedThumbnail = getVideoThumbnail(videos[0].url);
     if (generatedThumbnail) {
       return generatedThumbnail;
@@ -168,7 +159,7 @@ function getOptimizedOgImage(media, baseUrl, coverImage = null) {
     return `${baseUrl}/assets/default-video.png`;
   }
   
-  // إذا كانت هناك صور متعددة، إنشاء صورة مجمعة
+  // إذا كانت هناك صور متعددة
   if (images.length > 1) {
     const collageUrl = createCollageUrl(images);
     if (collageUrl) {
@@ -185,8 +176,27 @@ function getOptimizedOgImage(media, baseUrl, coverImage = null) {
 }
 
 /**
+ * إضافة أيقونة تشغيل على صورة موجودة
+ */
+function getVideoThumbnailWithPlay(imageUrl) {
+  if (!imageUrl || !imageUrl.includes('cloudinary.com')) return imageUrl;
+  
+  const baseUrl = getCloudinaryBaseUrl(imageUrl);
+  if (!baseUrl) return imageUrl;
+  
+  let path = imageUrl.split('/upload/')[1];
+  path = path.replace(/^v\d+\//, '');
+  
+  // صورة طولية مع أيقونة تشغيل
+  return baseUrl + 
+    'c_fill,w_720,h_1280,g_auto/' +
+    'l_text:Arial_120_bold:%E2%96%B6,co_white,o_70/' +
+    'fl_layer_apply,g_center/' +
+    path;
+}
+
+/**
  * صفحة مشاركة المنشور
- * GET /share/post/:id
  */
 router.get('/post/:id', async (req, res) => {
   try {
@@ -202,7 +212,6 @@ router.get('/post/:id', async (req, res) => {
     
     const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
     
-    // الحصول على صورة OG المحسنة (مع دعم الصور المجمعة والفيديو)
     const ogImage = getOptimizedOgImage(post.media, baseUrl, post.coverImage);
     
     let ogVideo = null;
@@ -215,7 +224,6 @@ router.get('/post/:id', async (req, res) => {
     const description = post.content ? post.content.substring(0, 200) : 'شاهد هذا المنشور على تطبيق مهنتي لي';
     const userName = post.user?.name || 'مستخدم';
     
-    // حساب عدد الصور للعرض في الوصف
     const imageCount = post.media ? post.media.filter(m => m.type === 'image').length : 0;
     const enhancedDescription = imageCount > 1 
       ? `${description} | ${imageCount} صور`
@@ -245,7 +253,6 @@ router.get('/post/:id', async (req, res) => {
 
 /**
  * صفحة مشاركة الشورتس
- * GET /share/short/:id
  */
 router.get('/short/:id', async (req, res) => {
   try {
@@ -259,12 +266,11 @@ router.get('/short/:id', async (req, res) => {
     const videoMedia = post.media?.find(m => m.type === 'video');
     const ogVideo = videoMedia?.url;
     
-    // الحصول على صورة مصغرة للفيديو
     let ogImage = null;
     if (post.coverImage?.url) {
-      ogImage = optimizeImageForOG(post.coverImage.url);
+      ogImage = getVideoThumbnailWithPlay(post.coverImage.url);
     } else if (videoMedia?.thumbnail) {
-      ogImage = optimizeImageForOG(videoMedia.thumbnail);
+      ogImage = getVideoThumbnailWithPlay(videoMedia.thumbnail);
     } else if (ogVideo) {
       ogImage = getVideoThumbnail(ogVideo);
     }
@@ -308,7 +314,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   const fullOgImage = ogImage || `${baseUrl}/assets/default-post.png`;
   const fullOgVideo = getFullUrl(ogVideo, baseUrl);
 
-  // إنشاء معرض الوسائط مع تحسينات للعرض
   let mediaGallery = '';
   if (media && media.length > 0) {
     const images = media.filter(m => m.type === 'image');
@@ -316,7 +321,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     
     if (videos.length > 0) {
       const videoUrl = getFullUrl(videos[0].url, baseUrl);
-      // استخدام الصورة المصغرة المولدة
       let thumbUrl = videos[0].thumbnail ? getFullUrl(videos[0].thumbnail, baseUrl) : null;
       if (!thumbUrl && videoUrl && videoUrl.includes('cloudinary.com')) {
         thumbUrl = getVideoThumbnail(videoUrl);
@@ -334,7 +338,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
         </div>
       `;
     } else if (images.length > 0) {
-      // تحديد نوع الشبكة حسب عدد الصور
       const gridClass = images.length === 1 ? 'single' : 
                         images.length === 2 ? 'double' : 
                         images.length === 3 ? 'triple' : 'quad';
@@ -360,25 +363,21 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} - ${APP_NAME}</title>
   
-  <!-- Open Graph Meta Tags -->
   <meta property="og:type" content="${hasVideo ? 'video.other' : 'article'}">
   <meta property="og:url" content="${pageUrl}">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${fullOgImage}">
   <meta property="og:image:secure_url" content="${fullOgImage}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  <meta property="og:image:width" content="${hasVideo ? '720' : '1200'}">
+  <meta property="og:image:height" content="${hasVideo ? '1280' : '630'}">
   <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
   <meta property="og:locale" content="ar_SA">
   ${fullOgVideo ? `<meta property="og:video" content="${fullOgVideo}">
   <meta property="og:video:secure_url" content="${fullOgVideo}">
-  <meta property="og:video:type" content="video/mp4">
-  <meta property="og:video:width" content="1280">
-  <meta property="og:video:height" content="720">` : ''}
+  <meta property="og:video:type" content="video/mp4">` : ''}
   
-  <!-- Twitter Card Meta Tags -->
   <meta name="twitter:card" content="${hasVideo ? 'player' : 'summary_large_image'}">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
@@ -446,30 +445,20 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     }
     .user-info h3 { font-size: 15px; color: #1a1a1a; }
     .user-info p { font-size: 11px; color: #666; }
-    
-    /* Video Styles */
     .video-container { background: #000; }
     .video-player { width: 100%; max-height: 450px; display: block; }
-    
-    /* Image Gallery Styles - Grid Layout */
     .image-gallery {
       display: grid;
       gap: 2px;
       background: #f0f0f0;
     }
-    .image-gallery.single {
-      grid-template-columns: 1fr;
-    }
-    .image-gallery.double {
-      grid-template-columns: 1fr 1fr;
-    }
+    .image-gallery.single { grid-template-columns: 1fr; }
+    .image-gallery.double { grid-template-columns: 1fr 1fr; }
     .image-gallery.triple {
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
     }
-    .image-gallery.triple .gallery-item:first-child {
-      grid-row: span 2;
-    }
+    .image-gallery.triple .gallery-item:first-child { grid-row: span 2; }
     .image-gallery.quad {
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
@@ -487,13 +476,8 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       min-height: 150px;
       max-height: 300px;
     }
-    .image-gallery.single .gallery-image {
-      max-height: 400px;
-    }
-    .image-gallery.triple .gallery-item:first-child .gallery-image {
-      min-height: 302px;
-    }
-    
+    .image-gallery.single .gallery-image { max-height: 400px; }
+    .image-gallery.triple .gallery-item:first-child .gallery-image { min-height: 302px; }
     .content { 
       padding: 14px 16px; 
       font-size: 14px; 
@@ -523,12 +507,9 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     ${mediaGallery}
     ${content ? `<div class="content">${escapeHtml(content.substring(0, 500))}${content.length > 500 ? '...' : ''}</div>` : ''}
   </div>
-  
   <script>
     document.querySelectorAll('.gallery-image').forEach(function(img) {
-      img.onerror = function() {
-        this.parentElement.style.display = 'none';
-      };
+      img.onerror = function() { this.parentElement.style.display = 'none'; };
     });
   </script>
 </body>
@@ -547,15 +528,14 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} - ${APP_NAME}</title>
   
-  <!-- Open Graph Meta Tags -->
   <meta property="og:type" content="video.other">
   <meta property="og:url" content="${pageUrl}">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${fullOgImage}">
   <meta property="og:image:secure_url" content="${fullOgImage}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  <meta property="og:image:width" content="720">
+  <meta property="og:image:height" content="1280">
   <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
   <meta property="og:locale" content="ar_SA">
@@ -565,14 +545,10 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   <meta property="og:video:width" content="720">
   <meta property="og:video:height" content="1280">` : ''}
   
-  <!-- Twitter Card Meta Tags -->
   <meta name="twitter:card" content="player">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${fullOgImage}">
-  ${fullOgVideo ? `<meta name="twitter:player" content="${fullOgVideo}">
-  <meta name="twitter:player:width" content="720">
-  <meta name="twitter:player:height" content="1280">` : ''}
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -614,20 +590,9 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
     .download-btn:hover { transform: scale(1.05); }
     .download-btn svg { width: 20px; height: 20px; }
     .promo-text { color: white; font-size: 11px; margin-top: 8px; opacity: 0.9; }
-    .video-wrapper { 
-      background: #000; 
-      position: relative;
-    }
-    .video-player { 
-      width: 100%; 
-      max-height: 70vh; 
-      display: block; 
-    }
-    .video-poster {
-      width: 100%;
-      aspect-ratio: 9/16;
-      object-fit: cover;
-    }
+    .video-wrapper { background: #000; position: relative; }
+    .video-player { width: 100%; max-height: 70vh; display: block; }
+    .video-poster { width: 100%; aspect-ratio: 9/16; object-fit: cover; }
     .info { padding: 14px; color: white; }
     .user-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .avatar {
