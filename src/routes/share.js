@@ -350,12 +350,40 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       </a>
       <p class="promo-text">شاهد المزيد على التطبيق</p>
     </div>
-    <div class="video-wrapper">
+    <div class="video-wrapper" id="video-container">
       ${fullOgVideo ? `
-      <video controls playsinline preload="auto" poster="${fullOgImage}" class="video-player" crossorigin="anonymous">
-        <source src="${fullOgVideo}" type="video/mp4">
+      <video id="main-video" controls playsinline preload="metadata" poster="${fullOgImage}" class="video-player">
         Your browser does not support the video tag.
       </video>
+      <script>
+        (function() {
+          var video = document.getElementById('main-video');
+          var videoUrl = '${fullOgVideo}';
+          
+          // Try to load video
+          fetch(videoUrl, { method: 'HEAD', mode: 'cors' })
+            .then(function(response) {
+              if (response.ok) {
+                video.src = videoUrl;
+                video.load();
+              }
+            })
+            .catch(function() {
+              // Fallback: direct src
+              video.src = videoUrl;
+              video.load();
+            });
+          
+          // Click to play
+          video.addEventListener('click', function() {
+            if (video.paused) {
+              video.play().catch(function() {});
+            } else {
+              video.pause();
+            }
+          });
+        })();
+      </script>
       ` : `<img src="${fullOgImage}" alt="غلاف الفيديو" style="width:100%; aspect-ratio:9/16; object-fit:cover;">`}
     </div>
     <div class="info">
