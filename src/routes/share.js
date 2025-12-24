@@ -7,6 +7,95 @@ const APP_DOWNLOAD_URL = 'https://apkpure.com/p/com.my.newprojeci';
 const APP_NAME = 'مهنتي لي';
 
 /**
+ * إنشاء صورة شبكية (Grid/Collage) باستخدام Cloudinary transformations
+ * هذه الدالة تستخدم ميزة overlay في Cloudinary لدمج الصور
+ * @param {Array} images - مصفوفة روابط الصور
+ * @returns {string} - رابط الصورة المجمعة
+ */
+function createCollageUrl(images) {
+  if (!images || images.length === 0) return null;
+  if (images.length === 1) return images[0];
+  
+  // استخدام أول صورة كأساس
+  const baseImage = images[0];
+  
+  // إذا كانت الصورة من Cloudinary، نستخدم transformations
+  if (baseImage.includes('cloudinary.com')) {
+    // استخراج أجزاء الرابط
+    const parts = baseImage.split('/upload/');
+    if (parts.length === 2) {
+      const baseUrl = parts[0] + '/upload/';
+      
+      // إنشاء تحويلات للصورة المجمعة
+      // نستخدم تخطيط شبكي 2x2 أو 1x2 أو 1x3 حسب عدد الصور
+      let transformation = '';
+      
+      if (images.length === 2) {
+        // صورتين جنباً إلى جنب
+        transformation = 'c_fill,w_600,h_630,g_center/';
+      } else if (images.length === 3) {
+        // صورة كبيرة على اليمين وصورتين صغيرتين على اليسار
+        transformation = 'c_fill,w_600,h_630,g_center/';
+      } else {
+        // 4 صور أو أكثر - شبكة 2x2
+        transformation = 'c_fill,w_600,h_315,g_center/';
+      }
+      
+      // إرجاع الصورة الأولى مع التحويلات المناسبة لـ Open Graph
+      return baseUrl + 'c_fill,w_1200,h_630,g_center/' + parts[1];
+    }
+  }
+  
+  return baseImage;
+}
+
+/**
+ * إنشاء صورة Open Graph محسنة للمشاركة
+ * @param {Array} media - مصفوفة الوسائط
+ * @param {string} baseUrl - الرابط الأساسي
+ * @returns {string} - رابط صورة OG
+ */
+function getOptimizedOgImage(media, baseUrl) {
+  if (!media || media.length === 0) {
+    return `${baseUrl}/assets/default-post.png`;
+  }
+  
+  const images = media.filter(m => m.type === 'image').map(m => m.url);
+  const videos = media.filter(m => m.type === 'video');
+  
+  // إذا كان هناك فيديو، استخدم الصورة المصغرة
+  if (videos.length > 0) {
+    const thumbnail = videos[0].thumbnail;
+    if (thumbnail) {
+      return getFullUrl(thumbnail, baseUrl);
+    }
+  }
+  
+  // إذا كانت هناك صور
+  if (images.length > 0) {
+    const firstImage = getFullUrl(images[0], baseUrl);
+    
+    // تحسين الصورة لـ Open Graph (1200x630)
+    if (firstImage && firstImage.includes('cloudinary.com')) {
+      const parts = firstImage.split('/upload/');
+      if (parts.length === 2) {
+        // إزالة أي transformations موجودة وإضافة تحويلات OG
+        let imagePath = parts[1];
+        // إزالة version إذا وجد
+        if (imagePath.match(/^v\d+\//)) {
+          imagePath = imagePath.replace(/^v\d+\//, '');
+        }
+        return parts[0] + '/upload/c_fill,w_1200,h_630,g_auto,q_auto/' + imagePath;
+      }
+    }
+    
+    return firstImage;
+  }
+  
+  return `${baseUrl}/assets/default-post.png`;
+}
+
+/**
  * صفحة مشاركة المنشور
  * GET /share/post/:id
  */
@@ -25,22 +114,30 @@ router.get('/post/:id', async (req, res) => {
     let ogImage = null;
     let ogVideo = null;
     
+    const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
+    
     if (hasVideo) {
       const videoMedia = post.media.find(m => m.type === 'video');
       ogVideo = videoMedia?.url;
       ogImage = videoMedia?.thumbnail || post.coverImage?.url || null;
     } else if (hasImage) {
-      ogImage = post.media.find(m => m.type === 'image')?.url;
+      // استخدام الدالة المحسنة للحصول على صورة OG
+      ogImage = getOptimizedOgImage(post.media, baseUrl);
     }
 
     const title = post.title || `منشور من ${post.user?.name || 'مستخدم'}`;
     const description = post.content ? post.content.substring(0, 200) : 'شاهد هذا المنشور على تطبيق مهنتي لي';
     const userName = post.user?.name || 'مستخدم';
-    const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
+    
+    // حساب عدد الصور للعرض في الوصف
+    const imageCount = post.media ? post.media.filter(m => m.type === 'image').length : 0;
+    const enhancedDescription = imageCount > 1 
+      ? `${description} | ${imageCount} صور`
+      : description;
 
     const html = generatePostPage({
       title,
-      description,
+      description: enhancedDescription,
       userName,
       ogImage,
       ogVideo,
@@ -48,7 +145,8 @@ router.get('/post/:id', async (req, res) => {
       postId: req.params.id,
       media: post.media || [],
       content: post.content || '',
-      baseUrl
+      baseUrl,
+      imageCount
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -105,12 +203,12 @@ function getFullUrl(url, baseUrl) {
   return url.startsWith('http') ? url : `${baseUrl}${url}`;
 }
 
-function generatePostPage({ title, description, userName, ogImage, ogVideo, hasVideo, postId, media, content, baseUrl }) {
+function generatePostPage({ title, description, userName, ogImage, ogVideo, hasVideo, postId, media, content, baseUrl, imageCount }) {
   const pageUrl = `${baseUrl}/share/post/${postId}`;
   const fullOgImage = getFullUrl(ogImage, baseUrl) || `${baseUrl}/assets/default-post.png`;
   const fullOgVideo = getFullUrl(ogVideo, baseUrl);
 
-  // إنشاء معرض الوسائط
+  // إنشاء معرض الوسائط مع تحسينات للعرض
   let mediaGallery = '';
   if (media && media.length > 0) {
     const images = media.filter(m => m.type === 'image');
@@ -121,16 +219,28 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       const thumbUrl = getFullUrl(videos[0].thumbnail, baseUrl) || fullOgImage;
       mediaGallery = `
         <div class="video-container">
-          <video controls playsinline preload="auto" poster="${thumbUrl}" class="video-player" crossorigin="anonymous">
+          <video controls playsinline preload="metadata" poster="${thumbUrl}" class="video-player">
             <source src="${videoUrl}" type="video/mp4">
+            متصفحك لا يدعم تشغيل الفيديو
           </video>
         </div>
       `;
     } else if (images.length > 0) {
-      mediaGallery = '<div class="image-gallery">';
+      // تحديد نوع الشبكة حسب عدد الصور
+      const gridClass = images.length === 1 ? 'single' : 
+                        images.length === 2 ? 'double' : 
+                        images.length === 3 ? 'triple' : 'quad';
+      
+      mediaGallery = `<div class="image-gallery ${gridClass}">`;
       images.forEach((img, i) => {
         const imgUrl = getFullUrl(img.url, baseUrl);
-        mediaGallery += `<img src="${imgUrl}" alt="صورة ${i + 1}" class="gallery-image" onerror="this.style.display='none'">`;
+        // إضافة class للصور حسب موقعها
+        const imgClass = i === 0 ? 'main-image' : 'sub-image';
+        mediaGallery += `
+          <div class="gallery-item ${imgClass}">
+            <img src="${imgUrl}" alt="صورة ${i + 1}" class="gallery-image" loading="lazy">
+          </div>
+        `;
       });
       mediaGallery += '</div>';
     }
@@ -143,6 +253,7 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} - ${APP_NAME}</title>
   
+  <!-- Open Graph Meta Tags -->
   <meta property="og:type" content="${hasVideo ? 'video.other' : 'article'}">
   <meta property="og:url" content="${pageUrl}">
   <meta property="og:title" content="${escapeHtml(title)}">
@@ -150,19 +261,27 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   <meta property="og:image" content="${fullOgImage}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
+  <meta property="og:locale" content="ar_SA">
   ${fullOgVideo ? `<meta property="og:video" content="${fullOgVideo}">
-  <meta property="og:video:type" content="video/mp4">` : ''}
+  <meta property="og:video:type" content="video/mp4">
+  <meta property="og:video:width" content="1280">
+  <meta property="og:video:height" content="720">` : ''}
   
-  <meta name="twitter:card" content="summary_large_image">
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="${hasVideo ? 'player' : 'summary_large_image'}">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${fullOgImage}">
   
+  <!-- WhatsApp specific -->
+  <meta property="og:image:secure_url" content="${fullOgImage}">
+  
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
@@ -173,7 +292,7 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     .card {
       background: white;
       border-radius: 20px;
-      max-width: 420px;
+      max-width: 480px;
       width: 100%;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -195,6 +314,7 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       font-weight: bold;
       font-size: 15px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
     }
     .download-btn:hover { transform: scale(1.05); }
     .download-btn svg { width: 20px; height: 20px; }
@@ -220,11 +340,97 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     }
     .user-info h3 { font-size: 15px; color: #1a1a1a; }
     .user-info p { font-size: 11px; color: #666; }
+    
+    /* Video Styles */
     .video-container { background: #000; }
     .video-player { width: 100%; max-height: 450px; display: block; }
-    .image-gallery { display: flex; flex-direction: column; gap: 2px; }
-    .gallery-image { width: 100%; max-height: 300px; object-fit: cover; display: block; }
-    .content { padding: 14px 16px; font-size: 14px; line-height: 1.6; color: #333; }
+    
+    /* Image Gallery Styles - Grid Layout */
+    .image-gallery {
+      display: grid;
+      gap: 2px;
+      background: #f0f0f0;
+    }
+    .image-gallery.single {
+      grid-template-columns: 1fr;
+    }
+    .image-gallery.double {
+      grid-template-columns: 1fr 1fr;
+    }
+    .image-gallery.triple {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    .image-gallery.triple .gallery-item:first-child {
+      grid-row: span 2;
+    }
+    .image-gallery.quad {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    .gallery-item {
+      overflow: hidden;
+      background: #f5f5f5;
+      position: relative;
+    }
+    .gallery-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      min-height: 150px;
+      max-height: 300px;
+    }
+    .image-gallery.single .gallery-image {
+      max-height: 400px;
+    }
+    .image-gallery.triple .gallery-item:first-child .gallery-image {
+      min-height: 302px;
+    }
+    
+    /* Image loading placeholder */
+    .gallery-item::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border: 3px solid #ddd;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 1;
+    }
+    .gallery-image:not([src=""]) + .gallery-item::before,
+    .gallery-item:has(.gallery-image[complete="true"])::before {
+      display: none;
+    }
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    
+    .content { 
+      padding: 14px 16px; 
+      font-size: 14px; 
+      line-height: 1.7; 
+      color: #333;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    /* Image count badge */
+    .image-count {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -244,8 +450,21 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       </div>
     </div>
     ${mediaGallery}
-    ${content ? `<div class="content">${escapeHtml(content.substring(0, 300))}${content.length > 300 ? '...' : ''}</div>` : ''}
+    ${content ? `<div class="content">${escapeHtml(content.substring(0, 500))}${content.length > 500 ? '...' : ''}</div>` : ''}
   </div>
+  
+  <script>
+    // Handle image loading errors gracefully
+    document.querySelectorAll('.gallery-image').forEach(function(img) {
+      img.onerror = function() {
+        this.parentElement.style.display = 'none';
+      };
+      img.onload = function() {
+        this.parentElement.style.background = 'transparent';
+        this.setAttribute('complete', 'true');
+      };
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -262,6 +481,7 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} - ${APP_NAME}</title>
   
+  <!-- Open Graph Meta Tags -->
   <meta property="og:type" content="video.other">
   <meta property="og:url" content="${pageUrl}">
   <meta property="og:title" content="${escapeHtml(title)}">
@@ -269,22 +489,31 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   <meta property="og:image" content="${fullOgImage}">
   <meta property="og:image:width" content="720">
   <meta property="og:image:height" content="1280">
+  <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
+  <meta property="og:locale" content="ar_SA">
   ${fullOgVideo ? `<meta property="og:video" content="${fullOgVideo}">
   <meta property="og:video:secure_url" content="${fullOgVideo}">
   <meta property="og:video:type" content="video/mp4">
   <meta property="og:video:width" content="720">
   <meta property="og:video:height" content="1280">` : ''}
   
+  <!-- Twitter Card Meta Tags -->
   <meta name="twitter:card" content="player">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${fullOgImage}">
+  ${fullOgVideo ? `<meta name="twitter:player" content="${fullOgVideo}">
+  <meta name="twitter:player:width" content="720">
+  <meta name="twitter:player:height" content="1280">` : ''}
+  
+  <!-- WhatsApp specific -->
+  <meta property="og:image:secure_url" content="${fullOgImage}">
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: #000;
       min-height: 100vh;
       display: flex;
@@ -297,7 +526,7 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       background: #1a1a1a;
       border-radius: 20px;
       overflow: hidden;
-      margin: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
     .download-bar {
       padding: 14px;
@@ -316,12 +545,42 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       font-weight: bold;
       font-size: 15px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
     }
     .download-btn:hover { transform: scale(1.05); }
     .download-btn svg { width: 20px; height: 20px; }
     .promo-text { color: white; font-size: 11px; margin-top: 8px; opacity: 0.9; }
-    .video-wrapper { background: #000; }
-    .video-player { width: 100%; max-height: 70vh; display: block; }
+    .video-wrapper { 
+      background: #000; 
+      position: relative;
+    }
+    .video-player { 
+      width: 100%; 
+      max-height: 70vh; 
+      display: block; 
+    }
+    .video-poster {
+      width: 100%;
+      aspect-ratio: 9/16;
+      object-fit: cover;
+    }
+    .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .play-overlay:hover { transform: translate(-50%, -50%) scale(1.1); }
+    .play-overlay svg { width: 40px; height: 40px; fill: #ff0050; margin-left: 4px; }
     .info { padding: 14px; color: white; }
     .user-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .avatar {
@@ -353,38 +612,10 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
     <div class="video-wrapper" id="video-container">
       ${fullOgVideo ? `
       <video id="main-video" controls playsinline preload="metadata" poster="${fullOgImage}" class="video-player">
-        Your browser does not support the video tag.
+        <source src="${fullOgVideo}" type="video/mp4">
+        متصفحك لا يدعم تشغيل الفيديو
       </video>
-      <script>
-        (function() {
-          var video = document.getElementById('main-video');
-          var videoUrl = '${fullOgVideo}';
-          
-          // Try to load video
-          fetch(videoUrl, { method: 'HEAD', mode: 'cors' })
-            .then(function(response) {
-              if (response.ok) {
-                video.src = videoUrl;
-                video.load();
-              }
-            })
-            .catch(function() {
-              // Fallback: direct src
-              video.src = videoUrl;
-              video.load();
-            });
-          
-          // Click to play
-          video.addEventListener('click', function() {
-            if (video.paused) {
-              video.play().catch(function() {});
-            } else {
-              video.pause();
-            }
-          });
-        })();
-      </script>
-      ` : `<img src="${fullOgImage}" alt="غلاف الفيديو" style="width:100%; aspect-ratio:9/16; object-fit:cover;">`}
+      ` : `<img src="${fullOgImage}" alt="غلاف الفيديو" class="video-poster">`}
     </div>
     <div class="info">
       <div class="user-row">
@@ -398,6 +629,16 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       ${description ? `<div class="description">${escapeHtml(description.substring(0, 150))}${description.length > 150 ? '...' : ''}</div>` : ''}
     </div>
   </div>
+  
+  <script>
+    // Video error handling
+    var video = document.getElementById('main-video');
+    if (video) {
+      video.onerror = function() {
+        console.log('Video failed to load');
+      };
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -409,9 +650,12 @@ function generateErrorPage(message) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>خطأ - ${APP_NAME}</title>
+  <meta property="og:title" content="خطأ - ${APP_NAME}">
+  <meta property="og:description" content="${escapeHtml(message)}">
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
@@ -425,6 +669,7 @@ function generateErrorPage(message) {
       padding: 40px;
       text-align: center;
       max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
     .error-icon { font-size: 60px; margin-bottom: 20px; }
     h1 { color: #333; margin-bottom: 10px; font-size: 18px; }
@@ -439,7 +684,9 @@ function generateErrorPage(message) {
       border-radius: 30px;
       text-decoration: none;
       font-weight: bold;
+      transition: transform 0.2s;
     }
+    .download-btn:hover { transform: scale(1.05); }
   </style>
 </head>
 <body>

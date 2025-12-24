@@ -29,10 +29,44 @@ connectDB();
 // Setup recommendation cron job (updates scores every 30 minutes)
 setupCronJob(30);
 
-// Middleware
+// Middleware - تكوين helmet مع السماح بتحميل الوسائط من Cloudinary
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://res.cloudinary.com",
+        "https://*.cloudinary.com",
+        "https://cloudinary.com"
+      ],
+      mediaSrc: [
+        "'self'",
+        "blob:",
+        "https://res.cloudinary.com",
+        "https://*.cloudinary.com",
+        "https://cloudinary.com"
+      ],
+      connectSrc: [
+        "'self'",
+        "https://res.cloudinary.com",
+        "https://*.cloudinary.com",
+        "https://api.cloudinary.com"
+      ],
+      frameSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: []
+    }
+  }
 }));
+
 app.use(cors({
   origin: '*', // في الإنتاج، حدد النطاقات المسموح بها
   credentials: true
@@ -43,6 +77,9 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Static files (assets - default images)
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
 // API Routes
 app.use('/api/v1/auth', authRoutes);
@@ -55,7 +92,12 @@ app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 
 // Share pages (Open Graph for social media)
-app.use('/share', shareRoutes);
+// تعطيل CSP لصفحات المشاركة للسماح بعرض الوسائط بشكل صحيح
+app.use('/share', (req, res, next) => {
+  // إزالة Content-Security-Policy لصفحات المشاركة
+  res.removeHeader('Content-Security-Policy');
+  next();
+}, shareRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {
