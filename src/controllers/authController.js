@@ -2,6 +2,57 @@ const User = require('../models/User');
 const crypto = require('crypto');
 const sendEmail = require('../config/email');
 
+// أيقونة التطبيق SVG (الحقيبة) - مرسومة بـ CSS/SVG
+const getAppLogoSVG = () => `
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="18" fill="url(#bgGradient)"/>
+  <g transform="translate(18, 22)">
+    <path d="M10 0C10 0 10 4 10 6L34 6C34 4 34 0 34 0C34 0 30 0 22 0C14 0 10 0 10 0Z" fill="white" opacity="0.9"/>
+    <rect x="4" y="8" width="36" height="28" rx="4" fill="none" stroke="white" stroke-width="3.5"/>
+    <line x1="22" y1="8" x2="22" y2="36" stroke="white" stroke-width="3"/>
+    <circle cx="22" cy="22" r="3" fill="white"/>
+  </g>
+</svg>
+`;
+
+// قالب البريد الإلكتروني الأساسي
+const getEmailTemplate = (title, subtitle, userName, content, footerText) => `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
+      <div style="display: inline-block; margin-bottom: 15px;">
+        ${getAppLogoSVG()}
+      </div>
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px;">${title}</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">${subtitle}</p>
+    </div>
+    <div style="padding: 40px 30px;">
+      <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${userName}،</h2>
+      ${content}
+    </div>
+    <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+      <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+        © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
+      </p>
+      ${footerText ? `<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0;">${footerText}</p>` : ''}
+    </div>
+  </div>
+</body>
+</html>
+`;
+
 // @desc    Register user (Step 1: Create user and send verification code)
 // @route   POST /api/v1/auth/register
 // @access  Public
@@ -37,43 +88,28 @@ exports.register = async (req, res, next) => {
     const verificationCode = user.getEmailVerificationCode();
     await user.save({ validateBeforeSave: false });
 
-    // Email HTML template for verification
-    const htmlMessage = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">مهنتي لي</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">تأكيد البريد الإلكتروني</p>
-          </div>
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${user.name}،</h2>
-            <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
-              شكراً لتسجيلك في مهنتي لي! استخدم الرمز التالي لتأكيد بريدك الإلكتروني:
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
-                ${verificationCode}
-              </div>
-            </div>
-            <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
-              هذا الرمز صالح لمدة 10 دقائق فقط. إذا لم تطلب هذا الرمز، يمكنك تجاهل هذا البريد.
-            </p>
-          </div>
-          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-              © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
-            </p>
-          </div>
+    // Email content for verification
+    const emailContent = `
+      <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+        شكراً لتسجيلك في مهنتي لي! استخدم الرمز التالي لتأكيد بريدك الإلكتروني:
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
+          ${verificationCode}
         </div>
-      </body>
-      </html>
+      </div>
+      <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
+        هذا الرمز صالح لمدة 10 دقائق فقط. إذا لم تطلب هذا الرمز، يمكنك تجاهل هذا البريد.
+      </p>
     `;
+
+    const htmlMessage = getEmailTemplate(
+      'مهنتي لي',
+      'تأكيد البريد الإلكتروني',
+      user.name,
+      emailContent,
+      null
+    );
 
     try {
       await sendEmail({
@@ -197,43 +233,28 @@ exports.resendVerification = async (req, res, next) => {
     const verificationCode = user.getEmailVerificationCode();
     await user.save({ validateBeforeSave: false });
 
-    // Email HTML template
-    const htmlMessage = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">مهنتي لي</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">رمز التحقق الجديد</p>
-          </div>
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${user.name}،</h2>
-            <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
-              إليك رمز التحقق الجديد:
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
-                ${verificationCode}
-              </div>
-            </div>
-            <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
-              هذا الرمز صالح لمدة 10 دقائق فقط.
-            </p>
-          </div>
-          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-              © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
-            </p>
-          </div>
+    // Email content
+    const emailContent = `
+      <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+        إليك رمز التحقق الجديد:
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
+          ${verificationCode}
         </div>
-      </body>
-      </html>
+      </div>
+      <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
+        هذا الرمز صالح لمدة 10 دقائق فقط.
+      </p>
     `;
+
+    const htmlMessage = getEmailTemplate(
+      'مهنتي لي',
+      'رمز التحقق الجديد',
+      user.name,
+      emailContent,
+      null
+    );
 
     try {
       await sendEmail({
@@ -422,43 +443,28 @@ exports.forgotPassword = async (req, res, next) => {
     const serverUrl = process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`;
     const resetUrl = `${serverUrl}/reset-password/${resetToken}`;
 
-    // Email HTML template
-    const htmlMessage = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">مهنتي لي</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">إعادة تعيين كلمة المرور</p>
-          </div>
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${user.name}،</h2>
-            <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
-              لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك. اضغط على الزر أدناه لإنشاء كلمة مرور جديدة.
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 12px; font-weight: bold; font-size: 16px;">
-                إعادة تعيين كلمة المرور
-              </a>
-            </div>
-            <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
-              إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا البريد الإلكتروني. سينتهي صلاحية هذا الرابط خلال 30 دقيقة.
-            </p>
-          </div>
-          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
-            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-              © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
+    // Email content for password reset
+    const emailContent = `
+      <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+        لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك. اضغط على الزر أدناه لإنشاء كلمة مرور جديدة.
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 12px; font-weight: bold; font-size: 16px;">
+          إعادة تعيين كلمة المرور
+        </a>
+      </div>
+      <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
+        إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا البريد الإلكتروني. سينتهي صلاحية هذا الرابط خلال 30 دقيقة.
+      </p>
     `;
+
+    const htmlMessage = getEmailTemplate(
+      'مهنتي لي',
+      'إعادة تعيين كلمة المرور',
+      user.name,
+      emailContent,
+      null
+    );
 
     try {
       await sendEmail({
