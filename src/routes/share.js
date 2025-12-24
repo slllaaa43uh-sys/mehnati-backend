@@ -7,55 +7,143 @@ const APP_DOWNLOAD_URL = 'https://apkpure.com/p/com.my.newprojeci';
 const APP_NAME = 'مهنتي لي';
 
 /**
- * إنشاء صورة شبكية (Grid/Collage) باستخدام Cloudinary transformations
- * هذه الدالة تستخدم ميزة overlay في Cloudinary لدمج الصور
- * @param {Array} images - مصفوفة روابط الصور
+ * استخراج public_id من رابط Cloudinary
+ * @param {string} url - رابط Cloudinary
+ * @returns {string} - public_id مشفر للاستخدام في overlay
+ */
+function extractCloudinaryPublicId(url) {
+  if (!url || !url.includes('cloudinary.com')) return null;
+  
+  try {
+    // مثال: https://res.cloudinary.com/dkj9e4low/image/upload/v1766433887/mehnati/posts/zg2fcq0mshnzr1hmmfwx.jpg
+    const parts = url.split('/upload/');
+    if (parts.length !== 2) return null;
+    
+    let path = parts[1];
+    // إزالة version إذا وجد (v1234567890/)
+    path = path.replace(/^v\d+\//, '');
+    // إزالة امتداد الملف
+    path = path.replace(/\.[^/.]+$/, '');
+    // تحويل / إلى : للاستخدام في overlay
+    return path.replace(/\//g, ':');
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * الحصول على base URL لـ Cloudinary من رابط صورة
+ * @param {string} url - رابط Cloudinary
+ * @returns {string} - base URL
+ */
+function getCloudinaryBaseUrl(url) {
+  if (!url || !url.includes('cloudinary.com')) return null;
+  const parts = url.split('/upload/');
+  return parts.length === 2 ? parts[0] + '/upload/' : null;
+}
+
+/**
+ * إنشاء صورة مجمعة (Collage) من عدة صور باستخدام Cloudinary overlays
+ * تدعم 2، 3، أو 4 صور
+ * @param {Array} imageUrls - مصفوفة روابط الصور
  * @returns {string} - رابط الصورة المجمعة
  */
-function createCollageUrl(images) {
-  if (!images || images.length === 0) return null;
-  if (images.length === 1) return images[0];
-  
-  // استخدام أول صورة كأساس
-  const baseImage = images[0];
-  
-  // إذا كانت الصورة من Cloudinary، نستخدم transformations
-  if (baseImage.includes('cloudinary.com')) {
-    // استخراج أجزاء الرابط
-    const parts = baseImage.split('/upload/');
-    if (parts.length === 2) {
-      const baseUrl = parts[0] + '/upload/';
-      
-      // إنشاء تحويلات للصورة المجمعة
-      // نستخدم تخطيط شبكي 2x2 أو 1x2 أو 1x3 حسب عدد الصور
-      let transformation = '';
-      
-      if (images.length === 2) {
-        // صورتين جنباً إلى جنب
-        transformation = 'c_fill,w_600,h_630,g_center/';
-      } else if (images.length === 3) {
-        // صورة كبيرة على اليمين وصورتين صغيرتين على اليسار
-        transformation = 'c_fill,w_600,h_630,g_center/';
-      } else {
-        // 4 صور أو أكثر - شبكة 2x2
-        transformation = 'c_fill,w_600,h_315,g_center/';
-      }
-      
-      // إرجاع الصورة الأولى مع التحويلات المناسبة لـ Open Graph
-      return baseUrl + 'c_fill,w_1200,h_630,g_center/' + parts[1];
-    }
+function createCollageUrl(imageUrls) {
+  if (!imageUrls || imageUrls.length === 0) return null;
+  if (imageUrls.length === 1) {
+    // صورة واحدة - تحسينها فقط
+    return optimizeImageForOG(imageUrls[0]);
   }
   
-  return baseImage;
+  const baseUrl = getCloudinaryBaseUrl(imageUrls[0]);
+  if (!baseUrl) return optimizeImageForOG(imageUrls[0]);
+  
+  const publicIds = imageUrls.map(url => extractCloudinaryPublicId(url)).filter(id => id);
+  if (publicIds.length < 2) return optimizeImageForOG(imageUrls[0]);
+  
+  // أبعاد الصورة النهائية لـ Open Graph
+  const finalWidth = 1200;
+  const finalHeight = 630;
+  
+  let transformation = '';
+  
+  if (publicIds.length === 2) {
+    // صورتين جنباً إلى جنب (600x630 لكل صورة)
+    const halfWidth = finalWidth / 2;
+    transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
+      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${finalHeight},g_auto/fl_layer_apply,g_east`;
+  } else if (publicIds.length === 3) {
+    // صورة كبيرة على اليسار (600x630) وصورتين صغيرتين على اليمين (600x315 لكل واحدة)
+    const halfWidth = finalWidth / 2;
+    const halfHeight = finalHeight / 2;
+    transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
+      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_north_east/` +
+      `l_${publicIds[2]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_east`;
+  } else {
+    // 4 صور أو أكثر - شبكة 2x2 (600x315 لكل صورة)
+    const halfWidth = finalWidth / 2;
+    const halfHeight = finalHeight / 2;
+    transformation = `c_fill,w_${halfWidth},h_${halfHeight},g_auto/` +
+      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_north_east/` +
+      `l_${publicIds[2]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_west/` +
+      `l_${publicIds[3] || publicIds[0]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_east`;
+  }
+  
+  // استخراج مسار الصورة الأولى
+  let basePath = imageUrls[0].split('/upload/')[1];
+  basePath = basePath.replace(/^v\d+\//, '');
+  
+  return baseUrl + transformation + '/' + basePath;
+}
+
+/**
+ * تحسين صورة واحدة لـ Open Graph
+ * @param {string} imageUrl - رابط الصورة
+ * @returns {string} - رابط الصورة المحسنة
+ */
+function optimizeImageForOG(imageUrl) {
+  if (!imageUrl || !imageUrl.includes('cloudinary.com')) return imageUrl;
+  
+  const baseUrl = getCloudinaryBaseUrl(imageUrl);
+  if (!baseUrl) return imageUrl;
+  
+  let path = imageUrl.split('/upload/')[1];
+  path = path.replace(/^v\d+\//, '');
+  
+  return baseUrl + 'c_fill,w_1200,h_630,g_auto,q_auto/' + path;
+}
+
+/**
+ * الحصول على صورة مصغرة من فيديو Cloudinary
+ * عن طريق تغيير الامتداد إلى jpg واستخدام so_0 للإطار الأول
+ * @param {string} videoUrl - رابط الفيديو
+ * @returns {string} - رابط الصورة المصغرة
+ */
+function getVideoThumbnail(videoUrl) {
+  if (!videoUrl) return null;
+  
+  // إذا كان الفيديو من Cloudinary
+  if (videoUrl.includes('cloudinary.com')) {
+    // تحويل video/upload إلى video/upload/so_0,c_fill,w_1200,h_630,g_auto
+    // وتغيير الامتداد إلى jpg
+    let thumbnailUrl = videoUrl
+      .replace('/video/upload/', '/video/upload/so_0,c_fill,w_1200,h_630,g_auto/')
+      .replace(/\.(mp4|webm|mov|avi)$/i, '.jpg');
+    
+    return thumbnailUrl;
+  }
+  
+  return null;
 }
 
 /**
  * إنشاء صورة Open Graph محسنة للمشاركة
  * @param {Array} media - مصفوفة الوسائط
  * @param {string} baseUrl - الرابط الأساسي
+ * @param {Object} coverImage - صورة الغلاف إذا وجدت
  * @returns {string} - رابط صورة OG
  */
-function getOptimizedOgImage(media, baseUrl) {
+function getOptimizedOgImage(media, baseUrl, coverImage = null) {
   if (!media || media.length === 0) {
     return `${baseUrl}/assets/default-post.png`;
   }
@@ -63,33 +151,34 @@ function getOptimizedOgImage(media, baseUrl) {
   const images = media.filter(m => m.type === 'image').map(m => m.url);
   const videos = media.filter(m => m.type === 'video');
   
-  // إذا كان هناك فيديو، استخدم الصورة المصغرة
+  // إذا كان هناك فيديو
   if (videos.length > 0) {
-    const thumbnail = videos[0].thumbnail;
-    if (thumbnail) {
-      return getFullUrl(thumbnail, baseUrl);
+    // أولوية: صورة الغلاف المخصصة > الصورة المصغرة المحفوظة > توليد من الفيديو
+    if (coverImage && coverImage.url) {
+      return optimizeImageForOG(coverImage.url);
+    }
+    if (videos[0].thumbnail) {
+      return optimizeImageForOG(videos[0].thumbnail);
+    }
+    // توليد صورة مصغرة من الفيديو
+    const generatedThumbnail = getVideoThumbnail(videos[0].url);
+    if (generatedThumbnail) {
+      return generatedThumbnail;
+    }
+    return `${baseUrl}/assets/default-video.png`;
+  }
+  
+  // إذا كانت هناك صور متعددة، إنشاء صورة مجمعة
+  if (images.length > 1) {
+    const collageUrl = createCollageUrl(images);
+    if (collageUrl) {
+      return collageUrl;
     }
   }
   
-  // إذا كانت هناك صور
-  if (images.length > 0) {
-    const firstImage = getFullUrl(images[0], baseUrl);
-    
-    // تحسين الصورة لـ Open Graph (1200x630)
-    if (firstImage && firstImage.includes('cloudinary.com')) {
-      const parts = firstImage.split('/upload/');
-      if (parts.length === 2) {
-        // إزالة أي transformations موجودة وإضافة تحويلات OG
-        let imagePath = parts[1];
-        // إزالة version إذا وجد
-        if (imagePath.match(/^v\d+\//)) {
-          imagePath = imagePath.replace(/^v\d+\//, '');
-        }
-        return parts[0] + '/upload/c_fill,w_1200,h_630,g_auto,q_auto/' + imagePath;
-      }
-    }
-    
-    return firstImage;
+  // صورة واحدة
+  if (images.length === 1) {
+    return optimizeImageForOG(images[0]);
   }
   
   return `${baseUrl}/assets/default-post.png`;
@@ -111,18 +200,15 @@ router.get('/post/:id', async (req, res) => {
     const hasVideo = post.media && post.media.some(m => m.type === 'video');
     const hasImage = post.media && post.media.some(m => m.type === 'image');
     
-    let ogImage = null;
-    let ogVideo = null;
-    
     const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
     
+    // الحصول على صورة OG المحسنة (مع دعم الصور المجمعة والفيديو)
+    const ogImage = getOptimizedOgImage(post.media, baseUrl, post.coverImage);
+    
+    let ogVideo = null;
     if (hasVideo) {
       const videoMedia = post.media.find(m => m.type === 'video');
       ogVideo = videoMedia?.url;
-      ogImage = videoMedia?.thumbnail || post.coverImage?.url || null;
-    } else if (hasImage) {
-      // استخدام الدالة المحسنة للحصول على صورة OG
-      ogImage = getOptimizedOgImage(post.media, baseUrl);
     }
 
     const title = post.title || `منشور من ${post.user?.name || 'مستخدم'}`;
@@ -172,12 +258,26 @@ router.get('/short/:id', async (req, res) => {
 
     const videoMedia = post.media?.find(m => m.type === 'video');
     const ogVideo = videoMedia?.url;
-    const ogImage = post.coverImage?.url || videoMedia?.thumbnail || null;
+    
+    // الحصول على صورة مصغرة للفيديو
+    let ogImage = null;
+    if (post.coverImage?.url) {
+      ogImage = optimizeImageForOG(post.coverImage.url);
+    } else if (videoMedia?.thumbnail) {
+      ogImage = optimizeImageForOG(videoMedia.thumbnail);
+    } else if (ogVideo) {
+      ogImage = getVideoThumbnail(ogVideo);
+    }
+    
+    const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
+    
+    if (!ogImage) {
+      ogImage = `${baseUrl}/assets/default-video.png`;
+    }
 
     const title = post.title || post.attractiveTitle || `فيديو من ${post.user?.name || 'مستخدم'}`;
     const description = post.content ? post.content.substring(0, 200) : 'شاهد هذا الفيديو على تطبيق مهنتي لي';
     const userName = post.user?.name || 'مستخدم';
-    const baseUrl = process.env.BASE_URL || 'https://mehnati-backend-3bu7.onrender.com';
 
     const html = generateShortPage({
       title,
@@ -205,7 +305,7 @@ function getFullUrl(url, baseUrl) {
 
 function generatePostPage({ title, description, userName, ogImage, ogVideo, hasVideo, postId, media, content, baseUrl, imageCount }) {
   const pageUrl = `${baseUrl}/share/post/${postId}`;
-  const fullOgImage = getFullUrl(ogImage, baseUrl) || `${baseUrl}/assets/default-post.png`;
+  const fullOgImage = ogImage || `${baseUrl}/assets/default-post.png`;
   const fullOgVideo = getFullUrl(ogVideo, baseUrl);
 
   // إنشاء معرض الوسائط مع تحسينات للعرض
@@ -216,7 +316,15 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     
     if (videos.length > 0) {
       const videoUrl = getFullUrl(videos[0].url, baseUrl);
-      const thumbUrl = getFullUrl(videos[0].thumbnail, baseUrl) || fullOgImage;
+      // استخدام الصورة المصغرة المولدة
+      let thumbUrl = videos[0].thumbnail ? getFullUrl(videos[0].thumbnail, baseUrl) : null;
+      if (!thumbUrl && videoUrl && videoUrl.includes('cloudinary.com')) {
+        thumbUrl = getVideoThumbnail(videoUrl);
+      }
+      if (!thumbUrl) {
+        thumbUrl = `${baseUrl}/assets/default-video.png`;
+      }
+      
       mediaGallery = `
         <div class="video-container">
           <video controls playsinline preload="metadata" poster="${thumbUrl}" class="video-player">
@@ -234,7 +342,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       mediaGallery = `<div class="image-gallery ${gridClass}">`;
       images.forEach((img, i) => {
         const imgUrl = getFullUrl(img.url, baseUrl);
-        // إضافة class للصور حسب موقعها
         const imgClass = i === 0 ? 'main-image' : 'sub-image';
         mediaGallery += `
           <div class="gallery-item ${imgClass}">
@@ -259,12 +366,14 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${fullOgImage}">
+  <meta property="og:image:secure_url" content="${fullOgImage}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
   <meta property="og:locale" content="ar_SA">
   ${fullOgVideo ? `<meta property="og:video" content="${fullOgVideo}">
+  <meta property="og:video:secure_url" content="${fullOgVideo}">
   <meta property="og:video:type" content="video/mp4">
   <meta property="og:video:width" content="1280">
   <meta property="og:video:height" content="720">` : ''}
@@ -274,9 +383,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${fullOgImage}">
-  
-  <!-- WhatsApp specific -->
-  <meta property="og:image:secure_url" content="${fullOgImage}">
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -388,29 +494,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       min-height: 302px;
     }
     
-    /* Image loading placeholder */
-    .gallery-item::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 40px;
-      height: 40px;
-      border: 3px solid #ddd;
-      border-top-color: #667eea;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      z-index: 1;
-    }
-    .gallery-image:not([src=""]) + .gallery-item::before,
-    .gallery-item:has(.gallery-image[complete="true"])::before {
-      display: none;
-    }
-    @keyframes spin {
-      to { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    
     .content { 
       padding: 14px 16px; 
       font-size: 14px; 
@@ -418,18 +501,6 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       color: #333;
       white-space: pre-wrap;
       word-wrap: break-word;
-    }
-    
-    /* Image count badge */
-    .image-count {
-      position: absolute;
-      bottom: 8px;
-      left: 8px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 12px;
     }
   </style>
 </head>
@@ -454,14 +525,9 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
   </div>
   
   <script>
-    // Handle image loading errors gracefully
     document.querySelectorAll('.gallery-image').forEach(function(img) {
       img.onerror = function() {
         this.parentElement.style.display = 'none';
-      };
-      img.onload = function() {
-        this.parentElement.style.background = 'transparent';
-        this.setAttribute('complete', 'true');
       };
     });
   </script>
@@ -471,7 +537,7 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
 
 function generateShortPage({ title, description, userName, ogImage, ogVideo, postId, views, baseUrl }) {
   const pageUrl = `${baseUrl}/share/short/${postId}`;
-  const fullOgImage = getFullUrl(ogImage, baseUrl) || `${baseUrl}/assets/default-video.png`;
+  const fullOgImage = ogImage || `${baseUrl}/assets/default-video.png`;
   const fullOgVideo = getFullUrl(ogVideo, baseUrl);
 
   return `<!DOCTYPE html>
@@ -487,8 +553,9 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${fullOgImage}">
-  <meta property="og:image:width" content="720">
-  <meta property="og:image:height" content="1280">
+  <meta property="og:image:secure_url" content="${fullOgImage}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="${escapeHtml(title)}">
   <meta property="og:site_name" content="${APP_NAME}">
   <meta property="og:locale" content="ar_SA">
@@ -506,9 +573,6 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
   ${fullOgVideo ? `<meta name="twitter:player" content="${fullOgVideo}">
   <meta name="twitter:player:width" content="720">
   <meta name="twitter:player:height" content="1280">` : ''}
-  
-  <!-- WhatsApp specific -->
-  <meta property="og:image:secure_url" content="${fullOgImage}">
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -564,23 +628,6 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       aspect-ratio: 9/16;
       object-fit: cover;
     }
-    .play-overlay {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80px;
-      height: 80px;
-      background: rgba(255,255,255,0.9);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .play-overlay:hover { transform: translate(-50%, -50%) scale(1.1); }
-    .play-overlay svg { width: 40px; height: 40px; fill: #ff0050; margin-left: 4px; }
     .info { padding: 14px; color: white; }
     .user-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .avatar {
@@ -609,9 +656,9 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       </a>
       <p class="promo-text">شاهد المزيد على التطبيق</p>
     </div>
-    <div class="video-wrapper" id="video-container">
+    <div class="video-wrapper">
       ${fullOgVideo ? `
-      <video id="main-video" controls playsinline preload="metadata" poster="${fullOgImage}" class="video-player">
+      <video controls playsinline preload="metadata" poster="${fullOgImage}" class="video-player">
         <source src="${fullOgVideo}" type="video/mp4">
         متصفحك لا يدعم تشغيل الفيديو
       </video>
@@ -629,16 +676,6 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       ${description ? `<div class="description">${escapeHtml(description.substring(0, 150))}${description.length > 150 ? '...' : ''}</div>` : ''}
     </div>
   </div>
-  
-  <script>
-    // Video error handling
-    var video = document.getElementById('main-video');
-    if (video) {
-      video.onerror = function() {
-        console.log('Video failed to load');
-      };
-    }
-  </script>
 </body>
 </html>`;
 }
