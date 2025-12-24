@@ -1,5 +1,8 @@
 const multer = require('multer');
-const { postStorage, avatarStorage, storyStorage, coverStorage } = require('../config/cloudinary');
+
+// استخدام Memory Storage بدلاً من Cloudinary Storage
+// الملفات ستُحفظ في الذاكرة ثم تُضغط وتُرفع إلى Backblaze B2
+const memoryStorage = multer.memoryStorage();
 
 // Enhanced file filter with better video support
 const fileFilter = (req, file, cb) => {
@@ -11,7 +14,6 @@ const fileFilter = (req, file, cb) => {
   }
   
   // Enhanced video check - support various video formats and codecs
-  // Some browsers send mimetype with codecs like 'video/webm;codecs=vp8,opus'
   const mimeType = file.mimetype.toLowerCase();
   const isVideo = mimeType.startsWith('video/') || 
                   mimeType.includes('video/mp4') ||
@@ -42,7 +44,7 @@ const fileFilter = (req, file, cb) => {
   cb(new Error('نوع الملف غير مدعوم. الأنواع المدعومة: صور (JPEG, PNG, GIF, WebP) وفيديو (MP4, WebM, MOV, AVI)'), false);
 };
 
-// Image only filter for covers
+// Image only filter for avatars and covers
 const imageOnlyFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   if (allowedTypes.includes(file.mimetype)) {
@@ -52,9 +54,9 @@ const imageOnlyFilter = (req, file, cb) => {
   }
 };
 
-// Upload configurations for posts
+// Upload configurations for posts (images and videos)
 const postUpload = multer({
-  storage: postStorage,
+  storage: memoryStorage,
   fileFilter,
   limits: {
     fileSize: 100 * 1024 * 1024 // 100MB max for videos
@@ -63,23 +65,16 @@ const postUpload = multer({
 
 // Upload configuration for avatars
 const avatarUpload = multer({
-  storage: avatarStorage,
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('نوع الملف غير مدعوم. الأنواع المدعومة: صور (JPEG, PNG, WebP)'), false);
-    }
-  },
+  storage: memoryStorage,
+  fileFilter: imageOnlyFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max for avatars
+    fileSize: 10 * 1024 * 1024 // 10MB max for avatars (سيتم ضغطها)
   }
 });
 
 // Upload configuration for stories
 const storyUpload = multer({
-  storage: storyStorage,
+  storage: memoryStorage,
   fileFilter,
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB max for stories
@@ -88,7 +83,7 @@ const storyUpload = multer({
 
 // Upload configuration for video covers
 const coverUpload = multer({
-  storage: coverStorage,
+  storage: memoryStorage,
   fileFilter: imageOnlyFilter,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB max for covers
@@ -98,10 +93,11 @@ const coverUpload = multer({
 // Export different upload configurations
 module.exports = {
   single: postUpload.single('file'),
+  multiple: postUpload.array('files', 10), // Max 10 files
   avatar: avatarUpload.single('avatar'),
   media: postUpload.array('media', 10), // Max 10 files
   storyMedia: storyUpload.single('media'),
-  cover: coverUpload.single('cover'), // Single cover image
+  cover: coverUpload.single('cover'),
   // Combined upload for shorts (video + cover)
   shortsMedia: postUpload.fields([
     { name: 'media', maxCount: 1 },

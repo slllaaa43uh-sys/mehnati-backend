@@ -8,6 +8,7 @@ require('dotenv').config();
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
+const { initializeB2 } = require('./services/storageService');
 
 // Route files
 const authRoutes = require('./routes/auth');
@@ -26,10 +27,15 @@ const app = express();
 // Connect to database
 connectDB();
 
+// Initialize Backblaze B2 connection
+initializeB2().catch(err => {
+  console.error('❌ فشل الاتصال بـ Backblaze B2:', err.message);
+});
+
 // Setup recommendation cron job (updates scores every 30 minutes)
 setupCronJob(30);
 
-// Middleware - تكوين helmet مع السماح بتحميل الوسائط من Cloudinary
+// Middleware - تكوين helmet مع السماح بتحميل الوسائط من Backblaze B2
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginEmbedderPolicy: false,
@@ -43,22 +49,28 @@ app.use(helmet({
         "'self'",
         "data:",
         "blob:",
+        "https://*.backblazeb2.com",
+        "https://f*.backblazeb2.com",
+        // دعم الروابط القديمة من Cloudinary للتوافق
         "https://res.cloudinary.com",
-        "https://*.cloudinary.com",
-        "https://cloudinary.com"
+        "https://*.cloudinary.com"
       ],
       mediaSrc: [
         "'self'",
         "blob:",
+        "https://*.backblazeb2.com",
+        "https://f*.backblazeb2.com",
+        // دعم الروابط القديمة من Cloudinary للتوافق
         "https://res.cloudinary.com",
-        "https://*.cloudinary.com",
-        "https://cloudinary.com"
+        "https://*.cloudinary.com"
       ],
       connectSrc: [
         "'self'",
+        "https://*.backblazeb2.com",
+        "https://api.backblazeb2.com",
+        // دعم الروابط القديمة من Cloudinary للتوافق
         "https://res.cloudinary.com",
-        "https://*.cloudinary.com",
-        "https://api.cloudinary.com"
+        "https://*.cloudinary.com"
       ],
       frameSrc: ["'self'"],
       objectSrc: ["'none'"],
@@ -111,7 +123,8 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'مرحباً بك في API مهنتي لي 🚀',
-    version: '1.0.0',
+    version: '2.0.0',
+    storage: 'Backblaze B2 with compression',
     endpoints: {
       auth: '/api/v1/auth',
       posts: '/api/v1/posts',
@@ -146,13 +159,14 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`
-╔════════════════════════════════════════════╗
-║     🚀 مهنتي لي API Server                 ║
-║     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   ║
-║     🌐 Port: ${PORT}                          ║
-║     📦 Environment: ${process.env.NODE_ENV || 'development'}           ║
-║     ✅ Server is running...                ║
-╚════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════╗
+║     🚀 مهنتي لي API Server v2.0                    ║
+║     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    ║
+║     🌐 Port: ${PORT}                                  ║
+║     📦 Environment: ${process.env.NODE_ENV || 'development'}                   ║
+║     💾 Storage: Backblaze B2 with compression      ║
+║     ✅ Server is running...                        ║
+╚════════════════════════════════════════════════════╝
   `);
 });
 

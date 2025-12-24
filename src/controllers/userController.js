@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
+const { uploadAvatar } = require('../services/storageService');
 
 // @desc    Get user by ID
 // @route   GET /api/v1/users/:id
@@ -60,9 +61,15 @@ exports.updateMe = async (req, res, next) => {
       }
     });
 
-    // Handle avatar upload from Cloudinary
+    // Handle avatar upload with compression to Backblaze B2
     if (req.file) {
-      updates.avatar = req.file.path; // Cloudinary URL
+      const uploadResult = await uploadAvatar(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
+      updates.avatar = uploadResult.file.url;
+      console.log('Avatar uploaded with compression:', uploadResult.file.compressionRatio + '% saved');
     }
 
     const user = await User.findByIdAndUpdate(

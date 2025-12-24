@@ -1,6 +1,7 @@
 const Story = require('../models/Story');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { uploadStoryMedia, deleteMedia } = require('../services/storageService');
 
 // @desc    Create story
 // @route   POST /api/v1/stories
@@ -13,18 +14,25 @@ exports.createStory = async (req, res, next) => {
     
     // الطريقة 1: استلام الملف مباشرة عبر multer (FormData)
     if (req.file) {
-      // Cloudinary returns the URL in req.file.path
+      // رفع الملف مع الضغط إلى Backblaze B2
+      const uploadResult = await uploadStoryMedia(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
+      
       media = {
-        url: req.file.path,
-        publicId: req.file.filename,
-        type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
+        url: uploadResult.file.url,
+        fileId: uploadResult.file.fileId,
+        fileName: uploadResult.file.fileName,
+        type: uploadResult.file.fileType
       };
       
       // Debug log
-      console.log('Story media uploaded via file:', {
+      console.log('Story media uploaded with compression:', {
         url: media.url,
         type: media.type,
-        publicId: media.publicId
+        compressionRatio: uploadResult.file.compressionRatio + '%'
       });
     }
     // الطريقة 2: استلام رابط الوسائط من JSON (بعد الرفع المسبق)
@@ -35,15 +43,15 @@ exports.createStory = async (req, res, next) => {
       
       media = {
         url: bodyMedia.url,
-        publicId: bodyMedia.publicId || null,
+        fileId: bodyMedia.fileId || null,
+        fileName: bodyMedia.fileName || null,
         type: bodyMedia.type || 'image'
       };
       
       // Debug log
       console.log('Story media received via JSON:', {
         url: media.url,
-        type: media.type,
-        publicId: media.publicId
+        type: media.type
       });
     }
 
@@ -255,6 +263,17 @@ exports.deleteStory = async (req, res, next) => {
         success: false,
         message: 'غير مصرح لك بحذف هذه القصة'
       });
+    }
+
+    // حذف الوسائط من Backblaze B2 إذا كانت موجودة
+    if (story.media && story.media.fileId && story.media.fileName) {
+      try {
+        await deleteMedia(story.media.fileId, story.media.fileName);
+        console.log('Story media deleted from Backblaze B2');
+      } catch (deleteError) {
+        console.error('Error deleting story media:', deleteError.message);
+        // نستمر في حذف القصة حتى لو فشل حذف الوسائط
+      }
     }
 
     await story.deleteOne();
