@@ -2,7 +2,7 @@ const User = require('../models/User');
 const crypto = require('crypto');
 const sendEmail = require('../config/email');
 
-// @desc    Register user
+// @desc    Register user (Step 1: Create user and send verification code)
 // @route   POST /api/v1/auth/register
 // @access  Public
 exports.register = async (req, res, next) => {
@@ -12,26 +12,142 @@ exports.register = async (req, res, next) => {
     // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'البريد الإلكتروني مستخدم بالفعل'
-      });
+      // If user exists but email not verified, allow re-registration
+      if (!existingUser.isEmailVerified) {
+        // Delete the unverified user to allow new registration
+        await User.findByIdAndDelete(existingUser._id);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'البريد الإلكتروني مستخدم بالفعل'
+        });
+      }
     }
 
-    // Create user
+    // Create user (not verified yet)
     const user = await User.create({
       name,
       email,
       password,
-      accountType: accountType || 'person'
+      accountType: accountType || 'person',
+      isEmailVerified: false
     });
 
-    // Generate token
+    // Generate verification code
+    const verificationCode = user.getEmailVerificationCode();
+    await user.save({ validateBeforeSave: false });
+
+    // Email HTML template for verification
+    const htmlMessage = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">مهنتي لي</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">تأكيد البريد الإلكتروني</p>
+          </div>
+          <div style="padding: 40px 30px;">
+            <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${user.name}،</h2>
+            <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+              شكراً لتسجيلك في مهنتي لي! استخدم الرمز التالي لتأكيد بريدك الإلكتروني:
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
+                ${verificationCode}
+              </div>
+            </div>
+            <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
+              هذا الرمز صالح لمدة 10 دقائق فقط. إذا لم تطلب هذا الرمز، يمكنك تجاهل هذا البريد.
+            </p>
+          </div>
+          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+              © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'رمز التحقق - مهنتي لي',
+        html: htmlMessage
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
+        userId: user._id
+      });
+    } catch (err) {
+      console.error('Email error:', err);
+      // Delete user if email fails
+      await User.findByIdAndDelete(user._id);
+
+      return res.status(500).json({
+        success: false,
+        message: 'فشل في إرسال رمز التحقق. يرجى المحاولة لاحقاً'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify email with code (Step 2: Complete registration)
+// @route   POST /api/v1/auth/verify-email
+// @access  Public
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { userId, code } = req.body;
+
+    if (!userId || !code) {
+      return res.status(400).json({
+        success: false,
+        message: 'يرجى إدخال رمز التحقق'
+      });
+    }
+
+    // Hash the provided code
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+
+    // Find user with matching code and not expired
+    const user = await User.findOne({
+      _id: userId,
+      emailVerificationCode: hashedCode,
+      emailVerificationExpire: { $gt: Date.now() }
+    }).select('+emailVerificationCode +emailVerificationExpire');
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'رمز التحقق غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    // Mark email as verified
+    user.isEmailVerified = true;
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Generate token for auto-login
     const token = user.getSignedJwtToken();
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: 'تم إنشاء الحساب بنجاح',
+      message: 'تم تأكيد البريد الإلكتروني بنجاح',
       token,
       user: {
         _id: user._id,
@@ -42,6 +158,101 @@ exports.register = async (req, res, next) => {
         accountType: user.accountType
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Resend verification code
+// @route   POST /api/v1/auth/resend-verification
+// @access  Public
+exports.resendVerification = async (req, res, next) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'معرف المستخدم مطلوب'
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني مؤكد بالفعل'
+      });
+    }
+
+    // Generate new verification code
+    const verificationCode = user.getEmailVerificationCode();
+    await user.save({ validateBeforeSave: false });
+
+    // Email HTML template
+    const htmlMessage = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">مهنتي لي</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">رمز التحقق الجديد</p>
+          </div>
+          <div style="padding: 40px 30px;">
+            <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${user.name}،</h2>
+            <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+              إليك رمز التحقق الجديد:
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <div style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
+                ${verificationCode}
+              </div>
+            </div>
+            <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 25px 0 0 0;">
+              هذا الرمز صالح لمدة 10 دقائق فقط.
+            </p>
+          </div>
+          <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+              © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'رمز التحقق الجديد - مهنتي لي',
+        html: htmlMessage
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'تم إرسال رمز التحقق الجديد'
+      });
+    } catch (err) {
+      console.error('Email error:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'فشل في إرسال رمز التحقق. يرجى المحاولة لاحقاً'
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -69,6 +280,16 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'بيانات الدخول غير صحيحة'
+      });
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'يرجى تأكيد بريدك الإلكتروني أولاً',
+        requireVerification: true,
+        userId: user._id
       });
     }
 
@@ -145,6 +366,7 @@ exports.getMe = async (req, res, next) => {
         city: user.city,
         accountType: user.accountType,
         isVerified: user.isVerified,
+        isEmailVerified: user.isEmailVerified,
         followers: user.followers,
         following: user.following,
         followersCount: user.followers.length,

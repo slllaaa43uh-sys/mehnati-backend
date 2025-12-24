@@ -57,6 +57,19 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // حقول التحقق من البريد الإلكتروني
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationCode: {
+    type: String,
+    select: false
+  },
+  emailVerificationExpire: {
+    type: Date,
+    select: false
+  },
   followers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -143,6 +156,23 @@ userSchema.methods.getResetPasswordToken = function() {
   this.resetPasswordExpire = Date.now() + 30 * 60 * 1000;
 
   return resetToken;
+};
+
+// Generate email verification code (6 digits)
+userSchema.methods.getEmailVerificationCode = function() {
+  // Generate 6 digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Hash code and set to emailVerificationCode field
+  this.emailVerificationCode = crypto
+    .createHash('sha256')
+    .update(code)
+    .digest('hex');
+
+  // Set expire (10 minutes)
+  this.emailVerificationExpire = Date.now() + 10 * 60 * 1000;
+
+  return code;
 };
 
 module.exports = mongoose.model('User', userSchema);

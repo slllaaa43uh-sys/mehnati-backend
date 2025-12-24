@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>إعادة تعيين كلمة المرور - مهنتي لي</title>
     <style>
         * {
@@ -12,86 +12,59 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Animated background */
-        body::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(-45deg, #3b82f6, #8b5cf6, #ec4899, #06b6d4);
-            background-size: 400% 400%;
-            animation: gradient-flow 15s ease infinite;
-            opacity: 0.3;
-            z-index: 0;
-        }
-
-        @keyframes gradient-flow {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            background-color: #ffffff;
         }
 
         .container {
             width: 100%;
-            max-width: 420px;
-            position: relative;
-            z-index: 1;
+            max-width: 400px;
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
+            background: #ffffff;
             border-radius: 24px;
-            padding: 40px 30px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 32px 24px;
         }
 
         .logo {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 32px;
         }
 
         .logo-icon {
-            width: 80px;
-            height: 80px;
+            width: 72px;
+            height: 72px;
             background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            border-radius: 20px;
+            border-radius: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 15px;
-            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+            margin: 0 auto 16px;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.25);
         }
 
         .logo-icon svg {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             fill: white;
         }
 
         .logo h1 {
-            font-size: 28px;
+            font-size: 24px;
             color: #1f2937;
-            font-weight: 800;
+            font-weight: 700;
+            margin-bottom: 4px;
         }
 
         .logo p {
             color: #6b7280;
             font-size: 14px;
-            margin-top: 5px;
         }
 
         .form-group {
@@ -100,7 +73,7 @@
 
         .form-group label {
             display: block;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             color: #374151;
             margin-bottom: 8px;
@@ -112,7 +85,7 @@
 
         .input-wrapper svg {
             position: absolute;
-            right: 15px;
+            right: 14px;
             top: 50%;
             transform: translateY(-50%);
             width: 20px;
@@ -122,11 +95,11 @@
 
         .form-group input {
             width: 100%;
-            padding: 16px 45px 16px 16px;
+            padding: 14px 44px 14px 14px;
             border: 2px solid #e5e7eb;
-            border-radius: 14px;
-            font-size: 15px;
-            transition: all 0.3s ease;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.2s ease;
             background: #f9fafb;
             direction: ltr;
             text-align: right;
@@ -135,34 +108,34 @@
         .form-group input:focus {
             outline: none;
             border-color: #3b82f6;
-            background: white;
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .btn {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             border: none;
-            border-radius: 14px;
+            border-radius: 12px;
             font-size: 16px;
-            font-weight: 700;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .btn-primary {
             background: linear-gradient(135deg, #3b82f6, #8b5cf6);
             color: white;
-            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 35px rgba(59, 130, 246, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
         }
 
         .btn-primary:active {
@@ -170,14 +143,14 @@
         }
 
         .btn:disabled {
-            opacity: 0.7;
+            opacity: 0.6;
             cursor: not-allowed;
             transform: none !important;
         }
 
         .alert {
-            padding: 14px 18px;
-            border-radius: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
             margin-bottom: 20px;
             font-size: 14px;
             font-weight: 500;
@@ -190,12 +163,6 @@
             border: 1px solid #fecaca;
         }
 
-        .alert-success {
-            background: #f0fdf4;
-            color: #16a34a;
-            border: 1px solid #bbf7d0;
-        }
-
         .alert.show {
             display: block;
             animation: slideIn 0.3s ease;
@@ -204,7 +171,7 @@
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(-10px);
+                transform: translateY(-8px);
             }
             to {
                 opacity: 1;
@@ -220,7 +187,7 @@
 
         .success-container.show {
             display: block;
-            animation: fadeIn 0.5s ease;
+            animation: fadeIn 0.4s ease;
         }
 
         @keyframes fadeIn {
@@ -229,15 +196,15 @@
         }
 
         .success-icon {
-            width: 80px;
-            height: 80px;
+            width: 72px;
+            height: 72px;
             background: linear-gradient(135deg, #22c55e, #16a34a);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0 auto 20px;
-            animation: scaleIn 0.5s ease;
+            animation: scaleIn 0.4s ease;
         }
 
         @keyframes scaleIn {
@@ -246,20 +213,21 @@
         }
 
         .success-icon svg {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             fill: white;
         }
 
         .success-container h2 {
             color: #1f2937;
-            font-size: 22px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            margin-bottom: 8px;
+            font-weight: 700;
         }
 
         .success-container p {
             color: #6b7280;
-            font-size: 15px;
+            font-size: 14px;
             line-height: 1.6;
         }
 
@@ -274,10 +242,10 @@
         .spinner {
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-top-color: white;
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            animation: spin 0.7s linear infinite;
         }
 
         @keyframes spin {
@@ -295,8 +263,8 @@
         }
 
         .error-icon {
-            width: 80px;
-            height: 80px;
+            width: 72px;
+            height: 72px;
             background: linear-gradient(135deg, #ef4444, #dc2626);
             border-radius: 50%;
             display: flex;
@@ -306,27 +274,91 @@
         }
 
         .error-icon svg {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             fill: white;
         }
 
         .error-page h2 {
             color: #1f2937;
-            font-size: 22px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            margin-bottom: 8px;
+            font-weight: 700;
         }
 
         .error-page p {
             color: #6b7280;
-            font-size: 15px;
+            font-size: 14px;
             line-height: 1.6;
         }
 
         .password-requirements {
             font-size: 12px;
             color: #9ca3af;
-            margin-top: 8px;
+            margin-top: 6px;
+        }
+
+        /* Loading State */
+        #loadingState {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        #loadingState .spinner {
+            display: inline-block;
+            width: 36px;
+            height: 36px;
+            border-width: 3px;
+            border-color: #e5e7eb;
+            border-top-color: #3b82f6;
+        }
+
+        #loadingState p {
+            margin-top: 16px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 16px;
+            }
+
+            .card {
+                padding: 24px 20px;
+            }
+
+            .logo-icon {
+                width: 64px;
+                height: 64px;
+            }
+
+            .logo-icon svg {
+                width: 32px;
+                height: 32px;
+            }
+
+            .logo h1 {
+                font-size: 22px;
+            }
+
+            .form-group input {
+                padding: 12px 40px 12px 12px;
+                font-size: 16px;
+            }
+
+            .btn {
+                padding: 12px;
+            }
+        }
+
+        /* Safe area for notched phones */
+        @supports (padding-top: env(safe-area-inset-top)) {
+            body {
+                padding-top: max(20px, env(safe-area-inset-top));
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+            }
         }
     </style>
 </head>
@@ -344,9 +376,9 @@
             </div>
 
             <!-- Loading State -->
-            <div id="loadingState" style="text-align: center; padding: 40px 0;">
-                <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border-width: 4px;"></div>
-                <p style="margin-top: 15px; color: #6b7280;">جاري التحقق من الرابط...</p>
+            <div id="loadingState">
+                <div class="spinner"></div>
+                <p>جاري التحقق من الرابط...</p>
             </div>
 
             <!-- Error Page -->
