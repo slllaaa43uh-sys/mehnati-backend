@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إعادة تعيين كلمة المرور - مهنتي لي</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(-45deg, #3b82f6, #8b5cf6, #ec4899, #06b6d4);
+            background-size: 400% 400%;
+            animation: gradient-flow 15s ease infinite;
+            opacity: 0.3;
+            z-index: 0;
+        }
+
+        @keyframes gradient-flow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .logo-icon svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        .logo h1 {
+            font-size: 28px;
+            color: #1f2937;
+            font-weight: 800;
+        }
+
+        .logo p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper svg {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            fill: #9ca3af;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 16px 45px 16px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 14px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+            direction: ltr;
+            text-align: right;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .alert {
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .success-container {
+            display: none;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .success-container.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            animation: scaleIn 0.5s ease;
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0); }
+            to { transform: scale(1); }
+        }
+
+        .success-icon svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        .success-container h2 {
+            color: #1f2937;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .success-container p {
+            color: #6b7280;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            display: none;
+        }
+
+        .loading.show {
+            display: inline-block;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-page {
+            display: none;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .error-page.show {
+            display: block;
+        }
+
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+
+        .error-icon svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        .error-page h2 {
+            color: #1f2937;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .error-page p {
+            color: #6b7280;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .password-requirements {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                    </svg>
+                </div>
+                <h1>مهنتي لي</h1>
+                <p>إعادة تعيين كلمة المرور</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" style="text-align: center; padding: 40px 0;">
+                <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border-width: 4px;"></div>
+                <p style="margin-top: 15px; color: #6b7280;">جاري التحقق من الرابط...</p>
+            </div>
+
+            <!-- Error Page -->
+            <div class="error-page" id="errorPage">
+                <div class="error-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </div>
+                <h2>رابط غير صالح</h2>
+                <p>هذا الرابط غير صالح أو منتهي الصلاحية.<br>يرجى طلب رابط جديد من التطبيق.</p>
+            </div>
+
+            <!-- Reset Form -->
+            <form id="resetForm" style="display: none;">
+                <div class="alert alert-error" id="errorAlert"></div>
+
+                <div class="form-group">
+                    <label>كلمة المرور الجديدة</label>
+                    <div class="input-wrapper">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                        </svg>
+                        <input type="password" id="password" placeholder="أدخل كلمة المرور الجديدة" required minlength="6">
+                    </div>
+                    <p class="password-requirements">يجب أن تكون 6 أحرف على الأقل</p>
+                </div>
+
+                <div class="form-group">
+                    <label>تأكيد كلمة المرور</label>
+                    <div class="input-wrapper">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                        </svg>
+                        <input type="password" id="confirmPassword" placeholder="أعد إدخال كلمة المرور" required minlength="6">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <span id="btnText">تحديث كلمة المرور</span>
+                    <div class="loading" id="btnLoading">
+                        <div class="spinner"></div>
+                    </div>
+                </button>
+            </form>
+
+            <!-- Success State -->
+            <div class="success-container" id="successContainer">
+                <div class="success-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                </div>
+                <h2>تم تحديث كلمة المرور بنجاح!</h2>
+                <p>يمكنك الآن الرجوع إلى التطبيق<br>وتسجيل الدخول بكلمة المرور الجديدة.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get token from URL
+        const pathParts = window.location.pathname.split('/');
+        const token = pathParts[pathParts.length - 1];
+
+        const loadingState = document.getElementById('loadingState');
+        const errorPage = document.getElementById('errorPage');
+        const resetForm = document.getElementById('resetForm');
+        const successContainer = document.getElementById('successContainer');
+        const errorAlert = document.getElementById('errorAlert');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const btnLoading = document.getElementById('btnLoading');
+
+        // Get API base URL (same origin)
+        const API_BASE = window.location.origin;
+
+        // Verify token on page load
+        async function verifyToken() {
+            if (!token || token === 'reset-password' || token === '') {
+                showError();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/verifyresettoken/${token}`);
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showForm();
+                } else {
+                    showError();
+                }
+            } catch (err) {
+                showError();
+            }
+        }
+
+        function showError() {
+            loadingState.style.display = 'none';
+            errorPage.classList.add('show');
+        }
+
+        function showForm() {
+            loadingState.style.display = 'none';
+            resetForm.style.display = 'block';
+        }
+
+        function showSuccess() {
+            resetForm.style.display = 'none';
+            successContainer.classList.add('show');
+        }
+
+        function showAlert(message) {
+            errorAlert.textContent = message;
+            errorAlert.classList.add('show');
+        }
+
+        function hideAlert() {
+            errorAlert.classList.remove('show');
+        }
+
+        function setLoading(loading) {
+            submitBtn.disabled = loading;
+            btnText.style.display = loading ? 'none' : 'inline';
+            btnLoading.classList.toggle('show', loading);
+        }
+
+        // Handle form submission
+        resetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert();
+
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Validation
+            if (password.length < 6) {
+                showAlert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                showAlert('كلمات المرور غير متطابقة');
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/resetpassword/${token}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showSuccess();
+                } else {
+                    showAlert(data.message || 'حدث خطأ. يرجى المحاولة مرة أخرى');
+                    setLoading(false);
+                }
+            } catch (err) {
+                showAlert('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى');
+                setLoading(false);
+            }
+        });
+
+        // Start verification
+        verifyToken();
+    </script>
+</body>
+</html>

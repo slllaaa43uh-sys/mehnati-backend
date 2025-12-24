@@ -99,6 +99,13 @@ app.use('/share', (req, res, next) => {
   next();
 }, shareRoutes);
 
+// Password Reset Page - صفحة إعادة تعيين كلمة المرور
+// تعطيل CSP للسماح بتشغيل JavaScript في الصفحة
+app.get('/reset-password/:token', (req, res) => {
+  res.removeHeader('Content-Security-Policy');
+  res.sendFile(path.join(__dirname, '../public/reset-password/index.html'));
+});
+
 // Health check endpoint
 app.get('/', (req, res) => {
   res.json({

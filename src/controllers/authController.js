@@ -196,8 +196,9 @@ exports.forgotPassword = async (req, res, next) => {
 
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL - Frontend URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    // Create reset URL - Server URL (صفحة إعادة التعيين على الخادم)
+    const serverUrl = process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const resetUrl = `${serverUrl}/reset-password/${resetToken}`;
 
     // Email HTML template
     const htmlMessage = `
