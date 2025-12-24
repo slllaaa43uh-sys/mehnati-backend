@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const crypto = require('crypto');
 const sendEmail = require('../config/email');
+const { isDisposableEmail } = require('../utils/disposableEmails');
 
 // أيقونة التطبيق SVG (الحقيبة) - مرسومة بـ CSS/SVG
 const getAppLogoSVG = () => `
@@ -59,6 +60,14 @@ const getEmailTemplate = (title, subtitle, userName, content, footerText) => `
 exports.register = async (req, res, next) => {
   try {
     const { name, email, password, accountType } = req.body;
+
+    // Check if email is from a disposable/temporary email service
+    if (isDisposableEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام البريد الإلكتروني المؤقت. يرجى استخدام بريد إلكتروني حقيقي'
+      });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
