@@ -18,6 +18,7 @@ const storyRoutes = require('./routes/stories');
 const reportRoutes = require('./routes/reports');
 const uploadRoutes = require('./routes/upload');
 const notificationRoutes = require('./routes/notifications');
+const shareRoutes = require('./routes/share');
 
 // Initialize express app
 const app = express();
@@ -52,6 +53,9 @@ app.use('/api/v1/stories', storyRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+
+// Share pages (Open Graph for social media)
+app.use('/share', shareRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {
