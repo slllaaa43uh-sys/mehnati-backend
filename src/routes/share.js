@@ -5,6 +5,9 @@ const Post = require('../models/Post');
 // رابط تنزيل التطبيق
 const APP_DOWNLOAD_URL = 'https://apkpure.com/p/com.my.newprojeci';
 const APP_NAME = 'مهنتي لي';
+// Deep Link scheme للتطبيق
+const APP_SCHEME = 'mehnati';
+const APP_PACKAGE = 'com.my.newprojeci';
 
 /**
  * استخراج public_id من رابط Cloudinary
@@ -55,28 +58,23 @@ function createCollageUrl(imageUrls) {
   const publicIds = imageUrls.map(url => extractCloudinaryPublicId(url)).filter(id => id);
   if (publicIds.length < 2) return optimizeImageForOG(imageUrls[0]);
   
-  // أبعاد الصورة النهائية لـ Open Graph
-  const finalWidth = 1200;
-  const finalHeight = 630;
-  
+  // أبعاد الصورة النهائية لـ Open Graph: 1200x630
   let transformation = '';
   
   if (publicIds.length === 2) {
     // صورتين جنباً إلى جنب (600x630 لكل صورة)
-    const halfWidth = 600;
-    transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
-      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${finalHeight},g_auto/fl_layer_apply,g_east`;
+    // نبدأ بالصورة الأولى 600x630، ثم نضيف الثانية على اليمين
+    // في النهاية نوسع الصورة إلى 1200x630
+    transformation = `c_fill,w_600,h_630,g_auto/` +
+      `l_${publicIds[1]}/c_fill,w_600,h_630,g_auto/fl_layer_apply,g_east/` +
+      `c_pad,w_1200,h_630,g_west`;
   } else if (publicIds.length >= 3) {
-    // 3 صور أو أكثر: صورة كبيرة على اليسار + صورتين على اليمين
-    // الصورة الأولى: 600x630 (نصف العرض، كامل الارتفاع)
-    // الصورة الثانية: 600x315 (أعلى اليمين)
-    // الصورة الثالثة: 600x315 (أسفل اليمين)
-    const halfWidth = 600;
-    const halfHeight = 315;
-    
-    transformation = `c_fill,w_${halfWidth},h_${finalHeight},g_auto/` +
-      `l_${publicIds[1]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_north_east/` +
-      `l_${publicIds[2]}/c_fill,w_${halfWidth},h_${halfHeight},g_auto/fl_layer_apply,g_south_east`;
+    // 3 صور: صورة كبيرة على اليسار (600x630) + صورتين على اليمين (600x315 لكل واحدة)
+    // نستخدم c_pad في النهاية لضمان العرض الكامل 1200
+    transformation = `c_fill,w_600,h_630,g_auto/` +
+      `l_${publicIds[1]}/c_fill,w_600,h_315,g_auto/fl_layer_apply,g_north_east/` +
+      `l_${publicIds[2]}/c_fill,w_600,h_315,g_auto/fl_layer_apply,g_south_east/` +
+      `c_pad,w_1200,h_630,g_west`;
   }
   
   // استخراج مسار الصورة الأولى
@@ -511,7 +509,80 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
     document.querySelectorAll('.gallery-image').forEach(function(img) {
       img.onerror = function() { this.parentElement.style.display = 'none'; };
     });
+    
+    // Deep Linking - محاولة فتح التطبيق إذا كان مثبتاً
+    (function() {
+      var postId = '${postId}';
+      var deepLink = '${APP_SCHEME}://post/' + postId;
+      var playStoreUrl = 'https://play.google.com/store/apps/details?id=${APP_PACKAGE}';
+      var fallbackUrl = '${APP_DOWNLOAD_URL}';
+      
+      // اكتشاف نوع الجهاز
+      var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      var isAndroid = /android/i.test(userAgent);
+      var isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+      
+      // إضافة زر فتح في التطبيق
+      var openInAppBtn = document.createElement('a');
+      openInAppBtn.href = deepLink;
+      openInAppBtn.className = 'open-in-app-btn';
+      openInAppBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg> فتح في التطبيق';
+      
+      var downloadSection = document.querySelector('.download-section');
+      if (downloadSection) {
+        downloadSection.appendChild(openInAppBtn);
+      }
+      
+      // محاولة فتح التطبيق تلقائياً على الموبايل
+      if (isAndroid || isIOS) {
+        var timeout;
+        var clicked = false;
+        
+        openInAppBtn.addEventListener('click', function(e) {
+          if (clicked) return;
+          clicked = true;
+          
+          // محاولة فتح التطبيق
+          window.location.href = deepLink;
+          
+          // إذا لم يفتح التطبيق خلال 2 ثانية، اذهب للمتجر
+          timeout = setTimeout(function() {
+            if (isAndroid) {
+              window.location.href = playStoreUrl;
+            } else {
+              window.location.href = fallbackUrl;
+            }
+          }, 2000);
+        });
+        
+        // إذا عاد المستخدم للصفحة، ألغِ التحويل
+        window.addEventListener('blur', function() {
+          clearTimeout(timeout);
+        });
+      }
+    })();
   </script>
+  <style>
+    .open-in-app-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 25px;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 14px;
+      margin-top: 10px;
+      border: 2px solid white;
+      transition: all 0.2s;
+    }
+    .open-in-app-btn:hover {
+      background: white;
+      color: #667eea;
+    }
+  </style>
 </body>
 </html>`;
 }
@@ -641,6 +712,49 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
       ${description ? `<div class="description">${escapeHtml(description.substring(0, 150))}${description.length > 150 ? '...' : ''}</div>` : ''}
     </div>
   </div>
+  <script>
+    // Deep Linking - محاولة فتح التطبيق إذا كان مثبتاً
+    (function() {
+      var postId = '${postId}';
+      var deepLink = '${APP_SCHEME}://short/' + postId;
+      var playStoreUrl = 'https://play.google.com/store/apps/details?id=${APP_PACKAGE}';
+      var fallbackUrl = '${APP_DOWNLOAD_URL}';
+      
+      var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      var isAndroid = /android/i.test(userAgent);
+      var isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+      
+      // إضافة زر فتح في التطبيق
+      var openInAppBtn = document.createElement('a');
+      openInAppBtn.href = deepLink;
+      openInAppBtn.className = 'open-in-app-btn';
+      openInAppBtn.innerHTML = '▶ فتح في التطبيق';
+      openInAppBtn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.2);color:white;padding:10px 20px;border-radius:25px;text-decoration:none;font-weight:bold;font-size:14px;margin-top:10px;border:2px solid white;';
+      
+      var downloadBar = document.querySelector('.download-bar');
+      if (downloadBar) {
+        downloadBar.appendChild(openInAppBtn);
+      }
+      
+      if (isAndroid || isIOS) {
+        var timeout;
+        var clicked = false;
+        
+        openInAppBtn.addEventListener('click', function(e) {
+          if (clicked) return;
+          clicked = true;
+          window.location.href = deepLink;
+          timeout = setTimeout(function() {
+            window.location.href = isAndroid ? playStoreUrl : fallbackUrl;
+          }, 2000);
+        });
+        
+        window.addEventListener('blur', function() {
+          clearTimeout(timeout);
+        });
+      }
+    })();
+  </script>
 </body>
 </html>`;
 }
