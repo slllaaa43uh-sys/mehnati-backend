@@ -121,7 +121,9 @@ function generatePostPage({ title, description, userName, ogImage, ogVideo, hasV
       const thumbUrl = getFullUrl(videos[0].thumbnail, baseUrl) || fullOgImage;
       mediaGallery = `
         <div class="video-container">
-          <video controls playsinline preload="auto" poster="${thumbUrl}" class="video-player" src="${videoUrl}" type="video/mp4"></video>
+          <video controls playsinline preload="auto" poster="${thumbUrl}" class="video-player" crossorigin="anonymous">
+            <source src="${videoUrl}" type="video/mp4">
+          </video>
         </div>
       `;
     } else if (images.length > 0) {
@@ -350,7 +352,10 @@ function generateShortPage({ title, description, userName, ogImage, ogVideo, pos
     </div>
     <div class="video-wrapper">
       ${fullOgVideo ? `
-      <video controls playsinline autoplay muted preload="auto" poster="${fullOgImage}" class="video-player" src="${fullOgVideo}" type="video/mp4"></video>
+      <video controls playsinline preload="auto" poster="${fullOgImage}" class="video-player" crossorigin="anonymous">
+        <source src="${fullOgVideo}" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
       ` : `<img src="${fullOgImage}" alt="غلاف الفيديو" style="width:100%; aspect-ratio:9/16; object-fit:cover;">`}
     </div>
     <div class="info">
