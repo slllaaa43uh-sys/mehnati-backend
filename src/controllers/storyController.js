@@ -2,6 +2,7 @@ const Story = require('../models/Story');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { uploadStoryMedia, deleteMedia } = require('../services/storageService');
+const { trimVideo, validateTrimTimes } = require('../services/videoService');
 
 // @desc    Create story
 // @route   POST /api/v1/stories
@@ -14,11 +15,49 @@ exports.createStory = async (req, res, next) => {
     
     // الطريقة 1: استلام الملف مباشرة عبر multer (FormData)
     if (req.file) {
-      // رفع الملف مع الضغط إلى Backblaze B2
+      let fileBuffer = req.file.buffer;
+      let fileName = req.file.originalname;
+      let mimeType = req.file.mimetype;
+      
+      // إذا كان الملف فيديو وتم إرسال بيانات القص، نقوم بقص الفيديو أولاً
+      if (mimeType.startsWith('video/')) {
+        const trimStart = parseFloat(req.body.trimStart);
+        const trimEnd = parseFloat(req.body.trimEnd);
+        
+        // التحقق من صحة بيانات القص
+        if (!isNaN(trimStart) && !isNaN(trimEnd) && validateTrimTimes(trimStart, trimEnd)) {
+          console.log(`Trimming video from ${trimStart}s to ${trimEnd}s`);
+          
+          try {
+            // قص الفيديو على الخادم
+            const trimmedVideo = await trimVideo(
+              req.file.buffer,
+              req.file.originalname,
+              trimStart,
+              trimEnd
+            );
+            
+            fileBuffer = trimmedVideo.buffer;
+            fileName = trimmedVideo.filename;
+            
+            console.log('Video trimmed successfully on server');
+          } catch (trimError) {
+            console.error('Error trimming video:', trimError);
+            return res.status(500).json({
+              success: false,
+              message: 'فشل قص الفيديو. يرجى المحاولة مرة أخرى.'
+            });
+          }
+        } else if (!isNaN(trimStart) || !isNaN(trimEnd)) {
+          console.log('Invalid trim times provided, uploading full video');
+        }
+      }
+      
+      // رفع الملف (المقصوص أو الأصلي) مع الضغط إلى Backblaze B2
       const uploadResult = await uploadStoryMedia(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype
+        fileBuffer,
+        fileName,
+        mimeType
       );
       
       media = {
