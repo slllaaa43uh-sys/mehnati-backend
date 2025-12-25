@@ -5,6 +5,14 @@ const morgan = require('morgan');
 const path = require('path');
 require('dotenv').config();
 
+// تفعيل garbage collector للتحكم اليدوي في الذاكرة
+// يجب تشغيل الخادم بـ: node --expose-gc src/server.js
+if (global.gc) {
+  console.log('✅ Garbage Collector متاح للتحكم اليدوي');
+} else {
+  console.log('⚠️ لتفعيل التحكم اليدوي في الذاكرة، شغّل الخادم بـ: node --expose-gc src/server.js');
+}
+
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
@@ -32,8 +40,27 @@ initializeB2().catch(err => {
   console.error('❌ فشل الاتصال بـ Backblaze B2:', err.message);
 });
 
-// Setup recommendation cron job (updates scores every 30 minutes)
-setupCronJob(30);
+// Setup recommendation cron job (updates scores every 60 minutes instead of 30 to reduce memory usage)
+setupCronJob(60);
+
+// مراقبة استخدام الذاكرة
+const logMemoryUsage = () => {
+  const used = process.memoryUsage();
+  console.log(`📊 استخدام الذاكرة: RSS=${Math.round(used.rss / 1024 / 1024)}MB, Heap=${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`);
+  
+  // تحذير إذا تجاوزت الذاكرة 400MB
+  if (used.heapUsed > 400 * 1024 * 1024) {
+    console.warn('⚠️ تحذير: استخدام الذاكرة مرتفع!');
+    if (global.gc) {
+      console.log('🧹 تشغيل Garbage Collector...');
+      global.gc();
+    }
+  }
+};
+
+// تسجيل استخدام الذاكرة كل 5 دقائق
+setInterval(logMemoryUsage, 5 * 60 * 1000);
+logMemoryUsage(); // تسجيل فوري عند البدء
 
 // Middleware - تكوين helmet مع السماح بتحميل الوسائط من Backblaze B2
 app.use(helmet({

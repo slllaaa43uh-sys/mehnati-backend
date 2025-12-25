@@ -11,6 +11,8 @@
  * - shares: المشاركات
  * - hiddenBy: المستخدمون الذين أخفوا الفيديو
  * - following: قائمة المتابعين
+ * 
+ * تم تحسين الأداء واستخدام الذاكرة في هذا الإصدار
  */
 
 const Post = require('../models/Post');
@@ -107,35 +109,55 @@ const calculatePropagationTier = (post, score) => {
  * ============================================
  * مهمة مجدولة لتحديث تقييمات جميع الفيديوهات
  * يجب تشغيلها كل 30 دقيقة أو ساعة
+ * تم تحسينها لتوفير الذاكرة باستخدام cursor
  * ============================================
  */
 exports.updateAllScoresCronJob = async () => {
   try {
-    const shorts = await Post.find({ isShort: true, status: 'approved' });
-    
     let updated = 0;
-    for (const short of shorts) {
+    let total = 0;
+    
+    // استخدام cursor بدلاً من find لتوفير الذاكرة
+    const cursor = Post.find({ isShort: true, status: 'approved' })
+      .select('views reactions comments shares hiddenBy createdAt recommendation')
+      .cursor({ batchSize: 50 }); // معالجة 50 فيديو في كل دفعة
+    
+    for await (const short of cursor) {
+      total++;
       const newScore = calculateVideoScore(short);
       const newTier = calculatePropagationTier(short, newScore);
       
       // تحديث فقط إذا تغيرت القيم
-      if (short.recommendation.score !== newScore || short.recommendation.propagationTier !== newTier) {
-        short.recommendation.score = newScore;
-        short.recommendation.propagationTier = newTier;
-        short.recommendation.lastTestedAt = new Date();
+      if (!short.recommendation || 
+          short.recommendation.score !== newScore || 
+          short.recommendation.propagationTier !== newTier) {
         
-        // تحديث الإحصائيات
-        short.recommendation.likeCount = short.reactions ? short.reactions.length : 0;
-        short.recommendation.commentCount = short.comments ? short.comments.length : 0;
-        short.recommendation.shareCount = short.shares || 0;
-        
-        await short.save();
+        // استخدام updateOne بدلاً من save لتوفير الذاكرة
+        await Post.updateOne(
+          { _id: short._id },
+          {
+            $set: {
+              'recommendation.score': newScore,
+              'recommendation.propagationTier': newTier,
+              'recommendation.lastTestedAt': new Date(),
+              'recommendation.likeCount': short.reactions ? short.reactions.length : 0,
+              'recommendation.commentCount': short.comments ? short.comments.length : 0,
+              'recommendation.shareCount': short.shares || 0
+            }
+          }
+        );
         updated++;
       }
     }
     
-    console.log(`[RecommendationService] Updated scores for ${updated}/${shorts.length} shorts`);
-    return { total: shorts.length, updated };
+    console.log(`[RecommendationService] Updated scores for ${updated}/${total} shorts`);
+    
+    // تشغيل garbage collector إذا كان متاحاً
+    if (global.gc) {
+      global.gc();
+    }
+    
+    return { total, updated };
   } catch (error) {
     console.error('[RecommendationService] Error updating scores:', error);
     throw error;
@@ -149,21 +171,30 @@ exports.updateAllScoresCronJob = async () => {
  */
 exports.updateSingleVideoScore = async (postId) => {
   try {
-    const post = await Post.findById(postId);
+    const post = await Post.findById(postId)
+      .select('isShort views reactions comments shares hiddenBy createdAt recommendation');
+    
     if (!post || !post.isShort) return null;
 
     const newScore = calculateVideoScore(post);
     const newTier = calculatePropagationTier(post, newScore);
 
-    post.recommendation.score = newScore;
-    post.recommendation.propagationTier = newTier;
-    post.recommendation.lastTestedAt = new Date();
-    post.recommendation.likeCount = post.reactions ? post.reactions.length : 0;
-    post.recommendation.commentCount = post.comments ? post.comments.length : 0;
-    post.recommendation.shareCount = post.shares || 0;
+    // استخدام updateOne بدلاً من save
+    await Post.updateOne(
+      { _id: postId },
+      {
+        $set: {
+          'recommendation.score': newScore,
+          'recommendation.propagationTier': newTier,
+          'recommendation.lastTestedAt': new Date(),
+          'recommendation.likeCount': post.reactions ? post.reactions.length : 0,
+          'recommendation.commentCount': post.comments ? post.comments.length : 0,
+          'recommendation.shareCount': post.shares || 0
+        }
+      }
+    );
 
-    await post.save();
-    return post;
+    return { score: newScore, tier: newTier };
   } catch (error) {
     console.error('[RecommendationService] Error updating single video:', error);
     return null;
@@ -173,14 +204,26 @@ exports.updateSingleVideoScore = async (postId) => {
 /**
  * ============================================
  * جلب الفيديوهات الموصى بها (صفحة "لك")
+ * تم تحسينها لتوفير الذاكرة
  * ============================================
  */
 exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
+  const limitNum = parseInt(limit);
+  
   let user = null;
+  let userFollowing = [];
+  let userInterestProfile = null;
   
   if (userId) {
-    user = await User.findById(userId);
+    user = await User.findById(userId)
+      .select('following interestProfile')
+      .lean();
+    
+    if (user) {
+      userFollowing = user.following || [];
+      userInterestProfile = user.interestProfile;
+    }
   }
 
   // 1. بناء استعلام المرشحين
@@ -195,44 +238,49 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   };
 
   // استبعاد الفيديوهات المخفية من قبل المستخدم
-  if (user) {
+  if (userId) {
     candidateQuery.hiddenBy = { $ne: userId };
     
     // استبعاد صناع المحتوى المخفيين
-    if (user.interestProfile && user.interestProfile.hiddenCreators && user.interestProfile.hiddenCreators.length > 0) {
-      candidateQuery.user = { $nin: user.interestProfile.hiddenCreators };
+    if (userInterestProfile && userInterestProfile.hiddenCreators && userInterestProfile.hiddenCreators.length > 0) {
+      candidateQuery.user = { $nin: userInterestProfile.hiddenCreators };
     }
   }
 
-  // 2. جلب المرشحين مع حساب التقييم الفوري
+  // 2. جلب المرشحين مع الحقول المطلوبة فقط
   const candidates = await Post.find(candidateQuery)
+    .select('user views reactions comments shares hiddenBy createdAt category recommendation media content coverImage attractiveTitle privacy allowComments allowDownloads allowRepost')
     .populate('user', 'name avatar isVerified')
-    .lean(); // استخدام lean للأداء
+    .sort({ 'recommendation.score': -1, createdAt: -1 })
+    .limit(limitNum * 3) // جلب 3 أضعاف المطلوب للتنوع
+    .lean();
 
   // 3. حساب التقييم والترتيب لكل فيديو
   let rankedShorts = candidates.map(short => {
-    // حساب التقييم الفوري
-    const score = calculateVideoScore(short);
+    // استخدام التقييم المحسوب مسبقاً إذا كان موجوداً
+    const score = short.recommendation?.score || calculateVideoScore(short);
     
     // حساب درجة التخصيص
     let personalizationScore = 0;
     if (user) {
       // نقاط إضافية للمتابَعين
-      if (user.following && user.following.some(f => f.toString() === short.user._id.toString())) {
+      if (userFollowing.some(f => f.toString() === short.user._id.toString())) {
         personalizationScore += 30;
       }
       
       // نقاط من تفاعل المستخدم مع التصنيف
-      if (short.category && user.interestProfile && user.interestProfile.interactedCategories) {
-        const categoryScore = user.interestProfile.interactedCategories.get(short.category);
+      if (short.category && userInterestProfile && userInterestProfile.interactedCategories) {
+        const categoryScore = userInterestProfile.interactedCategories.get?.(short.category) || 
+                             userInterestProfile.interactedCategories[short.category];
         if (categoryScore) {
           personalizationScore += categoryScore * 2;
         }
       }
       
       // نقاط من تفاعل المستخدم مع صانع المحتوى
-      if (user.interestProfile && user.interestProfile.interactedCreators) {
-        const creatorScore = user.interestProfile.interactedCreators.get(short.user._id.toString());
+      if (userInterestProfile && userInterestProfile.interactedCreators) {
+        const creatorScore = userInterestProfile.interactedCreators.get?.(short.user._id.toString()) ||
+                            userInterestProfile.interactedCreators[short.user._id.toString()];
         if (creatorScore) {
           personalizationScore += creatorScore * 3;
         }
@@ -258,7 +306,7 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   const creatorCount = new Map();
   
   for (const short of rankedShorts) {
-    if (finalShorts.length >= parseInt(limit) * 2) break; // جلب ضعف المطلوب للتنوع
+    if (finalShorts.length >= limitNum * 2) break;
 
     const creatorId = short.user._id.toString();
     const count = creatorCount.get(creatorId) || 0;
@@ -271,7 +319,7 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   }
 
   // 6. تطبيق التصفح (pagination)
-  const paginatedShorts = finalShorts.slice(skip, skip + parseInt(limit));
+  const paginatedShorts = finalShorts.slice(skip, skip + limitNum);
 
   // 7. تنسيق النتائج للتوافق مع الواجهة الأمامية
   const formattedShorts = paginatedShorts.map(short => ({
@@ -290,7 +338,7 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   return {
     posts: formattedShorts,
     total,
-    totalPages: Math.ceil(total / parseInt(limit)),
+    totalPages: Math.ceil(total / limitNum),
     currentPage: parseInt(page)
   };
 };
@@ -303,53 +351,51 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
  */
 exports.updateUserInterestProfile = async (userId, postId, interactionType) => {
   try {
-    const user = await User.findById(userId);
-    const post = await Post.findById(postId);
+    const post = await Post.findById(postId).select('user category isShort').lean();
     
-    if (!user || !post || !post.isShort) return;
-
-    // التأكد من وجود interestProfile
-    if (!user.interestProfile) {
-      user.interestProfile = {
-        interactedCategories: new Map(),
-        interactedCreators: new Map(),
-        fullyWatchedVideos: [],
-        skippedVideos: [],
-        hiddenCreators: []
-      };
-    }
+    if (!post || !post.isShort) return;
 
     const creatorId = post.user.toString();
     const category = post.category;
+
+    // استخدام updateOne بدلاً من find + save
+    const updateOps = {};
 
     switch (interactionType) {
       case 'LIKE':
       case 'COMMENT':
       case 'SHARE':
         // زيادة نقاط صانع المحتوى
-        const currentCreatorScore = user.interestProfile.interactedCreators.get(creatorId) || 0;
-        user.interestProfile.interactedCreators.set(creatorId, currentCreatorScore + 5);
+        updateOps[`interestProfile.interactedCreators.${creatorId}`] = { $inc: 5 };
         
         // زيادة نقاط التصنيف
         if (category) {
-          const currentCategoryScore = user.interestProfile.interactedCategories.get(category) || 0;
-          user.interestProfile.interactedCategories.set(category, currentCategoryScore + 3);
+          updateOps[`interestProfile.interactedCategories.${category}`] = { $inc: 3 };
         }
+        
+        await User.updateOne(
+          { _id: userId },
+          {
+            $inc: {
+              [`interestProfile.interactedCreators.${creatorId}`]: 5,
+              ...(category ? { [`interestProfile.interactedCategories.${category}`]: 3 } : {})
+            }
+          },
+          { upsert: true }
+        );
         break;
         
       case 'HIDE':
-        // إضافة صانع المحتوى للقائمة السوداء
-        if (!user.interestProfile.hiddenCreators.includes(post.user)) {
-          user.interestProfile.hiddenCreators.push(post.user);
-        }
-        
-        // تخفيض نقاط صانع المحتوى
-        const creatorScore = user.interestProfile.interactedCreators.get(creatorId) || 0;
-        user.interestProfile.interactedCreators.set(creatorId, creatorScore - 10);
+        await User.updateOne(
+          { _id: userId },
+          {
+            $addToSet: { 'interestProfile.hiddenCreators': post.user },
+            $inc: { [`interestProfile.interactedCreators.${creatorId}`]: -10 }
+          },
+          { upsert: true }
+        );
         break;
     }
-
-    await user.save();
   } catch (error) {
     console.error('[RecommendationService] Error updating user interest profile:', error);
   }
@@ -373,12 +419,15 @@ exports.getTrendingShorts = async (limit = 10) => {
       { privacy: null }
     ]
   })
+  .select('user views reactions comments shares createdAt category media content coverImage attractiveTitle recommendation')
   .populate('user', 'name avatar isVerified')
+  .sort({ 'recommendation.score': -1 })
+  .limit(limit * 2)
   .lean();
 
   // حساب التقييم وترتيب الترند
   const rankedTrending = trendingShorts.map(short => {
-    const score = calculateVideoScore(short);
+    const score = short.recommendation?.score || calculateVideoScore(short);
     const views = short.views || 1;
     const engagementRate = ((short.reactions?.length || 0) + (short.comments?.length || 0) + (short.shares || 0)) / views;
     

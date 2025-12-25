@@ -30,13 +30,20 @@ const COMPRESSION_CONFIG = {
   }
 };
 
+// تعطيل التخزين المؤقت في Sharp لتوفير الذاكرة
+sharp.cache(false);
+// تحديد عدد الخيوط المتزامنة
+sharp.concurrency(1);
+
 /**
- * ضغط صورة باستخدام Sharp
+ * ضغط صورة باستخدام Sharp مع إدارة الذاكرة
  * @param {Buffer} inputBuffer - بيانات الصورة الأصلية
  * @param {Object} options - خيارات الضغط
  * @returns {Promise<{buffer: Buffer, info: Object}>}
  */
 const compressImage = async (inputBuffer, options = {}) => {
+  let sharpInstance = null;
+  
   try {
     const config = COMPRESSION_CONFIG.image;
     const {
@@ -48,7 +55,11 @@ const compressImage = async (inputBuffer, options = {}) => {
       isStory = false
     } = options;
 
-    let sharpInstance = sharp(inputBuffer);
+    // إنشاء instance جديد من Sharp
+    sharpInstance = sharp(inputBuffer, {
+      limitInputPixels: 268402689, // حد أقصى للبكسلات (16384 x 16384)
+      sequentialRead: true // قراءة تسلسلية لتوفير الذاكرة
+    });
     
     // الحصول على معلومات الصورة الأصلية
     const metadata = await sharpInstance.metadata();
@@ -114,6 +125,16 @@ const compressImage = async (inputBuffer, options = {}) => {
   } catch (error) {
     console.error('❌ خطأ في ضغط الصورة:', error.message);
     throw error;
+  } finally {
+    // تنظيف الذاكرة - مهم جداً!
+    if (sharpInstance) {
+      sharpInstance.destroy();
+      sharpInstance = null;
+    }
+    // تشغيل garbage collector إذا كان متاحاً
+    if (global.gc) {
+      global.gc();
+    }
   }
 };
 
@@ -142,7 +163,10 @@ const compressVideo = async (inputBuffer, options = {}) => {
     // كتابة الملف المؤقت
     await fs.writeFile(inputPath, inputBuffer);
     
-    // أمر FFmpeg للضغط
+    // تحرير الذاكرة من الـ buffer الأصلي
+    inputBuffer = null;
+    
+    // أمر FFmpeg للضغط مع تحديد الذاكرة
     const ffmpegCommand = `ffmpeg -i "${inputPath}" \
       -vf "scale='min(${maxWidth},iw)':min'(${maxHeight},ih)':force_original_aspect_ratio=decrease" \
       -c:v libx264 \
@@ -151,11 +175,15 @@ const compressVideo = async (inputBuffer, options = {}) => {
       -c:a aac \
       -b:a ${audioBitrate} \
       -movflags +faststart \
+      -threads 1 \
       -y "${outputPath}"`;
     
-    // تنفيذ الأمر
+    // تنفيذ الأمر مع حد أقصى للذاكرة
     await new Promise((resolve, reject) => {
-      exec(ffmpegCommand, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
+      const process = exec(ffmpegCommand, { 
+        maxBuffer: 50 * 1024 * 1024, // تقليل من 100MB إلى 50MB
+        timeout: 120000 // 2 دقيقة كحد أقصى
+      }, (error, stdout, stderr) => {
         if (error) {
           console.error('FFmpeg stderr:', stderr);
           reject(error);
@@ -169,13 +197,14 @@ const compressVideo = async (inputBuffer, options = {}) => {
     const outputBuffer = await fs.readFile(outputPath);
     
     // حساب نسبة الضغط
-    const originalSize = inputBuffer.length;
+    const inputStats = await fs.stat(inputPath);
+    const originalSize = inputStats.size;
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
     console.log(`🎬 ضغط الفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
-    // تنظيف الملفات المؤقتة
+    // تنظيف الملفات المؤقتة فوراً
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     
@@ -248,11 +277,14 @@ const generateVideoThumbnail = async (videoBuffer) => {
   try {
     await fs.writeFile(inputPath, videoBuffer);
     
+    // تحرير الذاكرة
+    videoBuffer = null;
+    
     // استخراج إطار من الثانية الأولى
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "scale=720:-1" -q:v 2 -y "${outputPath}"`;
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "scale=720:-1" -q:v 2 -threads 1 -y "${outputPath}"`;
     
     await new Promise((resolve, reject) => {
-      exec(ffmpegCommand, (error) => {
+      exec(ffmpegCommand, { timeout: 30000 }, (error) => {
         if (error) reject(error);
         else resolve();
       });
@@ -275,10 +307,44 @@ const generateVideoThumbnail = async (videoBuffer) => {
   }
 };
 
+/**
+ * تنظيف الملفات المؤقتة القديمة
+ * يجب استدعاؤها دورياً
+ */
+const cleanupTempFiles = async () => {
+  const tempDir = os.tmpdir();
+  try {
+    const files = await fs.readdir(tempDir);
+    const now = Date.now();
+    const maxAge = 30 * 60 * 1000; // 30 دقيقة
+    
+    for (const file of files) {
+      if (file.startsWith('input_') || file.startsWith('output_') || file.startsWith('thumb_')) {
+        const filePath = path.join(tempDir, file);
+        try {
+          const stats = await fs.stat(filePath);
+          if (now - stats.mtimeMs > maxAge) {
+            await fs.unlink(filePath);
+            console.log(`🧹 تم حذف ملف مؤقت قديم: ${file}`);
+          }
+        } catch (e) {
+          // تجاهل الأخطاء
+        }
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في تنظيف الملفات المؤقتة:', error.message);
+  }
+};
+
+// تشغيل التنظيف كل 15 دقيقة
+setInterval(cleanupTempFiles, 15 * 60 * 1000);
+
 module.exports = {
   compressImage,
   compressVideo,
   compressFile,
   generateVideoThumbnail,
+  cleanupTempFiles,
   COMPRESSION_CONFIG
 };

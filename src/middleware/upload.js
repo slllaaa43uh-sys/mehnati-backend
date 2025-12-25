@@ -55,11 +55,13 @@ const imageOnlyFilter = (req, file, cb) => {
 };
 
 // Upload configurations for posts (images and videos)
+// تقليل الحد الأقصى للفيديو من 100MB إلى 50MB لتوفير الذاكرة
 const postUpload = multer({
   storage: memoryStorage,
   fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB max for videos
+    fileSize: 50 * 1024 * 1024, // 50MB max for videos (تم تقليله من 100MB)
+    files: 5 // حد أقصى 5 ملفات في الطلب الواحد
   }
 });
 
@@ -68,16 +70,19 @@ const avatarUpload = multer({
   storage: memoryStorage,
   fileFilter: imageOnlyFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max for avatars (سيتم ضغطها)
+    fileSize: 5 * 1024 * 1024, // 5MB max for avatars (تم تقليله من 10MB)
+    files: 1
   }
 });
 
 // Upload configuration for stories
+// تقليل الحد الأقصى للقصص من 50MB إلى 30MB
 const storyUpload = multer({
   storage: memoryStorage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB max for stories
+    fileSize: 30 * 1024 * 1024, // 30MB max for stories (تم تقليله من 50MB)
+    files: 1
   }
 });
 
@@ -86,16 +91,17 @@ const coverUpload = multer({
   storage: memoryStorage,
   fileFilter: imageOnlyFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max for covers
+    fileSize: 5 * 1024 * 1024, // 5MB max for covers (تم تقليله من 10MB)
+    files: 1
   }
 });
 
 // Export different upload configurations
 module.exports = {
   single: postUpload.single('file'),
-  multiple: postUpload.array('files', 10), // Max 10 files
+  multiple: postUpload.array('files', 5), // Max 5 files (تم تقليله من 10)
   avatar: avatarUpload.single('avatar'),
-  media: postUpload.array('media', 10), // Max 10 files
+  media: postUpload.array('media', 5), // Max 5 files (تم تقليله من 10)
   storyMedia: storyUpload.single('media'),
   cover: coverUpload.single('cover'),
   // Combined upload for shorts (video + cover)
