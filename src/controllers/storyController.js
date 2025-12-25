@@ -41,11 +41,21 @@ exports.createStory = async (req, res, next) => {
         ? JSON.parse(req.body.media) 
         : req.body.media;
       
+      // تطبيع نوع الوسائط - تحويل MIME type الكامل إلى نوع بسيط
+      let mediaType = bodyMedia.type || 'image';
+      if (typeof mediaType === 'string') {
+        if (mediaType.toLowerCase().includes('video') || mediaType.startsWith('video/')) {
+          mediaType = 'video';
+        } else {
+          mediaType = 'image';
+        }
+      }
+      
       media = {
         url: bodyMedia.url,
         fileId: bodyMedia.fileId || null,
         fileName: bodyMedia.fileName || null,
-        type: bodyMedia.type || 'image'
+        type: mediaType
       };
       
       // Debug log
