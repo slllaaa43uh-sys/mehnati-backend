@@ -247,12 +247,10 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
     }
   }
 
-  // 2. جلب المرشحين مع الحقول المطلوبة فقط
+  // 2. جلب المرشحين - بدون حد أقصى لضمان عرض جميع الفيديوهات
   const candidates = await Post.find(candidateQuery)
-    .select('user views reactions comments shares hiddenBy createdAt category recommendation media content coverImage attractiveTitle privacy allowComments allowDownloads allowRepost')
     .populate('user', 'name avatar isVerified')
-    .sort({ 'recommendation.score': -1, createdAt: -1 })
-    .limit(limitNum * 3) // جلب 3 أضعاف المطلوب للتنوع
+    .sort({ createdAt: -1 })
     .lean();
 
   // 3. حساب التقييم والترتيب لكل فيديو
