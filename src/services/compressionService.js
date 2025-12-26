@@ -5,28 +5,39 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
-// إعدادات الضغط
+// إعدادات الضغط القصوى - محسّنة لحل مشكلة إعادة رسم الصور في المتصفح
 const COMPRESSION_CONFIG = {
   image: {
-    // إعدادات ضغط الصور
-    maxWidth: 1080,           // الحد الأقصى للعرض
-    maxHeight: 1920,          // الحد الأقصى للارتفاع
-    quality: 70,              // جودة الضغط (0-100) - 70 يعطي توازن جيد
-    format: 'webp',           // تنسيق الإخراج - WebP أصغر حجماً
-    avatarSize: 400,          // حجم صور الملف الشخصي
-    avatarQuality: 75,        // جودة صور الملف الشخصي
-    storyMaxWidth: 1080,      // عرض القصص
-    storyQuality: 65          // جودة القصص (أقل لأنها مؤقتة)
+    // إعدادات ضغط الصور - ضغط قصوى لمنع التغشوش
+    maxWidth: 600,            // تقليل كبير للعرض
+    maxHeight: 1000,          // تقليل كبير للارتفاع
+    quality: 30,              // جودة منخفضة جداً للضغط الأقصى
+    format: 'webp',           // تنسيق WebP الأصغر حجماً
+    avatarSize: 200,          // حجم صغير لصور الملف الشخصي
+    avatarQuality: 40,        // جودة منخفضة للأفاتار
+    storyMaxWidth: 600,       // عرض القصص
+    storyQuality: 35,         // جودة منخفضة للقصص
+    // إعدادات إضافية للضغط الأقصى
+    thumbnailWidth: 300,      // عرض الصور المصغرة
+    thumbnailQuality: 25,     // جودة منخفضة جداً للصور المصغرة
+    webpEffort: 6,            // أقصى جهد ضغط WebP
+    mozjpegQuality: 30        // جودة منخفضة جداً لـ JPEG
   },
   video: {
-    // إعدادات ضغط الفيديو
-    maxWidth: 720,            // الحد الأقصى للعرض
-    maxHeight: 1280,          // الحد الأقصى للارتفاع
-    crf: 28,                  // Constant Rate Factor (18-28 جيد، أعلى = ضغط أكثر)
-    preset: 'fast',           // سرعة الترميز (ultrafast, fast, medium, slow)
-    audioBitrate: '96k',      // معدل بت الصوت
+    // إعدادات ضغط الفيديو - ضغط قصوى
+    maxWidth: 480,            // تقليل كبير للعرض
+    maxHeight: 854,           // تقليل كبير للارتفاع (نسبة 16:9)
+    crf: 35,                  // ضغط قوي جداً (أعلى = ضغط أكثر)
+    preset: 'medium',         // توازن بين السرعة والضغط
+    audioBitrate: '48k',      // معدل بت صوت منخفض جداً
     maxDuration: 60,          // الحد الأقصى للمدة بالثواني
-    format: 'mp4'             // تنسيق الإخراج
+    format: 'mp4',            // تنسيق الإخراج
+    // إعدادات إضافية للضغط الأقصى
+    videoCodec: 'libx264',    // ترميز الفيديو
+    audioCodec: 'aac',        // ترميز الصوت
+    pixelFormat: 'yuv420p',   // تنسيق البكسل للتوافق
+    profile: 'baseline',      // ملف تعريف أساسي للتوافق الأقصى
+    level: '3.0'              // مستوى منخفض للتوافق
   }
 };
 
@@ -36,7 +47,7 @@ sharp.cache(false);
 sharp.concurrency(1);
 
 /**
- * ضغط صورة باستخدام Sharp مع إدارة الذاكرة
+ * ضغط صورة باستخدام Sharp - ضغط قصوى لمنع التغشوش
  * @param {Buffer} inputBuffer - بيانات الصورة الأصلية
  * @param {Object} options - خيارات الضغط
  * @returns {Promise<{buffer: Buffer, info: Object}>}
@@ -52,24 +63,29 @@ const compressImage = async (inputBuffer, options = {}) => {
       quality = config.quality,
       format = config.format,
       isAvatar = false,
-      isStory = false
+      isStory = false,
+      isThumbnail = false
     } = options;
 
     // إنشاء instance جديد من Sharp
     sharpInstance = sharp(inputBuffer, {
-      limitInputPixels: 268402689, // حد أقصى للبكسلات (16384 x 16384)
-      sequentialRead: true // قراءة تسلسلية لتوفير الذاكرة
+      limitInputPixels: 268402689,
+      sequentialRead: true
     });
     
     // الحصول على معلومات الصورة الأصلية
     const metadata = await sharpInstance.metadata();
     
-    // تحديد الأبعاد المناسبة
+    // تحديد الأبعاد والجودة المناسبة
     let targetWidth = maxWidth;
     let targetHeight = maxHeight;
     let targetQuality = quality;
     
-    if (isAvatar) {
+    if (isThumbnail) {
+      targetWidth = config.thumbnailWidth;
+      targetHeight = Math.round(config.thumbnailWidth * 1.5);
+      targetQuality = config.thumbnailQuality;
+    } else if (isAvatar) {
       targetWidth = config.avatarSize;
       targetHeight = config.avatarSize;
       targetQuality = config.avatarQuality;
@@ -81,25 +97,45 @@ const compressImage = async (inputBuffer, options = {}) => {
     // تغيير الحجم مع الحفاظ على النسبة
     sharpInstance = sharpInstance.resize(targetWidth, targetHeight, {
       fit: isAvatar ? 'cover' : 'inside',
-      withoutEnlargement: true
+      withoutEnlargement: true,
+      kernel: 'lanczos3'
     });
     
-    // تحويل إلى WebP مع الضغط
+    // تحويل إلى WebP مع الضغط القصوى
     let outputBuffer;
     let outputFormat = format;
     
     if (format === 'webp') {
       outputBuffer = await sharpInstance
-        .webp({ quality: targetQuality, effort: 4 })
+        .webp({ 
+          quality: targetQuality, 
+          effort: config.webpEffort,
+          smartSubsample: true,
+          nearLossless: false,
+          alphaQuality: Math.max(targetQuality - 10, 20),
+          reductionEffort: 6
+        })
         .toBuffer();
     } else if (format === 'jpeg' || format === 'jpg') {
       outputBuffer = await sharpInstance
-        .jpeg({ quality: targetQuality, mozjpeg: true })
+        .jpeg({ 
+          quality: config.mozjpegQuality, 
+          mozjpeg: true,
+          chromaSubsampling: '4:2:0',
+          trellisQuantisation: true,
+          overshootDeringing: true,
+          optimizeScans: true
+        })
         .toBuffer();
       outputFormat = 'jpeg';
     } else {
       outputBuffer = await sharpInstance
-        .png({ compressionLevel: 9, quality: targetQuality })
+        .png({ 
+          compressionLevel: 9,
+          quality: targetQuality,
+          palette: true,
+          colors: 128
+        })
         .toBuffer();
       outputFormat = 'png';
     }
@@ -109,7 +145,7 @@ const compressImage = async (inputBuffer, options = {}) => {
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
-    console.log(`📸 ضغط الصورة: ${(originalSize / 1024).toFixed(2)}KB → ${(compressedSize / 1024).toFixed(2)}KB (${compressionRatio}% توفير)`);
+    console.log(`📸 ضغط قصوى للصورة: ${(originalSize / 1024).toFixed(2)}KB → ${(compressedSize / 1024).toFixed(2)}KB (${compressionRatio}% توفير)`);
     
     return {
       buffer: outputBuffer,
@@ -126,12 +162,10 @@ const compressImage = async (inputBuffer, options = {}) => {
     console.error('❌ خطأ في ضغط الصورة:', error.message);
     throw error;
   } finally {
-    // تنظيف الذاكرة - مهم جداً!
     if (sharpInstance) {
       sharpInstance.destroy();
       sharpInstance = null;
     }
-    // تشغيل garbage collector إذا كان متاحاً
     if (global.gc) {
       global.gc();
     }
@@ -139,7 +173,7 @@ const compressImage = async (inputBuffer, options = {}) => {
 };
 
 /**
- * ضغط فيديو باستخدام FFmpeg
+ * ضغط فيديو باستخدام FFmpeg - ضغط قصوى
  * @param {Buffer} inputBuffer - بيانات الفيديو الأصلية
  * @param {Object} options - خيارات الضغط
  * @returns {Promise<{buffer: Buffer, info: Object}>}
@@ -154,35 +188,35 @@ const compressVideo = async (inputBuffer, options = {}) => {
     audioBitrate = config.audioBitrate
   } = options;
   
-  // إنشاء ملفات مؤقتة
   const tempDir = os.tmpdir();
   const inputPath = path.join(tempDir, `input_${uuidv4()}.mp4`);
   const outputPath = path.join(tempDir, `output_${uuidv4()}.mp4`);
   
   try {
-    // كتابة الملف المؤقت
     await fs.writeFile(inputPath, inputBuffer);
-    
-    // تحرير الذاكرة من الـ buffer الأصلي
     inputBuffer = null;
     
-    // أمر FFmpeg للضغط مع تحديد الذاكرة
+    // أمر FFmpeg للضغط القصوى
     const ffmpegCommand = `ffmpeg -i "${inputPath}" \
-      -vf "scale='min(${maxWidth},iw)':min'(${maxHeight},ih)':force_original_aspect_ratio=decrease" \
-      -c:v libx264 \
+      -vf "scale='min(${maxWidth},iw)':min'(${maxHeight},ih)':force_original_aspect_ratio=decrease,format=${config.pixelFormat}" \
+      -c:v ${config.videoCodec} \
+      -profile:v ${config.profile} \
+      -level ${config.level} \
       -crf ${crf} \
       -preset ${preset} \
-      -c:a aac \
+      -tune fastdecode \
+      -c:a ${config.audioCodec} \
       -b:a ${audioBitrate} \
+      -ac 1 \
+      -ar 22050 \
       -movflags +faststart \
-      -threads 1 \
+      -threads 2 \
       -y "${outputPath}"`;
     
-    // تنفيذ الأمر مع حد أقصى للذاكرة
     await new Promise((resolve, reject) => {
       const process = exec(ffmpegCommand, { 
-        maxBuffer: 50 * 1024 * 1024, // تقليل من 100MB إلى 50MB
-        timeout: 120000 // 2 دقيقة كحد أقصى
+        maxBuffer: 50 * 1024 * 1024,
+        timeout: 180000
       }, (error, stdout, stderr) => {
         if (error) {
           console.error('FFmpeg stderr:', stderr);
@@ -193,18 +227,15 @@ const compressVideo = async (inputBuffer, options = {}) => {
       });
     });
     
-    // قراءة الملف المضغوط
     const outputBuffer = await fs.readFile(outputPath);
     
-    // حساب نسبة الضغط
     const inputStats = await fs.stat(inputPath);
     const originalSize = inputStats.size;
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
-    console.log(`🎬 ضغط الفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
+    console.log(`🎬 ضغط قصوى للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
-    // تنظيف الملفات المؤقتة فوراً
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     
@@ -218,7 +249,6 @@ const compressVideo = async (inputBuffer, options = {}) => {
       }
     };
   } catch (error) {
-    // تنظيف في حالة الخطأ
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     
@@ -229,10 +259,6 @@ const compressVideo = async (inputBuffer, options = {}) => {
 
 /**
  * ضغط ملف تلقائياً بناءً على نوعه
- * @param {Buffer} inputBuffer - بيانات الملف
- * @param {string} mimeType - نوع الملف
- * @param {Object} options - خيارات إضافية
- * @returns {Promise<{buffer: Buffer, info: Object, contentType: string}>}
  */
 const compressFile = async (inputBuffer, mimeType, options = {}) => {
   const isVideo = mimeType.startsWith('video/');
@@ -251,7 +277,6 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
       contentType: 'video/mp4'
     };
   } else {
-    // إرجاع الملف كما هو إذا لم يكن صورة أو فيديو
     return {
       buffer: inputBuffer,
       info: {
@@ -266,8 +291,6 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
 
 /**
  * إنشاء صورة مصغرة للفيديو
- * @param {Buffer} videoBuffer - بيانات الفيديو
- * @returns {Promise<Buffer>}
  */
 const generateVideoThumbnail = async (videoBuffer) => {
   const tempDir = os.tmpdir();
@@ -276,12 +299,9 @@ const generateVideoThumbnail = async (videoBuffer) => {
   
   try {
     await fs.writeFile(inputPath, videoBuffer);
-    
-    // تحرير الذاكرة
     videoBuffer = null;
     
-    // استخراج إطار من الثانية الأولى
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "scale=720:-1" -q:v 2 -threads 1 -y "${outputPath}"`;
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -ss 00:00:01 -vframes 1 -vf "scale=360:-1" -q:v 8 -threads 1 -y "${outputPath}"`;
     
     await new Promise((resolve, reject) => {
       exec(ffmpegCommand, { timeout: 30000 }, (error) => {
@@ -292,10 +312,11 @@ const generateVideoThumbnail = async (videoBuffer) => {
     
     const thumbnailBuffer = await fs.readFile(outputPath);
     
-    // ضغط الصورة المصغرة
-    const compressed = await compressImage(thumbnailBuffer, { quality: 70 });
+    const compressed = await compressImage(thumbnailBuffer, { 
+      quality: COMPRESSION_CONFIG.image.thumbnailQuality,
+      isThumbnail: true
+    });
     
-    // تنظيف
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     
@@ -308,15 +329,30 @@ const generateVideoThumbnail = async (videoBuffer) => {
 };
 
 /**
+ * إنشاء صورة مصغرة للصورة
+ */
+const generateImageThumbnail = async (imageBuffer) => {
+  try {
+    const result = await compressImage(imageBuffer, {
+      isThumbnail: true,
+      quality: COMPRESSION_CONFIG.image.thumbnailQuality
+    });
+    return result.buffer;
+  } catch (error) {
+    console.error('❌ خطأ في إنشاء الصورة المصغرة:', error.message);
+    throw error;
+  }
+};
+
+/**
  * تنظيف الملفات المؤقتة القديمة
- * يجب استدعاؤها دورياً
  */
 const cleanupTempFiles = async () => {
   const tempDir = os.tmpdir();
   try {
     const files = await fs.readdir(tempDir);
     const now = Date.now();
-    const maxAge = 30 * 60 * 1000; // 30 دقيقة
+    const maxAge = 30 * 60 * 1000;
     
     for (const file of files) {
       if (file.startsWith('input_') || file.startsWith('output_') || file.startsWith('thumb_')) {
@@ -337,7 +373,6 @@ const cleanupTempFiles = async () => {
   }
 };
 
-// تشغيل التنظيف كل 15 دقيقة
 setInterval(cleanupTempFiles, 15 * 60 * 1000);
 
 module.exports = {
@@ -345,6 +380,7 @@ module.exports = {
   compressVideo,
   compressFile,
   generateVideoThumbnail,
+  generateImageThumbnail,
   cleanupTempFiles,
   COMPRESSION_CONFIG
 };
