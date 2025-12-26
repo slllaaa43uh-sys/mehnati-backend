@@ -343,7 +343,7 @@ exports.deleteStory = async (req, res, next) => {
 exports.getStoryViewers = async (req, res, next) => {
   try {
     const story = await Story.findById(req.params.id)
-      .populate('views.user', 'name avatar');
+      .populate('views.user', '_id name avatar');
 
     if (!story) {
       return res.status(404).json({
@@ -360,11 +360,18 @@ exports.getStoryViewers = async (req, res, next) => {
       });
     }
 
+    // تصفية المشاهدات التي تحتوي على مستخدم صالح فقط
+    const validViewers = story.views.filter(v => v.user && v.user._id);
+    
     res.status(200).json({
       success: true,
-      viewsCount: story.views.length,
-      viewers: story.views.map(v => ({
-        user: v.user,
+      viewsCount: validViewers.length,
+      viewers: validViewers.map(v => ({
+        user: {
+          _id: v.user._id,
+          name: v.user.name || 'مستخدم',
+          avatar: v.user.avatar || null
+        },
         viewedAt: v.viewedAt
       }))
     });
