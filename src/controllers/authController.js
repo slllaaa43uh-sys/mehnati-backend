@@ -5,21 +5,7 @@ const { isDisposableEmail } = require('../utils/disposableEmails');
 
 // أيقونة التطبيق SVG (الحقيبة) - مرسومة بـ CSS/SVG
 const getAppLogoSVG = () => `
-<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <rect width="80" height="80" rx="18" fill="url(#bgGradient)"/>
-  <g transform="translate(18, 22)">
-    <path d="M10 0C10 0 10 4 10 6L34 6C34 4 34 0 34 0C34 0 30 0 22 0C14 0 10 0 10 0Z" fill="white" opacity="0.9"/>
-    <rect x="4" y="8" width="36" height="28" rx="4" fill="none" stroke="white" stroke-width="3.5"/>
-    <line x1="22" y1="8" x2="22" y2="36" stroke="white" stroke-width="3"/>
-    <circle cx="22" cy="22" r="3" fill="white"/>
-  </g>
-</svg>
+<img src="https://mehnati-backend.onrender.com/assets/app-logo.jpg" alt="مهنتي لي" style="width: 80px; height: 80px; border-radius: 18px; object-fit: cover;">
 `;
 
 // قالب البريد الإلكتروني الأساسي
