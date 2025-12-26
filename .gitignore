@@ -6,6 +6,9 @@ node_modules/
 .env.local
 .env.production
 
+# Firebase Service Account (يحتوي على مفاتيح سرية)
+firebase-service-account.json
+
 # Logs
 logs/
 *.log

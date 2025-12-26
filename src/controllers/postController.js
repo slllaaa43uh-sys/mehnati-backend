@@ -2,6 +2,7 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { getRecommendedShorts, updateSingleVideoScore, updateUserInterestProfile } = require('../services/recommendationService');
+const { sendNotificationByCategory } = require('../services/fcmService');
 
 /**
  * ============================================
@@ -189,6 +190,41 @@ exports.createPost = async (req, res, next) => {
     const post = await Post.create(postData);
 
     await post.populate('user', 'name avatar');
+
+    // ============================================
+    // إرسال إشعار FCM بناءً على التصنيف
+    // ============================================
+    if (category) {
+      // تحديد نوع المنشور للإشعار
+      let notificationType = 'منشور جديد';
+      if (type === 'job' || displayPage === 'jobs') {
+        notificationType = 'وظيفة جديدة';
+      } else if (displayPage === 'haraj') {
+        notificationType = 'إعلان حراج جديد';
+      } else if (isShort) {
+        notificationType = 'فيديو قصير جديد';
+      }
+
+      // إنشاء عنوان ونص الإشعار
+      const notificationTitle = `${notificationType} - ${category}`;
+      const notificationBody = title || finalContent.substring(0, 100) || 'تحقق من المحتوى الجديد!';
+
+      // إرسال الإشعار بشكل غير متزامن (لا ننتظر النتيجة)
+      sendNotificationByCategory(
+        category,
+        notificationTitle,
+        notificationBody,
+        {
+          postId: post._id.toString(),
+          type: type || 'general',
+          displayPage: displayPage || 'home',
+          userId: req.user.id
+        }
+      ).catch(err => {
+        // تسجيل الخطأ فقط دون إيقاف العملية
+        console.error('خطأ في إرسال إشعار FCM:', err.message);
+      });
+    }
 
     res.status(201).json({
       success: true,

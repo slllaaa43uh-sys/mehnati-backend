@@ -17,6 +17,7 @@ const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
 const { initializeB2 } = require('./services/storageService');
+const { initializeFirebase } = require('./config/firebase');
 
 // Route files
 const authRoutes = require('./routes/auth');
@@ -28,6 +29,7 @@ const reportRoutes = require('./routes/reports');
 const uploadRoutes = require('./routes/upload');
 const notificationRoutes = require('./routes/notifications');
 const shareRoutes = require('./routes/share');
+const fcmRoutes = require('./routes/fcm');
 
 // Initialize express app
 const app = express();
@@ -37,8 +39,11 @@ connectDB();
 
 // Initialize Backblaze B2 connection
 initializeB2().catch(err => {
-  console.error('❌ فشل الاتصال بـ Backblaze B2:', err.message);
+  console.error('❤️ فشل الاتصال بـ Backblaze B2:', err.message);
 });
+
+// Initialize Firebase Admin SDK for FCM
+initializeFirebase();
 
 // Setup recommendation cron job (updates scores every 60 minutes instead of 30 to reduce memory usage)
 setupCronJob(60);
@@ -129,6 +134,7 @@ app.use('/api/v1/stories', storyRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/fcm', fcmRoutes);
 
 // Share pages (Open Graph for social media)
 // تعطيل CSP لصفحات المشاركة للسماح بعرض الوسائط بشكل صحيح
@@ -160,7 +166,8 @@ app.get('/', (req, res) => {
       stories: '/api/v1/stories',
       reports: '/api/v1/reports',
       upload: '/api/v1/upload',
-      notifications: '/api/v1/notifications'
+      notifications: '/api/v1/notifications',
+      fcm: '/api/v1/fcm'
     }
   });
 });
