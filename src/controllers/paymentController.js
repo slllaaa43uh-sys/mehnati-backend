@@ -192,6 +192,45 @@ exports.promotePost = async (req, res) => {
   }
 };
 
+// @desc    Get payment link for promotion
+// @route   POST /api/payment/get-payment-link
+// @access  Private
+exports.getPaymentLink = async (req, res) => {
+  try {
+    const { promotionType, userId } = req.body;
+
+    // Validate promotion type
+    if (!promotionType || (promotionType !== 'weekly' && promotionType !== 'monthly')) {
+      return res.status(400).json({
+        success: false,
+        message: 'نوع التمييز غير صالح'
+      });
+    }
+
+    // Get payment link from mapping
+    const paymentLink = PAYMENT_LINKS[promotionType];
+
+    if (!paymentLink) {
+      return res.status(500).json({
+        success: false,
+        message: 'رابط الدفع غير متوفر'
+      });
+    }
+
+    // Return payment link
+    return res.status(200).json({
+      success: true,
+      paymentLink,
+      promotionType,
+      message: 'تم الحصول على رابط الدفع بنجاح'
+    });
+
+  } catch (error) {
+    console.error('❌ Get Payment Link Error:', error);
+    res.status(500).json({ success: false, message: 'حدث خطأ في الخادم' });
+  }
+};
+
 // @desc    Check if user can use free promotion
 // @route   GET /api/payment/check-free-eligibility
 // @access  Private

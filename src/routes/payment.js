@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const {
   paytabsWebhook,
   promotePost,
+  getPaymentLink,
   checkFreePromotionEligibility
 } = require('../controllers/paymentController');
 
@@ -16,6 +17,11 @@ router.post('/webhook', paytabsWebhook);
 // @desc    Promote a post (free/paid)
 // @access  Private
 router.post('/promote/:postId', protect, promotePost);
+
+// @route   POST /api/payment/get-payment-link
+// @desc    Get payment link for promotion
+// @access  Private
+router.post('/get-payment-link', protect, getPaymentLink);
 
 // @route   GET /api/payment/check-free-eligibility
 // @desc    Check if user can use free promotion
