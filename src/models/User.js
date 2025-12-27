@@ -114,6 +114,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  lastFreePromotionUsed: {
+    type: Date,
+    default: null
+  },
   resetPasswordToken: String,
   resetPasswordExpire: Date
 }, {

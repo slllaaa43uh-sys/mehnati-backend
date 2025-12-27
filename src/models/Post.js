@@ -98,6 +98,15 @@ const postSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  featuredExpiry: {
+    type: Date,
+    default: null
+  },
+  featuredType: {
+    type: String,
+    enum: ['free', 'weekly', 'monthly'],
+    default: null
+  },
   
   // صفحة الظهور
   displayPage: {

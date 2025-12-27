@@ -16,8 +16,10 @@ if (global.gc) {
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
+const { setupFeaturedCron } = require('./cron/featuredCron');
 const { initializeB2 } = require('./services/storageService');
 const { initializeFirebase } = require('./config/firebase');
+const { initializeSocket } = require('./config/socket');
 
 // Route files
 const authRoutes = require('./routes/auth');
@@ -30,6 +32,7 @@ const uploadRoutes = require('./routes/upload');
 const notificationRoutes = require('./routes/notifications');
 const shareRoutes = require('./routes/share');
 const fcmRoutes = require('./routes/fcm');
+const paymentRoutes = require('./routes/payment');
 
 // Initialize express app
 const app = express();
@@ -47,6 +50,9 @@ initializeFirebase();
 
 // Setup recommendation cron job (updates scores every 60 minutes instead of 30 to reduce memory usage)
 setupCronJob(60);
+
+// Setup featured posts cron job (runs every hour)
+setupFeaturedCron();
 
 // مراقبة استخدام الذاكرة
 const logMemoryUsage = () => {
@@ -147,6 +153,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/fcm', fcmRoutes);
+app.use('/api/v1/payment', paymentRoutes);
 
 // Share pages (Open Graph for social media)
 // تعطيل CSP لصفحات المشاركة للسماح بعرض الوسائط بشكل صحيح
@@ -204,6 +211,8 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
+  // Initialize Socket.IO after server starts
+  initializeSocket(server);
   console.log(`
 ╔════════════════════════════════════════════════════╗
 ║     🚀 مهنتي لي API Server v2.0                    ║
