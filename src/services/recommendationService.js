@@ -320,16 +320,36 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
   const paginatedShorts = finalShorts.slice(skip, skip + limitNum);
 
   // 7. تنسيق النتائج للتوافق مع الواجهة الأمامية
-  const formattedShorts = paginatedShorts.map(short => ({
-    ...short,
-    attractiveTitle: short.attractiveTitle || null,
-    privacy: short.privacy || 'public',
-    allowComments: short.allowComments !== undefined ? short.allowComments : true,
-    allowDownloads: short.allowDownloads !== undefined ? short.allowDownloads : true,
-    allowRepost: short.allowRepost !== undefined ? short.allowRepost : true,
-    coverImage: short.coverImage || null,
-    views: short.views || 0
-  }));
+  const formattedShorts = paginatedShorts.map(short => {
+    // استخراج الصورة المصغرة من media أو coverImage
+    let thumbnailUrl = null;
+    if (short.coverImage && short.coverImage.url) {
+      thumbnailUrl = short.coverImage.url;
+    } else if (short.media && short.media.length > 0) {
+      const videoMedia = short.media.find(m => m.type === 'video') || short.media[0];
+      if (videoMedia && videoMedia.thumbnail) {
+        thumbnailUrl = videoMedia.thumbnail;
+      }
+    }
+    
+    // إضافة الـ thumbnail إلى كل عنصر في media
+    const mediaWithThumbnail = short.media ? short.media.map(m => ({
+      ...m,
+      thumbnail: m.thumbnail || thumbnailUrl
+    })) : [];
+    
+    return {
+      ...short,
+      media: mediaWithThumbnail,
+      attractiveTitle: short.attractiveTitle || null,
+      privacy: short.privacy || 'public',
+      allowComments: short.allowComments !== undefined ? short.allowComments : true,
+      allowDownloads: short.allowDownloads !== undefined ? short.allowDownloads : true,
+      allowRepost: short.allowRepost !== undefined ? short.allowRepost : true,
+      coverImage: short.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
+      views: short.views || 0
+    };
+  });
 
   const total = await Post.countDocuments(candidateQuery);
 

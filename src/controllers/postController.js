@@ -1405,17 +1405,36 @@ exports.getShortsFriends = async (req, res, next) => {
       .limit(parseInt(limit))
       .select('+attractiveTitle +privacy +allowComments +allowDownloads +allowRepost +coverImage +views');
 
-    // تحويل البيانات لتضمين الحقول الجديدة
+    // تحويل البيانات لتضمين الحقول الجديدة والصورة المصغرة
     const shortsWithSettings = shorts.map(short => {
       const shortObj = short.toObject();
+      
+      // استخراج الصورة المصغرة من media أو coverImage
+      let thumbnailUrl = null;
+      if (shortObj.coverImage && shortObj.coverImage.url) {
+        thumbnailUrl = shortObj.coverImage.url;
+      } else if (shortObj.media && shortObj.media.length > 0) {
+        const videoMedia = shortObj.media.find(m => m.type === 'video') || shortObj.media[0];
+        if (videoMedia && videoMedia.thumbnail) {
+          thumbnailUrl = videoMedia.thumbnail;
+        }
+      }
+      
+      // إضافة الـ thumbnail إلى كل عنصر في media
+      const mediaWithThumbnail = shortObj.media ? shortObj.media.map(m => ({
+        ...m,
+        thumbnail: m.thumbnail || thumbnailUrl
+      })) : [];
+      
       return {
         ...shortObj,
+        media: mediaWithThumbnail,
         attractiveTitle: shortObj.attractiveTitle || null,
         privacy: shortObj.privacy || 'public',
         allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
         allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
         allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
-        coverImage: shortObj.coverImage || null,
+        coverImage: shortObj.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
         views: shortObj.views || 0
       };
     });
@@ -1658,16 +1677,36 @@ exports.getShortsByCategory = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // تحويل البيانات لتضمين الصورة المصغرة
     const shortsWithSettings = shorts.map(short => {
       const shortObj = short.toObject();
+      
+      // استخراج الصورة المصغرة من media أو coverImage
+      let thumbnailUrl = null;
+      if (shortObj.coverImage && shortObj.coverImage.url) {
+        thumbnailUrl = shortObj.coverImage.url;
+      } else if (shortObj.media && shortObj.media.length > 0) {
+        const videoMedia = shortObj.media.find(m => m.type === 'video') || shortObj.media[0];
+        if (videoMedia && videoMedia.thumbnail) {
+          thumbnailUrl = videoMedia.thumbnail;
+        }
+      }
+      
+      // إضافة الـ thumbnail إلى كل عنصر في media
+      const mediaWithThumbnail = shortObj.media ? shortObj.media.map(m => ({
+        ...m,
+        thumbnail: m.thumbnail || thumbnailUrl
+      })) : [];
+      
       return {
         ...shortObj,
+        media: mediaWithThumbnail,
         attractiveTitle: shortObj.attractiveTitle || null,
         privacy: shortObj.privacy || 'public',
         allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
         allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
         allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
-        coverImage: shortObj.coverImage || null,
+        coverImage: shortObj.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
         views: shortObj.views || 0
       };
     });
@@ -1746,16 +1785,36 @@ exports.getMyShorts = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // تحويل البيانات لتضمين الصورة المصغرة
     const shortsWithSettings = shorts.map(short => {
       const shortObj = short.toObject();
+      
+      // استخراج الصورة المصغرة من media أو coverImage
+      let thumbnailUrl = null;
+      if (shortObj.coverImage && shortObj.coverImage.url) {
+        thumbnailUrl = shortObj.coverImage.url;
+      } else if (shortObj.media && shortObj.media.length > 0) {
+        const videoMedia = shortObj.media.find(m => m.type === 'video') || shortObj.media[0];
+        if (videoMedia && videoMedia.thumbnail) {
+          thumbnailUrl = videoMedia.thumbnail;
+        }
+      }
+      
+      // إضافة الـ thumbnail إلى كل عنصر في media
+      const mediaWithThumbnail = shortObj.media ? shortObj.media.map(m => ({
+        ...m,
+        thumbnail: m.thumbnail || thumbnailUrl
+      })) : [];
+      
       return {
         ...shortObj,
+        media: mediaWithThumbnail,
         attractiveTitle: shortObj.attractiveTitle || null,
         privacy: shortObj.privacy || 'public',
         allowComments: shortObj.allowComments !== undefined ? shortObj.allowComments : true,
         allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
         allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
-        coverImage: shortObj.coverImage || null,
+        coverImage: shortObj.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
         views: shortObj.views || 0
       };
     });
