@@ -199,7 +199,7 @@ const compressVideo = async (inputBuffer, options = {}) => {
     
     // أمر FFmpeg للضغط الأقصى
     const ffmpegCommand = `ffmpeg -i "${inputPath}" \
-      -vf "scale='min(${maxWidth},iw)':min'(${maxHeight},ih)':force_original_aspect_ratio=decrease,format=${config.pixelFormat}" \
+      -vf "scale=min(${maxWidth}\\,iw):min(${maxHeight}\\,ih):force_original_aspect_ratio=decrease,format=${config.pixelFormat}" \
       -c:v ${config.videoCodec} \
       -profile:v ${config.profile} \
       -level ${config.level} \
