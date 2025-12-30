@@ -17,10 +17,38 @@ const storySchema = new mongoose.Schema({
   media: {
     url: String,
     publicId: String, // Cloudinary public ID for deletion
+    fileId: String, // Backblaze B2 file ID for deletion
+    fileName: String, // Backblaze B2 file name
     type: {
       type: String,
       enum: ['image', 'video']
     }
+  },
+  // ميزات تعديل القصص (نصوص، ملصقات، فلاتر، تكبير/تصغير)
+  overlays: [{
+    id: Number,
+    type: {
+      type: String,
+      enum: ['text', 'sticker']
+    },
+    content: String,
+    x: Number,
+    y: Number,
+    scale: Number,
+    color: String
+  }],
+  filter: {
+    type: String,
+    default: 'none'
+  },
+  mediaScale: {
+    type: Number,
+    default: 1
+  },
+  objectFit: {
+    type: String,
+    enum: ['contain', 'cover'],
+    default: 'contain'
   },
   views: [{
     user: {
@@ -32,6 +60,15 @@ const storySchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  // بيانات القص للفيديو
+  trimStart: {
+    type: Number,
+    default: 0
+  },
+  trimEnd: {
+    type: Number,
+    default: 0
+  },
   // القصة تنتهي بعد 24 ساعة
   expiresAt: {
     type: Date,

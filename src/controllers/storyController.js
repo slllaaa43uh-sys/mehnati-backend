@@ -9,7 +9,7 @@ const { trimVideo, validateTrimTimes } = require('../services/videoService');
 // @access  Private
 exports.createStory = async (req, res, next) => {
   try {
-    const { text, backgroundColor } = req.body;
+    const { text, backgroundColor, overlays, filter, mediaScale, objectFit } = req.body;
 
     let media = null;
     
@@ -104,11 +104,27 @@ exports.createStory = async (req, res, next) => {
       });
     }
 
+    // معالجة بيانات التعديلات (overlays, filter, scale)
+    let parsedOverlays = [];
+    if (overlays) {
+      try {
+        parsedOverlays = typeof overlays === 'string' ? JSON.parse(overlays) : overlays;
+      } catch (e) {
+        console.error('Error parsing overlays:', e);
+      }
+    }
+
     const story = await Story.create({
       user: req.user.id,
       text,
       backgroundColor: backgroundColor || '#1a1a2e',
-      media
+      media,
+      overlays: parsedOverlays,
+      filter: filter || 'none',
+      mediaScale: mediaScale ? parseFloat(mediaScale) : 1,
+      objectFit: objectFit || 'contain',
+      trimStart: req.body.trimStart ? parseFloat(req.body.trimStart) : 0,
+      trimEnd: req.body.trimEnd ? parseFloat(req.body.trimEnd) : 0
     });
 
     await story.populate('user', 'name avatar');

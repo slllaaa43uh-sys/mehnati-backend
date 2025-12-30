@@ -5,31 +5,31 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
-// إعدادات الضغط الأقصى - لحل مشكلة إعادة الرسم والغشوشة في المتصفح
+// إعدادات الضغط المحسنة - جودة متوازنة للصور (1080p) والفيديو (720p)
 const COMPRESSION_CONFIG = {
   image: {
-    // إعدادات ضغط الصور - أقصى ضغط ممكن
-    maxWidth: 400,            // عرض صغير جداً
-    maxHeight: 700,           // ارتفاع صغير جداً
-    quality: 15,              // جودة منخفضة جداً للضغط الأقصى
+    // إعدادات ضغط الصور - جودة محسنة ومتوازنة
+    maxWidth: 1080,           // عرض متوسط لجودة أفضل
+    maxHeight: 1920,          // ارتفاع متوسط
+    quality: 65,              // جودة متوسطة لتوازن بين الحجم والوضوح
     format: 'webp',           // تنسيق WebP الأصغر حجماً
-    avatarSize: 150,          // حجم صغير جداً لصور الملف الشخصي
-    avatarQuality: 20,        // جودة منخفضة جداً للأفاتار
-    storyMaxWidth: 400,       // عرض القصص صغير
-    storyQuality: 18,         // جودة منخفضة جداً للقصص
-    // إعدادات إضافية للضغط الأقصى
-    thumbnailWidth: 200,      // عرض الصور المصغرة
-    thumbnailQuality: 10,     // جودة منخفضة جداً للصور المصغرة
-    webpEffort: 6,            // أقصى جهد ضغط WebP
-    mozjpegQuality: 15        // جودة منخفضة جداً لـ JPEG
+    avatarSize: 200,          // حجم معقول لصور الملف الشخصي
+    avatarQuality: 70,        // جودة جيدة للأفاتار
+    storyMaxWidth: 720,       // عرض القصص محسن
+    storyQuality: 68,         // جودة جيدة للقصص
+    // إعدادات إضافية للضغط المتوازن
+    thumbnailWidth: 300,      // عرض الصور المصغرة
+    thumbnailQuality: 60,     // جودة معقولة للصور المصغرة
+    webpEffort: 4,            // جهد ضغط متوازن WebP
+    mozjpegQuality: 65        // جودة معقولة لـ JPEG
   },
   video: {
-    // إعدادات ضغط الفيديو - ضغط قصوى
-    maxWidth: 360,            // عرض صغير جداً (360p)
-    maxHeight: 640,           // ارتفاع صغير جداً
-    crf: 40,                  // ضغط قوي جداً جداً
-    preset: 'slow',           // ضغط أفضل (أبطأ لكن حجم أصغر)
-    audioBitrate: '32k',      // معدل بت صوت منخفض جداً
+    // إعدادات ضغط الفيديو - جودة 720p
+    maxWidth: 1280,           // عرض 720p
+    maxHeight: 720,           // ارتفاع 720p
+    crf: 28,                  // ضغط متوازن لجودة جيدة
+    preset: 'medium',         // توازن بين السرعة والجودة
+    audioBitrate: '128k',     // معدل بت صوت جيد
     maxDuration: 60,          // الحد الأقصى للمدة بالثواني
     format: 'mp4',            // تنسيق الإخراج
     videoCodec: 'libx264',    // ترميز الفيديو
@@ -146,7 +146,7 @@ const compressImage = async (inputBuffer, options = {}) => {
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
-    console.log(`📸 ضغط أقصى للصورة: ${(originalSize / 1024).toFixed(2)}KB → ${(compressedSize / 1024).toFixed(2)}KB (${compressionRatio}% توفير)`);
+    console.log(`📸 ضغط محسن للصورة: ${(originalSize / 1024).toFixed(2)}KB → ${(compressedSize / 1024).toFixed(2)}KB (${compressionRatio}% توفير)`);
     
     return {
       buffer: outputBuffer,
@@ -235,7 +235,7 @@ const compressVideo = async (inputBuffer, options = {}) => {
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
-    console.log(`🎬 ضغط أقصى للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
+    console.log(`🎬 ضغط محسن 720p للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
