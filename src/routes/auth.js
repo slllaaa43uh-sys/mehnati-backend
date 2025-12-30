@@ -9,7 +9,8 @@ const {
   resetPassword,
   verifyResetToken,
   verifyEmail,
-  resendVerification
+  resendVerification,
+  detectCountry
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -26,5 +27,8 @@ router.post('/resend-verification', resendVerification);
 router.post('/forgotpassword', forgotPassword);
 router.put('/resetpassword/:resettoken', resetPassword);
 router.get('/verifyresettoken/:resettoken', verifyResetToken);
+
+// Country detection route
+router.get('/detect-country', detectCountry);
 
 module.exports = router;

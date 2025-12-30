@@ -588,3 +588,90 @@ exports.verifyResetToken = async (req, res, next) => {
     next(error);
   }
 };
+
+
+// @desc    Detect user country from IP address
+// @route   GET /api/v1/auth/detect-country
+// @access  Public
+exports.detectCountry = async (req, res, next) => {
+  try {
+    // الحصول على عنوان IP الحقيقي للمستخدم
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+               req.headers['x-real-ip'] || 
+               req.connection?.remoteAddress || 
+               req.socket?.remoteAddress ||
+               req.ip;
+
+    // تنظيف عنوان IP (إزالة ::ffff: للـ IPv6)
+    const cleanIP = ip?.replace(/^::ffff:/, '');
+
+    // إذا كان IP محلي (localhost)، أرجع null
+    if (!cleanIP || cleanIP === '127.0.0.1' || cleanIP === '::1' || cleanIP === 'localhost') {
+      return res.status(200).json({
+        success: true,
+        country: null,
+        countryAr: null,
+        message: 'لا يمكن تحديد الدولة من عنوان IP محلي'
+      });
+    }
+
+    // استخدام خدمة ip-api.com المجانية (لا تحتاج مفتاح API)
+    // Node.js 18+ يدعم fetch الأصلي
+    const response = await fetch(`http://ip-api.com/json/${cleanIP}?fields=status,country,countryCode`);
+    const data = await response.json();
+
+    if (data.status !== 'success') {
+      return res.status(200).json({
+        success: true,
+        country: null,
+        countryAr: null,
+        message: 'لم يتم العثور على معلومات الدولة'
+      });
+    }
+
+    // خريطة تحويل أسماء الدول من الإنجليزية إلى العربية
+    const countryMap = {
+      'Saudi Arabia': 'السعودية',
+      'United Arab Emirates': 'الإمارات',
+      'Egypt': 'مصر',
+      'Jordan': 'الأردن',
+      'Kuwait': 'الكويت',
+      'Qatar': 'قطر',
+      'Bahrain': 'البحرين',
+      'Oman': 'عمان',
+      'Iraq': 'العراق',
+      'Syria': 'سوريا',
+      'Lebanon': 'لبنان',
+      'Palestine': 'فلسطين',
+      'Yemen': 'اليمن',
+      'Libya': 'ليبيا',
+      'Tunisia': 'تونس',
+      'Algeria': 'الجزائر',
+      'Morocco': 'المغرب',
+      'Sudan': 'السودان',
+      'Somalia': 'الصومال',
+      'Mauritania': 'موريتانيا',
+      'Djibouti': 'جيبوتي',
+      'Comoros': 'جزر القمر'
+    };
+
+    const countryAr = countryMap[data.country] || null;
+
+    res.status(200).json({
+      success: true,
+      country: data.country,
+      countryCode: data.countryCode,
+      countryAr: countryAr,
+      isArabCountry: !!countryAr
+    });
+
+  } catch (error) {
+    console.error('Error detecting country:', error);
+    res.status(200).json({
+      success: true,
+      country: null,
+      countryAr: null,
+      message: 'حدث خطأ في تحديد الدولة'
+    });
+  }
+};
