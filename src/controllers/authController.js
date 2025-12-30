@@ -45,7 +45,8 @@ const getEmailTemplate = (title, subtitle, userName, content, footerText) => `
 // @access  Public
 exports.register = async (req, res, next) => {
   try {
-    const { name, email, password, accountType } = req.body;
+    // استقبال جميع الحقول من الواجهة الأمامية
+    const { name, email, password, accountType, userType, country, phone } = req.body;
 
     // Check if email is from a disposable/temporary email service
     if (isDisposableEmail(email)) {
@@ -70,12 +71,19 @@ exports.register = async (req, res, next) => {
       }
     }
 
+    // تحديد نوع الحساب - الواجهة الأمامية ترسل userType أو accountType
+    const finalAccountType = userType || accountType || 'person';
+    // تحويل 'individual' إلى 'person' للتوافق مع النموذج
+    const mappedAccountType = finalAccountType === 'individual' ? 'person' : finalAccountType;
+
     // Create user (not verified yet)
     const user = await User.create({
       name,
       email,
       password,
-      accountType: accountType || 'person',
+      accountType: mappedAccountType,
+      country: country || null,
+      phone: phone || null,
       isEmailVerified: false
     });
 
