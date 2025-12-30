@@ -64,7 +64,14 @@ exports.createPost = async (req, res, next) => {
       allowDownloads,
       allowDownload, // الواجهة الأمامية ترسل allowDownload
       allowRepost,
-      allowDuet // الواجهة الأمامية ترسل allowDuet بدلاً من allowRepost
+      allowDuet, // الواجهة الأمامية ترسل allowDuet بدلاً من allowRepost
+      // ميزات تحرير الفيديو الجديدة (Video Editing Features)
+      textOverlays,
+      stickerOverlays,
+      videoFilter,
+      voiceover,
+      audioSettings,
+      overlays // الواجهة الأمامية ترسل overlays ككائن مجمع
     } = req.body;
 
     // Handle media files from Cloudinary
@@ -185,6 +192,73 @@ exports.createPost = async (req, res, next) => {
         // الواجهة الأمامية ترسل الغلاف في media[0].thumbnail
         postData.coverImage = { url: media[0].thumbnail };
       }
+      
+      // ============================================
+      // معالجة ميزات تحرير الفيديو (Video Editing Features)
+      // ============================================
+      
+      // معالجة overlays المجمعة من الواجهة الأمامية
+      if (overlays) {
+        try {
+          const parsedOverlays = typeof overlays === 'string' ? JSON.parse(overlays) : overlays;
+          if (parsedOverlays.texts) postData.textOverlays = parsedOverlays.texts;
+          if (parsedOverlays.stickers) postData.stickerOverlays = parsedOverlays.stickers;
+          if (parsedOverlays.filter) postData.videoFilter = parsedOverlays.filter;
+          if (parsedOverlays.voiceover) postData.voiceover = parsedOverlays.voiceover;
+          if (parsedOverlays.audioSettings) postData.audioSettings = parsedOverlays.audioSettings;
+        } catch (e) {
+          console.log('Error parsing overlays:', e);
+        }
+      }
+      
+      // معالجة النصوص المضافة (Text Overlays)
+      if (textOverlays) {
+        try {
+          postData.textOverlays = typeof textOverlays === 'string' ? JSON.parse(textOverlays) : textOverlays;
+        } catch (e) {
+          console.log('Error parsing textOverlays:', e);
+        }
+      }
+      
+      // معالجة الملصقات (Sticker Overlays)
+      if (stickerOverlays) {
+        try {
+          postData.stickerOverlays = typeof stickerOverlays === 'string' ? JSON.parse(stickerOverlays) : stickerOverlays;
+        } catch (e) {
+          console.log('Error parsing stickerOverlays:', e);
+        }
+      }
+      
+      // معالجة فلتر الفيديو (Video Filter)
+      if (videoFilter) {
+        postData.videoFilter = videoFilter;
+      }
+      
+      // معالجة التعليق الصوتي (Voiceover)
+      if (voiceover) {
+        try {
+          postData.voiceover = typeof voiceover === 'string' ? JSON.parse(voiceover) : voiceover;
+        } catch (e) {
+          console.log('Error parsing voiceover:', e);
+        }
+      }
+      
+      // معالجة إعدادات الصوت (Audio Settings)
+      if (audioSettings) {
+        try {
+          postData.audioSettings = typeof audioSettings === 'string' ? JSON.parse(audioSettings) : audioSettings;
+        } catch (e) {
+          console.log('Error parsing audioSettings:', e);
+        }
+      }
+      
+      console.log('Video editing features received:', {
+        textOverlays: postData.textOverlays?.length || 0,
+        stickerOverlays: postData.stickerOverlays?.length || 0,
+        videoFilter: postData.videoFilter,
+        hasVoiceover: !!postData.voiceover?.url,
+        audioSettings: postData.audioSettings
+      });
     }
 
     const post = await Post.create(postData);

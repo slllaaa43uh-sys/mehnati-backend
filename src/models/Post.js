@@ -171,6 +171,65 @@ const postSchema = new mongoose.Schema({
   },
   
   // ============================================
+  // ميزات تحرير الفيديو (Video Editing Features)
+  // ============================================
+  
+  // النصوص المضافة على الفيديو (Text Overlays)
+  textOverlays: [{
+    id: Number,
+    content: String,
+    x: Number,
+    y: Number,
+    scale: { type: Number, default: 1 },
+    color: { type: String, default: '#FFFFFF' }
+  }],
+  
+  // الملصقات المضافة على الفيديو (Sticker Overlays)
+  stickerOverlays: [{
+    id: Number,
+    content: String, // Emoji or URL
+    x: Number,
+    y: Number,
+    scale: { type: Number, default: 1 }
+  }],
+  
+  // فلتر الفيديو (Video Filter)
+  videoFilter: {
+    type: String,
+    default: 'none'
+  },
+  
+  // التعليق الصوتي (Voiceover)
+  voiceover: {
+    url: {
+      type: String,
+      default: null
+    },
+    publicId: {
+      type: String,
+      default: null
+    },
+    duration: {
+      type: Number,
+      default: 0
+    }
+  },
+  
+  // إعدادات الصوت (Audio Settings)
+  audioSettings: {
+    isMuted: {
+      type: Boolean,
+      default: false
+    },
+    volume: {
+      type: Number,
+      default: 100,
+      min: 0,
+      max: 100
+    }
+  },
+  
+  // ============================================
   // نهاية إعدادات الشورتس
   // ============================================
   
