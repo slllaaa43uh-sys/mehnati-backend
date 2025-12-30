@@ -197,22 +197,8 @@ const compressVideo = async (inputBuffer, options = {}) => {
     await fs.writeFile(inputPath, inputBuffer);
     inputBuffer = null;
     
-    // أمر FFmpeg للضغط الأقصى
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" \
-      -vf "scale=min(${maxWidth}\\,iw):min(${maxHeight}\\,ih):force_original_aspect_ratio=decrease,format=${config.pixelFormat}" \
-      -c:v ${config.videoCodec} \
-      -profile:v ${config.profile} \
-      -level ${config.level} \
-      -crf ${crf} \
-      -preset ${preset} \
-      -tune fastdecode \
-      -c:a ${config.audioCodec} \
-      -b:a ${audioBitrate} \
-      -ac 1 \
-      -ar 22050 \
-      -movflags +faststart \
-      -threads 2 \
-      -y "${outputPath}"`;
+    // أمر FFmpeg للضغط - صيغة مبسطة ومستقرة
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -vf "scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,pad=${maxWidth}:${maxHeight}:(ow-iw)/2:(oh-ih)/2,format=${config.pixelFormat}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 2 -ar 44100 -movflags +faststart -y "${outputPath}"`;
     
     await new Promise((resolve, reject) => {
       exec(ffmpegCommand, { 
