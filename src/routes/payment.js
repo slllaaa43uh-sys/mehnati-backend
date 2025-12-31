@@ -5,7 +5,8 @@ const {
   paytabsWebhook,
   promotePost,
   getPaymentLink,
-  checkFreePromotionEligibility
+  checkFreePromotionEligibility,
+  getPromotionOptions
 } = require('../controllers/paymentController');
 
 // @route   POST /api/payment/webhook
@@ -27,5 +28,10 @@ router.post('/get-payment-link', protect, getPaymentLink);
 // @desc    Check if user can use free promotion
 // @access  Private
 router.get('/check-free-eligibility', protect, checkFreePromotionEligibility);
+
+// @route   GET /api/payment/promotion-options
+// @desc    Get all promotion options (all free now)
+// @access  Public
+router.get('/promotion-options', getPromotionOptions);
 
 module.exports = router;
