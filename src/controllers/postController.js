@@ -1766,9 +1766,16 @@ exports.getShortsByCategory = async (req, res, next) => {
         { privacy: 'public' },
         { privacy: { $exists: false } },
         { privacy: null }
-      ],
-      category: { $regex: new RegExp(category, 'i') }
+      ]
     };
+    
+    // تصفية حسب الفئة - فقط الفيديوهات التي تطابق الفئة المحددة
+    // نقبل الفئة بالعربية أو الإنجليزية
+    if (category.toLowerCase() === 'haraj' || category === 'الحراج') {
+      query.category = { $regex: new RegExp('حراج|haraj', 'i') };
+    } else if (category.toLowerCase() === 'jobs' || category === 'الوظائف') {
+      query.category = { $regex: new RegExp('وظائف|jobs', 'i') };
+    }
 
     const shorts = await Post.find(query)
       .populate('user', 'name avatar isVerified')

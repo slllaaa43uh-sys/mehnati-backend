@@ -33,6 +33,7 @@ const notificationRoutes = require('./routes/notifications');
 const shareRoutes = require('./routes/share');
 const fcmRoutes = require('./routes/fcm');
 const paymentRoutes = require('./routes/payment');
+const locationRoutes = require('./routes/location');
 
 // Initialize express app
 const app = express();
@@ -154,6 +155,7 @@ app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/fcm', fcmRoutes);
 app.use('/api/v1/payment', paymentRoutes);
+app.use('/api/v1/location', locationRoutes);
 
 // Share pages (Open Graph for social media)
 // تعطيل CSP لصفحات المشاركة للسماح بعرض الوسائط بشكل صحيح
@@ -186,7 +188,8 @@ app.get('/', (req, res) => {
       reports: '/api/v1/reports',
       upload: '/api/v1/upload',
       notifications: '/api/v1/notifications',
-      fcm: '/api/v1/fcm'
+      fcm: '/api/v1/fcm',
+      location: '/api/v1/location'
     }
   });
 });
