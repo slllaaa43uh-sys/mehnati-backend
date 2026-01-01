@@ -259,6 +259,105 @@ exports.createPost = async (req, res, next) => {
         hasVoiceover: !!postData.voiceover?.url,
         audioSettings: postData.audioSettings
       });
+      
+      // ============================================
+      // معالجة الميزات الجديدة للفيديوهات (New Video Features)
+      // ============================================
+      
+      // معالجة الهاشتاجات (Hashtags)
+      if (req.body.hashtags) {
+        try {
+          const parsedHashtags = typeof req.body.hashtags === 'string' 
+            ? JSON.parse(req.body.hashtags) 
+            : req.body.hashtags;
+          postData.hashtags = Array.isArray(parsedHashtags) ? parsedHashtags : [];
+        } catch (e) {
+          // استخراج الهاشتاجات من النص إذا كان سلسلة نصية
+          const hashtagRegex = /#[\u0600-\u06FF\w]+/g;
+          const matches = req.body.hashtags.match(hashtagRegex);
+          postData.hashtags = matches ? matches.map(h => h.replace('#', '')) : [];
+        }
+      }
+      // استخراج الهاشتاجات من الوصف تلقائياً
+      if (!postData.hashtags || postData.hashtags.length === 0) {
+        const hashtagRegex = /#[\u0600-\u06FF\w]+/g;
+        const contentMatches = finalContent.match(hashtagRegex);
+        if (contentMatches) {
+          postData.hashtags = contentMatches.map(h => h.replace('#', ''));
+        }
+      }
+      
+      // معالجة الذكر/الإشارة (Mentions)
+      if (req.body.mentions) {
+        try {
+          postData.mentions = typeof req.body.mentions === 'string' 
+            ? JSON.parse(req.body.mentions) 
+            : req.body.mentions;
+        } catch (e) {
+          console.log('Error parsing mentions:', e);
+        }
+      }
+      // استخراج الإشارات من الوصف تلقائياً (@username)
+      if (!postData.mentions || postData.mentions.length === 0) {
+        const mentionRegex = /@[\u0600-\u06FF\w]+/g;
+        const contentMentions = finalContent.match(mentionRegex);
+        if (contentMentions) {
+          postData.mentions = contentMentions.map(m => ({ username: m.replace('@', '') }));
+        }
+      }
+      
+      // معالجة رابط الموقع (Website Link)
+      if (req.body.websiteLink) {
+        postData.websiteLink = req.body.websiteLink;
+      }
+      
+      // معالجة ترويج الفيديو (Video Promotion)
+      if (req.body.promotion) {
+        try {
+          const promotion = typeof req.body.promotion === 'string' 
+            ? JSON.parse(req.body.promotion) 
+            : req.body.promotion;
+          
+          if (promotion && promotion.duration > 0) {
+            const startDate = new Date();
+            const endDate = new Date(startDate.getTime() + (promotion.duration * 24 * 60 * 60 * 1000));
+            
+            // حساب المشاهدات المتوقعة
+            let minViews = 500, maxViews = 1000;
+            if (promotion.budget > 0) {
+              minViews = promotion.budget * 80;
+              maxViews = promotion.budget * 120;
+            }
+            
+            // تحديد نوع الترويج
+            let promotionType = 'free';
+            if (promotion.duration === 7) promotionType = 'weekly';
+            else if (promotion.duration === 30) promotionType = 'monthly';
+            else if (promotion.duration > 1) promotionType = 'custom';
+            
+            postData.videoPromotion = {
+              isPromoted: true,
+              promotionType,
+              targetCountry: promotion.city?.split(' - ')[0] || null,
+              targetCity: promotion.city?.split(' - ')[1] || promotion.city || null,
+              duration: promotion.duration,
+              budget: promotion.budget || 0,
+              startDate,
+              endDate,
+              estimatedViews: { min: minViews, max: maxViews }
+            };
+          }
+        } catch (e) {
+          console.log('Error parsing promotion:', e);
+        }
+      }
+      
+      console.log('New video features received:', {
+        hashtags: postData.hashtags?.length || 0,
+        mentions: postData.mentions?.length || 0,
+        websiteLink: postData.websiteLink || null,
+        videoPromotion: postData.videoPromotion?.isPromoted || false
+      });
     }
 
     const post = await Post.create(postData);

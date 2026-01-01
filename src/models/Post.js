@@ -230,6 +230,73 @@ const postSchema = new mongoose.Schema({
   },
   
   // ============================================
+  // ميزات جديدة للفيديوهات (New Video Features)
+  // ============================================
+  
+  // الهاشتاجات (Hashtags)
+  hashtags: [{
+    type: String,
+    trim: true
+  }],
+  
+  // الذكر/الإشارة (Mentions)
+  mentions: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    username: String
+  }],
+  
+  // رابط الموقع (Website Link)
+  websiteLink: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  
+  // ترويج الفيديو (Video Promotion)
+  videoPromotion: {
+    isPromoted: {
+      type: Boolean,
+      default: false
+    },
+    promotionType: {
+      type: String,
+      enum: ['free', 'weekly', 'monthly', 'custom'],
+      default: null
+    },
+    targetCountry: {
+      type: String,
+      default: null
+    },
+    targetCity: {
+      type: String,
+      default: null
+    },
+    duration: {
+      type: Number, // بالأيام
+      default: 0
+    },
+    budget: {
+      type: Number, // بالعملات
+      default: 0
+    },
+    startDate: {
+      type: Date,
+      default: null
+    },
+    endDate: {
+      type: Date,
+      default: null
+    },
+    estimatedViews: {
+      min: { type: Number, default: 0 },
+      max: { type: Number, default: 0 }
+    }
+  },
+  
+  // ============================================
   // نهاية إعدادات الشورتس
   // ============================================
   
