@@ -1534,7 +1534,13 @@ exports.getShortsFriends = async (req, res, next) => {
         allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
         allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
         coverImage: shortObj.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
-        views: shortObj.views || 0
+        views: shortObj.views || 0,
+        // الحقول الجديدة
+        location: shortObj.location || null,
+        hashtags: shortObj.hashtags || [],
+        mentions: shortObj.mentions || [],
+        websiteLink: shortObj.websiteLink || null,
+        videoPromotion: shortObj.videoPromotion || null
       };
     });
 
@@ -1813,7 +1819,13 @@ exports.getShortsByCategory = async (req, res, next) => {
         allowDownloads: shortObj.allowDownloads !== undefined ? shortObj.allowDownloads : true,
         allowRepost: shortObj.allowRepost !== undefined ? shortObj.allowRepost : true,
         coverImage: shortObj.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
-        views: shortObj.views || 0
+        views: shortObj.views || 0,
+        // الحقول الجديدة
+        location: shortObj.location || null,
+        hashtags: shortObj.hashtags || [],
+        mentions: shortObj.mentions || [],
+        websiteLink: shortObj.websiteLink || null,
+        videoPromotion: shortObj.videoPromotion || null
       };
     });
 

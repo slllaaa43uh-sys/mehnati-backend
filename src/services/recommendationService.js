@@ -347,7 +347,13 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
       allowDownloads: short.allowDownloads !== undefined ? short.allowDownloads : true,
       allowRepost: short.allowRepost !== undefined ? short.allowRepost : true,
       coverImage: short.coverImage || (thumbnailUrl ? { url: thumbnailUrl } : null),
-      views: short.views || 0
+      views: short.views || 0,
+      // الحقول الجديدة
+      location: short.location || null,
+      hashtags: short.hashtags || [],
+      mentions: short.mentions || [],
+      websiteLink: short.websiteLink || null,
+      videoPromotion: short.videoPromotion || null
     };
   });
 
