@@ -556,3 +556,94 @@ exports.deleteAccount = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Save FCM Token for push notifications
+// @route   POST /api/v1/users/fcm-token
+// @access  Private
+exports.saveFcmToken = async (req, res, next) => {
+  try {
+    const { fcmToken, deviceId, platform } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'FCM Token مطلوب'
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // Check if token already exists for this user
+    const existingTokenIndex = user.fcmTokens.findIndex(t => t.token === fcmToken);
+
+    if (existingTokenIndex !== -1) {
+      // Update lastUsed timestamp
+      user.fcmTokens[existingTokenIndex].lastUsed = new Date();
+    } else {
+      // Add new token (limit to 5 devices per user)
+      if (user.fcmTokens.length >= 5) {
+        // Remove oldest token
+        user.fcmTokens.sort((a, b) => new Date(a.lastUsed) - new Date(b.lastUsed));
+        user.fcmTokens.shift();
+      }
+
+      user.fcmTokens.push({
+        token: fcmToken,
+        deviceId: deviceId || null,
+        platform: platform || 'android',
+        createdAt: new Date(),
+        lastUsed: new Date()
+      });
+    }
+
+    await user.save();
+
+    console.log(`✅ FCM Token saved for user ${user._id}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حفظ FCM Token بنجاح'
+    });
+  } catch (error) {
+    console.error('❌ Error saving FCM token:', error);
+    next(error);
+  }
+};
+
+// @desc    Remove FCM Token (on logout)
+// @route   DELETE /api/v1/users/fcm-token
+// @access  Private
+exports.removeFcmToken = async (req, res, next) => {
+  try {
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'FCM Token مطلوب'
+      });
+    }
+
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { fcmTokens: { token: fcmToken } } }
+    );
+
+    console.log(`✅ FCM Token removed for user ${req.user.id}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إزالة FCM Token بنجاح'
+    });
+  } catch (error) {
+    console.error('❌ Error removing FCM token:', error);
+    next(error);
+  }
+};

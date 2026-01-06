@@ -110,6 +110,14 @@ const userSchema = new mongoose.Schema({
     skippedVideos: [mongoose.Schema.Types.ObjectId],
     hiddenCreators: [mongoose.Schema.Types.ObjectId]
   },
+  // FCM Tokens for push notifications (supports multiple devices per user)
+  fcmTokens: [{
+    token: { type: String, required: true },
+    deviceId: { type: String },
+    platform: { type: String, enum: ['android', 'ios', 'web'], default: 'android' },
+    createdAt: { type: Date, default: Date.now },
+    lastUsed: { type: Date, default: Date.now }
+  }],
   lastSeen: {
     type: Date,
     default: Date.now

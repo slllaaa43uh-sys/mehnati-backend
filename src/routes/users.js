@@ -17,7 +17,9 @@ const {
   createSection,
   deleteSection,
   getTotalLikes,
-  deleteAccount
+  deleteAccount,
+  saveFcmToken,
+  removeFcmToken
 } = require('../controllers/userController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -26,6 +28,10 @@ const upload = require('../middleware/upload');
 router.get('/me', protect, getMe);
 router.put('/me', protect, upload.avatar, updateMe);
 router.delete('/me/account', protect, deleteAccount);
+
+// FCM Token routes for push notifications
+router.post('/fcm-token', protect, saveFcmToken);
+router.delete('/fcm-token', protect, removeFcmToken);
 
 // Notifications - Order matters! More specific routes first
 router.get('/me/notifications/unread-count', protect, getUnreadCount);
