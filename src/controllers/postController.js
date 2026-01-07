@@ -367,7 +367,20 @@ exports.createPost = async (req, res, next) => {
     // ============================================
     // إرسال إشعار FCM بناءً على التصنيف
     // ============================================
+    console.log('========================================');
+    console.log('📤 POST CONTROLLER - FCM NOTIFICATION DEBUG');
+    console.log('========================================');
+    console.log('📋 Post Created:');
+    console.log('   - Post ID:', post._id);
+    console.log('   - Category:', category || 'NOT SET');
+    console.log('   - Type:', type || 'general');
+    console.log('   - Display Page:', displayPage || 'home');
+    console.log('   - Is Short:', isShort);
+    console.log('   - Title:', title || 'NO TITLE');
+    
     if (category) {
+      console.log('✅ Category exists, preparing to send FCM notification...');
+      
       // تحديد نوع المنشور للإشعار
       let notificationType = 'منشور جديد';
       if (type === 'job' || displayPage === 'jobs') {
@@ -382,6 +395,12 @@ exports.createPost = async (req, res, next) => {
       const notificationTitle = `${notificationType} - ${category}`;
       const notificationBody = title || finalContent.substring(0, 100) || 'تحقق من المحتوى الجديد!';
 
+      console.log('📋 Notification Details:');
+      console.log('   - Notification Type:', notificationType);
+      console.log('   - Notification Title:', notificationTitle);
+      console.log('   - Notification Body:', notificationBody);
+      console.log('🚀 Calling sendNotificationByCategory...');
+
       // إرسال الإشعار بشكل غير متزامن (لا ننتظر النتيجة)
       sendNotificationByCategory(
         category,
@@ -393,11 +412,25 @@ exports.createPost = async (req, res, next) => {
           displayPage: displayPage || 'home',
           userId: req.user.id
         }
-      ).catch(err => {
+      ).then(result => {
+        console.log('========================================');
+        console.log('📤 FCM sendNotificationByCategory RESULT:');
+        console.log('   - Success:', result.success);
+        console.log('   - Topics:', result.topics);
+        console.log('   - Results:', JSON.stringify(result.results, null, 2));
+        console.log('========================================');
+      }).catch(err => {
         // تسجيل الخطأ فقط دون إيقاف العملية
-        console.error('خطأ في إرسال إشعار FCM:', err.message);
+        console.error('========================================');
+        console.error('❌ FCM NOTIFICATION ERROR in postController:');
+        console.error('   - Error:', err.message);
+        console.error('   - Stack:', err.stack);
+        console.error('========================================');
       });
+    } else {
+      console.log('⚠️ No category provided, skipping FCM notification');
     }
+    console.log('========================================');
 
     res.status(201).json({
       success: true,

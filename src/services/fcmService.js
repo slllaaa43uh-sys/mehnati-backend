@@ -116,23 +116,44 @@ const categoryToTopic = (category, type = null) => {
  */
 const sendNotificationToTopic = async (topic, title, body, data = {}) => {
   try {
+    console.log('========================================');
+    console.log('🔔 FCM NOTIFICATION DEBUG - START');
+    console.log('========================================');
+    console.log('📋 Input Parameters:');
+    console.log('   - Original Topic:', topic);
+    console.log('   - Title:', title);
+    console.log('   - Body:', body);
+    console.log('   - Data:', JSON.stringify(data, null, 2));
+    
     // التحقق من جاهزية Firebase
-    if (!isFirebaseReady()) {
-      console.warn('⚠️ Firebase غير جاهز. لن يتم إرسال الإشعار.');
+    const firebaseReady = isFirebaseReady();
+    console.log('🔥 Firebase Ready Status:', firebaseReady);
+    
+    if (!firebaseReady) {
+      console.error('❌ Firebase غير جاهز. لن يتم إرسال الإشعار.');
+      console.log('💡 تأكد من إضافة إعدادات Firebase في متغيرات البيئة أو ملف firebase-service-account.json');
+      console.log('========================================');
       return { success: false, error: 'Firebase not initialized' };
     }
 
     // التحقق من البيانات المطلوبة
     if (!topic || !title || !body) {
+      console.error('❌ Missing required parameters:');
+      console.error('   - topic:', topic ? '✓' : '✗ MISSING');
+      console.error('   - title:', title ? '✓' : '✗ MISSING');
+      console.error('   - body:', body ? '✓' : '✗ MISSING');
       throw new Error('يجب توفير topic و title و body');
     }
 
     const admin = getFirebaseAdmin();
+    console.log('✅ Firebase Admin instance obtained');
 
     // Convert topic using the mapping
     const cleanTopic = categoryToTopic(topic);
-
-    console.log(`📤 Sending notification to topic: ${topic} -> ${cleanTopic}`);
+    console.log('🏷️ Topic Conversion:');
+    console.log('   - Original:', topic);
+    console.log('   - Converted:', cleanTopic);
+    console.log('   - Topic exists in map:', CATEGORY_TO_TOPIC_MAP[topic] ? 'YES' : 'NO (generated)');
 
     // إنشاء رسالة الإشعار
     const message = {
@@ -171,11 +192,20 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
       }
     };
 
+    console.log('📦 Message Payload:');
+    console.log(JSON.stringify(message, null, 2));
+
+    console.log('🚀 Attempting to send notification to topic:', cleanTopic);
+    console.log('⏳ Sending...');
+
     // إرسال الإشعار
     const response = await admin.messaging().send(message);
 
-    console.log('✅ تم إرسال الإشعار بنجاح إلى Topic:', cleanTopic);
-    console.log('📱 Response:', response);
+    console.log('✅ Notification sent successfully! Response:', response);
+    console.log('📱 Message ID:', response);
+    console.log('========================================');
+    console.log('🔔 FCM NOTIFICATION DEBUG - END (SUCCESS)');
+    console.log('========================================');
 
     return {
       success: true,
@@ -185,7 +215,20 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     };
 
   } catch (error) {
-    console.error('❌ خطأ في إرسال الإشعار إلى Topic:', error.message);
+    console.error('========================================');
+    console.error('❌ Error sending notification:', error);
+    console.error('========================================');
+    console.error('📋 Error Details:');
+    console.error('   - Message:', error.message);
+    console.error('   - Code:', error.code || 'N/A');
+    console.error('   - Stack:', error.stack);
+    if (error.errorInfo) {
+      console.error('   - Error Info:', JSON.stringify(error.errorInfo, null, 2));
+    }
+    console.error('========================================');
+    console.error('🔔 FCM NOTIFICATION DEBUG - END (FAILED)');
+    console.error('========================================');
+    
     return {
       success: false,
       error: error.message
@@ -203,6 +246,9 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
  */
 const sendNotificationToMultipleTopics = async (topics, title, body, data = {}) => {
   try {
+    console.log('📤 sendNotificationToMultipleTopics called');
+    console.log('   - Topics:', topics);
+    
     if (!Array.isArray(topics) || topics.length === 0) {
       throw new Error('يجب توفير مصفوفة topics غير فارغة');
     }
@@ -243,12 +289,21 @@ const sendNotificationToMultipleTopics = async (topics, title, body, data = {}) 
  */
 const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => {
   try {
+    console.log('========================================');
+    console.log('🔔 FCM DEVICE NOTIFICATION DEBUG - START');
+    console.log('========================================');
+    console.log('📋 Input Parameters:');
+    console.log('   - Device Token:', deviceToken ? deviceToken.substring(0, 20) + '...' : 'MISSING');
+    console.log('   - Title:', title);
+    console.log('   - Body:', body);
+    
     if (!isFirebaseReady()) {
-      console.warn('⚠️ Firebase غير جاهز. لن يتم إرسال الإشعار.');
+      console.error('❌ Firebase غير جاهز. لن يتم إرسال الإشعار.');
       return { success: false, error: 'Firebase not initialized' };
     }
 
     if (!deviceToken || !title || !body) {
+      console.error('❌ Missing required parameters');
       throw new Error('يجب توفير deviceToken و title و body');
     }
 
@@ -284,9 +339,11 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
       }
     };
 
+    console.log('🚀 Attempting to send notification to device...');
     const response = await admin.messaging().send(message);
 
-    console.log('✅ تم إرسال الإشعار بنجاح إلى الجهاز');
+    console.log('✅ Notification sent successfully! Response:', response);
+    console.log('========================================');
 
     return {
       success: true,
@@ -294,7 +351,9 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     };
 
   } catch (error) {
-    console.error('❌ خطأ في إرسال الإشعار إلى الجهاز:', error.message);
+    console.error('❌ Error sending notification:', error);
+    console.error('   - Message:', error.message);
+    console.error('   - Code:', error.code || 'N/A');
     return {
       success: false,
       error: error.message
@@ -313,10 +372,19 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
  */
 const sendNotificationByCategory = async (category, title, body, additionalData = {}) => {
   try {
+    console.log('========================================');
+    console.log('🔔 sendNotificationByCategory DEBUG - START');
+    console.log('========================================');
+    console.log('📋 Input:');
+    console.log('   - Category:', category);
+    console.log('   - Title:', title);
+    console.log('   - Body:', body);
+    console.log('   - Additional Data:', JSON.stringify(additionalData, null, 2));
+    
     // Get the topic name from category
     const topic = categoryToTopic(category);
     
-    console.log(`📤 sendNotificationByCategory: ${category} -> ${topic}`);
+    console.log(`📤 Category to Topic: ${category} -> ${topic}`);
 
     // Also send to the general topic for this section
     const topics = [topic];
@@ -324,12 +392,16 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     // If it's a job category, also send to jobs_all
     if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
       topics.push('jobs_all');
+      console.log('   + Adding jobs_all topic');
     }
     
     // If it's a haraj category, also send to haraj_all
     if (topic.startsWith('haraj_') && topic !== 'haraj_all') {
       topics.push('haraj_all');
+      console.log('   + Adding haraj_all topic');
     }
+
+    console.log('📋 Final Topics to send:', topics);
 
     // Send to all relevant topics
     const results = await Promise.allSettled(
@@ -340,6 +412,14 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     );
 
     const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const failed = results.length - successful;
+
+    console.log('========================================');
+    console.log('📊 sendNotificationByCategory Results:');
+    console.log('   - Total:', results.length);
+    console.log('   - Successful:', successful);
+    console.log('   - Failed:', failed);
+    console.log('========================================');
 
     return {
       success: successful > 0,
@@ -349,6 +429,7 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
 
   } catch (error) {
     console.error('❌ خطأ في إرسال الإشعار حسب التصنيف:', error.message);
+    console.error('   - Stack:', error.stack);
     return {
       success: false,
       error: error.message
@@ -364,7 +445,15 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
  */
 const subscribeToTopic = async (deviceToken, topic) => {
   try {
+    console.log('========================================');
+    console.log('🔔 SUBSCRIBE TO TOPIC DEBUG - START');
+    console.log('========================================');
+    console.log('📋 Input:');
+    console.log('   - Device Token:', deviceToken ? deviceToken.substring(0, 30) + '...' : 'MISSING');
+    console.log('   - Original Topic:', topic);
+    
     if (!isFirebaseReady()) {
+      console.error('❌ Firebase not ready');
       return { success: false, error: 'Firebase not initialized' };
     }
 
@@ -379,6 +468,12 @@ const subscribeToTopic = async (deviceToken, topic) => {
 
     console.log(`✅ تم اشتراك الجهاز في Topic: ${cleanTopic}`);
     console.log(`📊 Success count: ${response.successCount}, Failure count: ${response.failureCount}`);
+    
+    if (response.failureCount > 0 && response.errors) {
+      console.error('❌ Subscription errors:', response.errors);
+    }
+    
+    console.log('========================================');
 
     return {
       success: response.successCount > 0,
@@ -389,6 +484,7 @@ const subscribeToTopic = async (deviceToken, topic) => {
 
   } catch (error) {
     console.error('❌ خطأ في الاشتراك في Topic:', error.message);
+    console.error('   - Code:', error.code || 'N/A');
     return {
       success: false,
       error: error.message
@@ -404,6 +500,10 @@ const subscribeToTopic = async (deviceToken, topic) => {
  */
 const unsubscribeFromTopic = async (deviceToken, topic) => {
   try {
+    console.log('========================================');
+    console.log('🔔 UNSUBSCRIBE FROM TOPIC DEBUG - START');
+    console.log('========================================');
+    
     if (!isFirebaseReady()) {
       return { success: false, error: 'Firebase not initialized' };
     }
@@ -418,6 +518,7 @@ const unsubscribeFromTopic = async (deviceToken, topic) => {
     const response = await admin.messaging().unsubscribeFromTopic(deviceToken, cleanTopic);
 
     console.log(`✅ تم إلغاء اشتراك الجهاز من Topic: ${cleanTopic}`);
+    console.log('========================================');
 
     return {
       success: response.successCount > 0,
