@@ -367,7 +367,7 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
  * @param {string} category - تصنيف المنشور (مثل: سائق خاص، جوالات)
  * @param {string} title - عنوان الإشعار
  * @param {string} body - نص الإشعار
- * @param {object} additionalData - بيانات إضافية (اختياري)
+ * @param {object} additionalData - بيانات إضافية (اختياري) - يمكن أن يحتوي على postTitle لتحديد نوع الوظيفة
  * @returns {Promise<object>} - نتيجة الإرسال
  */
 const sendNotificationByCategory = async (category, title, body, additionalData = {}) => {
@@ -386,26 +386,70 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     
     console.log(`📤 Category to Topic: ${category} -> ${topic}`);
 
-    // Also send to the general topic for this section
-    const topics = [topic];
+    // Build list of topics to send to
+    const topics = [];
     
-    // If it's a job category, also send to jobs_all
+    // ============================================
+    // JOBS: Send to specific seeker/employer topics
+    // ============================================
     if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
+      // Determine job type from post title
+      const postTitle = additionalData.postTitle || '';
+      let jobType = null;
+      
+      // Check if seeker (looking for job) or employer (looking for employees)
+      if (postTitle.includes('ابحث عن وظيفة') || postTitle.includes('أبحث عن وظيفة')) {
+        // Person looking for job -> notify employers who want to hire
+        jobType = 'employer';
+        console.log('   📌 Post is from JOB SEEKER -> Notifying EMPLOYERS');
+      } else if (postTitle.includes('ابحث عن موظفين') || postTitle.includes('أبحث عن موظفين')) {
+        // Company looking for employees -> notify job seekers
+        jobType = 'seeker';
+        console.log('   📌 Post is from EMPLOYER -> Notifying JOB SEEKERS');
+      }
+      
+      if (jobType) {
+        // Add specific topic with suffix (e.g., jobs_driver_seeker)
+        topics.push(`${topic}_${jobType}`);
+        console.log(`   + Adding ${topic}_${jobType} topic`);
+      }
+      
+      // Also send to base topic (for users subscribed without suffix)
+      topics.push(topic);
+      console.log(`   + Adding ${topic} topic (base)`);
+      
+      // Also send to jobs_all for general job notifications
       topics.push('jobs_all');
       console.log('   + Adding jobs_all topic');
+      
+      // Add jobs_all with suffix if jobType is determined
+      if (jobType) {
+        topics.push(`jobs_all_${jobType}`);
+        console.log(`   + Adding jobs_all_${jobType} topic`);
+      }
     }
-    
-    // If it's a haraj category, also send to haraj_all
-    if (topic.startsWith('haraj_') && topic !== 'haraj_all') {
+    // ============================================
+    // HARAJ: Send to category and haraj_all
+    // ============================================
+    else if (topic.startsWith('haraj_') && topic !== 'haraj_all') {
+      topics.push(topic);
       topics.push('haraj_all');
-      console.log('   + Adding haraj_all topic');
+      console.log('   + Adding haraj topics:', topic, 'haraj_all');
+    }
+    // ============================================
+    // OTHER: Just send to the topic
+    // ============================================
+    else {
+      topics.push(topic);
     }
 
-    console.log('📋 Final Topics to send:', topics);
+    // Remove duplicates
+    const uniqueTopics = [...new Set(topics)];
+    console.log('📋 Final Topics to send:', uniqueTopics);
 
     // Send to all relevant topics
     const results = await Promise.allSettled(
-      topics.map(t => sendNotificationToTopic(t, title, body, {
+      uniqueTopics.map(t => sendNotificationToTopic(t, title, body, {
         category,
         ...additionalData
       }))
@@ -423,7 +467,7 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
 
     return {
       success: successful > 0,
-      topics,
+      topics: uniqueTopics,
       results: results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: r.reason })
     };
 

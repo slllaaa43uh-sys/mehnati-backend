@@ -402,6 +402,7 @@ exports.createPost = async (req, res, next) => {
       console.log('🚀 Calling sendNotificationByCategory...');
 
       // إرسال الإشعار بشكل غير متزامن (لا ننتظر النتيجة)
+      // نمرر postTitle لتحديد نوع الوظيفة (seeker/employer)
       sendNotificationByCategory(
         category,
         notificationTitle,
@@ -410,7 +411,8 @@ exports.createPost = async (req, res, next) => {
           postId: post._id.toString(),
           type: type || 'general',
           displayPage: displayPage || 'home',
-          userId: req.user.id
+          userId: req.user.id,
+          postTitle: title || '' // عنوان المنشور لتحديد نوع الوظيفة
         }
       ).then(result => {
         console.log('========================================');
