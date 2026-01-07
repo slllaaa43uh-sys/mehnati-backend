@@ -12,6 +12,101 @@ const { getFirebaseAdmin, isFirebaseReady } = require('../config/firebase');
  */
 
 /**
+ * ============================================
+ * CATEGORY TO TOPIC MAPPING
+ * ============================================
+ * Maps Arabic category names to English topic names
+ * This ensures consistency between frontend and backend
+ */
+const CATEGORY_TO_TOPIC_MAP = {
+  // ============ HARAJ CATEGORIES ============
+  'سيارات': 'haraj_cars',
+  'عقارات': 'haraj_realestate',
+  'أجهزة منزلية': 'haraj_appliances',
+  'أثاث ومفروشات': 'haraj_furniture',
+  'جوالات': 'haraj_phones',
+  'لابتوبات وكمبيوتر': 'haraj_computers',
+  'كاميرات وتصوير': 'haraj_cameras',
+  'ألعاب فيديو': 'haraj_games',
+  'ملابس وموضة': 'haraj_fashion',
+  'ساعات ومجوهرات': 'haraj_jewelry',
+  'حيوانات أليفة': 'haraj_pets',
+  'طيور': 'haraj_birds',
+  'معدات ثقيلة': 'haraj_equipment',
+  'قطع غيار': 'haraj_parts',
+  'تحف ومقتنيات': 'haraj_antiques',
+  'كتب ومجلات': 'haraj_books',
+  'أدوات رياضية': 'haraj_sports',
+  'مستلزمات أطفال': 'haraj_kids',
+  'خيم وتخييم': 'haraj_camping',
+  'أرقام مميزة': 'haraj_numbers',
+  'نقل عفش': 'haraj_moving',
+  'أدوات أخرى': 'haraj_other',
+  
+  // ============ JOB CATEGORIES ============
+  'سائق خاص': 'jobs_driver',
+  'حارس أمن': 'jobs_security',
+  'طباخ': 'jobs_cook',
+  'محاسب': 'jobs_accountant',
+  'مهندس مدني': 'jobs_engineer',
+  'طبيب/ممرض': 'jobs_medical',
+  'نجار': 'jobs_carpenter',
+  'كاتب محتوى': 'jobs_writer',
+  'كهربائي': 'jobs_electrician',
+  'ميكانيكي': 'jobs_mechanic',
+  'بائع / كاشير': 'jobs_sales',
+  'مبرمج': 'jobs_programmer',
+  'مصمم جرافيك': 'jobs_designer',
+  'مترجم': 'jobs_translator',
+  'مدرس خصوصي': 'jobs_teacher',
+  'مدير مشاريع': 'jobs_manager',
+  'خدمة عملاء': 'jobs_support',
+  'مقدم طعام': 'jobs_waiter',
+  'توصيل': 'jobs_delivery',
+  'حلاق / خياط': 'jobs_barber',
+  'مزارع': 'jobs_farmer',
+  'وظائف أخرى': 'jobs_other',
+  
+  // ============ GENERAL TOPICS ============
+  'jobs': 'jobs_all',
+  'haraj': 'haraj_all',
+  'general': 'general',
+  'عام': 'general'
+};
+
+/**
+ * Convert Arabic category name to English topic name
+ * @param {string} category - Arabic category name
+ * @param {string} type - Optional type (seeker/employer for jobs)
+ * @returns {string} - English topic name
+ */
+const categoryToTopic = (category, type = null) => {
+  // First check if it's already in the map
+  let baseTopic = CATEGORY_TO_TOPIC_MAP[category];
+  
+  if (!baseTopic) {
+    // If not found, create a safe topic name
+    // Remove spaces and special characters, keep only alphanumeric and underscores
+    baseTopic = category
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_\u0600-\u06FF]/g, '') // Keep Arabic letters
+      .replace(/[\u0600-\u06FF]+/g, match => {
+        // Convert Arabic to transliterated version or use hash
+        return Buffer.from(match).toString('hex').substring(0, 8);
+      });
+  }
+  
+  // Add type suffix for jobs if provided
+  if (type && (type === 'seeker' || type === 'employer')) {
+    return `${baseTopic}_${type}`;
+  }
+  
+  return baseTopic;
+};
+
+/**
  * إرسال إشعار إلى Topic محدد
  * @param {string} topic - اسم الـ Topic (مثل: drivers، doctors، jobs، haraj)
  * @param {string} title - عنوان الإشعار
@@ -34,8 +129,10 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
 
     const admin = getFirebaseAdmin();
 
-    // تنظيف اسم الـ Topic (إزالة المسافات والأحرف الخاصة)
-    const cleanTopic = topic.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    // Convert topic using the mapping
+    const cleanTopic = categoryToTopic(topic);
+
+    console.log(`📤 Sending notification to topic: ${topic} -> ${cleanTopic}`);
 
     // إنشاء رسالة الإشعار
     const message = {
@@ -44,9 +141,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         body: body
       },
       data: {
-        ...data,
+        ...Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)])
+        ),
         timestamp: new Date().toISOString(),
-        topic: cleanTopic
+        topic: cleanTopic,
+        originalTopic: topic
       },
       topic: cleanTopic,
       // إعدادات Android
@@ -54,7 +154,7 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         priority: 'high',
         notification: {
           sound: 'default',
-          channelId: 'mehnati_notifications',
+          channelId: 'fcm_default_channel',
           priority: 'high',
           defaultSound: true,
           defaultVibrateTimings: true
@@ -80,7 +180,8 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     return {
       success: true,
       messageId: response,
-      topic: cleanTopic
+      topic: cleanTopic,
+      originalTopic: topic
     };
 
   } catch (error) {
@@ -159,7 +260,9 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         body: body
       },
       data: {
-        ...data,
+        ...Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)])
+        ),
         timestamp: new Date().toISOString()
       },
       token: deviceToken,
@@ -167,7 +270,7 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         priority: 'high',
         notification: {
           sound: 'default',
-          channelId: 'mehnati_notifications',
+          channelId: 'fcm_default_channel',
           priority: 'high'
         }
       },
@@ -202,7 +305,7 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
 /**
  * إرسال إشعار بناءً على تصنيف المنشور/الوظيفة
  * هذه الدالة تحدد تلقائياً الـ Topic المناسب بناءً على category
- * @param {string} category - تصنيف المنشور (مثل: drivers، doctors، jobs، haraj)
+ * @param {string} category - تصنيف المنشور (مثل: سائق خاص، جوالات)
  * @param {string} title - عنوان الإشعار
  * @param {string} body - نص الإشعار
  * @param {object} additionalData - بيانات إضافية (اختياري)
@@ -210,31 +313,39 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
  */
 const sendNotificationByCategory = async (category, title, body, additionalData = {}) => {
   try {
-    // تحويل category إلى topic name
-    // يمكنك تخصيص هذا التحويل حسب احتياجاتك
-    const topicMap = {
-      'drivers': 'drivers',
-      'سائقين': 'drivers',
-      'doctors': 'doctors',
-      'أطباء': 'doctors',
-      'engineers': 'engineers',
-      'مهندسين': 'engineers',
-      'teachers': 'teachers',
-      'معلمين': 'teachers',
-      'jobs': 'jobs',
-      'وظائف': 'jobs',
-      'haraj': 'haraj',
-      'حراج': 'haraj',
-      'general': 'general',
-      'عام': 'general'
+    // Get the topic name from category
+    const topic = categoryToTopic(category);
+    
+    console.log(`📤 sendNotificationByCategory: ${category} -> ${topic}`);
+
+    // Also send to the general topic for this section
+    const topics = [topic];
+    
+    // If it's a job category, also send to jobs_all
+    if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
+      topics.push('jobs_all');
+    }
+    
+    // If it's a haraj category, also send to haraj_all
+    if (topic.startsWith('haraj_') && topic !== 'haraj_all') {
+      topics.push('haraj_all');
+    }
+
+    // Send to all relevant topics
+    const results = await Promise.allSettled(
+      topics.map(t => sendNotificationToTopic(t, title, body, {
+        category,
+        ...additionalData
+      }))
+    );
+
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+
+    return {
+      success: successful > 0,
+      topics,
+      results: results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: r.reason })
     };
-
-    const topic = topicMap[category] || 'general';
-
-    return await sendNotificationToTopic(topic, title, body, {
-      category,
-      ...additionalData
-    });
 
   } catch (error) {
     console.error('❌ خطأ في إرسال الإشعار حسب التصنيف:', error.message);
@@ -258,15 +369,21 @@ const subscribeToTopic = async (deviceToken, topic) => {
     }
 
     const admin = getFirebaseAdmin();
-    const cleanTopic = topic.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    
+    // Convert topic using the mapping
+    const cleanTopic = categoryToTopic(topic);
+
+    console.log(`📥 Subscribing device to topic: ${topic} -> ${cleanTopic}`);
 
     const response = await admin.messaging().subscribeToTopic(deviceToken, cleanTopic);
 
     console.log(`✅ تم اشتراك الجهاز في Topic: ${cleanTopic}`);
+    console.log(`📊 Success count: ${response.successCount}, Failure count: ${response.failureCount}`);
 
     return {
-      success: true,
+      success: response.successCount > 0,
       topic: cleanTopic,
+      originalTopic: topic,
       response
     };
 
@@ -292,15 +409,20 @@ const unsubscribeFromTopic = async (deviceToken, topic) => {
     }
 
     const admin = getFirebaseAdmin();
-    const cleanTopic = topic.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    
+    // Convert topic using the mapping
+    const cleanTopic = categoryToTopic(topic);
+
+    console.log(`📤 Unsubscribing device from topic: ${topic} -> ${cleanTopic}`);
 
     const response = await admin.messaging().unsubscribeFromTopic(deviceToken, cleanTopic);
 
     console.log(`✅ تم إلغاء اشتراك الجهاز من Topic: ${cleanTopic}`);
 
     return {
-      success: true,
+      success: response.successCount > 0,
       topic: cleanTopic,
+      originalTopic: topic,
       response
     };
 
@@ -313,11 +435,17 @@ const unsubscribeFromTopic = async (deviceToken, topic) => {
   }
 };
 
+// Export the category mapping for use in frontend
+const getCategoryTopicMap = () => CATEGORY_TO_TOPIC_MAP;
+
 module.exports = {
   sendNotificationToTopic,
   sendNotificationToMultipleTopics,
   sendNotificationToDevice,
   sendNotificationByCategory,
   subscribeToTopic,
-  unsubscribeFromTopic
+  unsubscribeFromTopic,
+  categoryToTopic,
+  getCategoryTopicMap,
+  CATEGORY_TO_TOPIC_MAP
 };
