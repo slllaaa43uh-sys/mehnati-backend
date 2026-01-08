@@ -174,10 +174,10 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
       android: {
         priority: 'high',
         notification: {
-          sound: 'default',
+          sound: 'notify',
           channelId: 'fcm_default_channel',
           priority: 'high',
-          defaultSound: true,
+          clickAction: 'FCM_PLUGIN_ACTIVITY',
           defaultVibrateTimings: true
         }
       },
@@ -324,9 +324,10 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
       android: {
         priority: 'high',
         notification: {
-          sound: 'default',
+          sound: 'notify',
           channelId: 'fcm_default_channel',
-          priority: 'high'
+          priority: 'high',
+          clickAction: 'FCM_PLUGIN_ACTIVITY'
         }
       },
       apns: {
