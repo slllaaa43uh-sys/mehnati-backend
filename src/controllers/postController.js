@@ -381,22 +381,56 @@ exports.createPost = async (req, res, next) => {
     if (category) {
       console.log('✅ Category exists, preparing to send FCM notification...');
       
-      // تحديد نوع المنشور للإشعار
-      let notificationType = 'منشور جديد';
-      if (type === 'job' || displayPage === 'jobs') {
-        notificationType = 'وظيفة جديدة';
+      // اسم المستخدم للإشعار
+      const userName = post.user?.name || req.user?.name || 'مستخدم';
+      
+      // تبسيط اسم الفئة (سائق بدلاً من سائق خاص)
+      const SIMPLIFIED_CATEGORIES = {
+        'سائق خاص': 'سائق',
+        'حارس أمن': 'حارس',
+        'طبيب/ممرض': 'طبيب',
+        'بائع / كاشير': 'بائع',
+        'حلاق / خياط': 'حلاق',
+        'مهندس مدني': 'مهندس',
+        'مدير مشاريع': 'مدير',
+        'كاتب محتوى': 'كاتب',
+        'مدرس خصوصي': 'مدرس',
+        'مصمم جرافيك': 'مصمم',
+        'خدمة عملاء': 'خدمة عملاء',
+        'مقدم طعام': 'نادل',
+        'وظائف أخرى': 'وظيفة'
+      };
+      const simplifiedCategory = SIMPLIFIED_CATEGORIES[category] || category;
+      
+      // تحديد نوع البحث (وظيفة أو موظفين)
+      let notificationTitle = '';
+      let notificationBody = '';
+      
+      if (displayPage === 'jobs') {
+        if (title && (title.includes('ابحث عن وظيفة') || title.includes('أبحث عن وظيفة'))) {
+          // شخص يبحث عن وظيفة
+          notificationTitle = `${simplifiedCategory} - باحث عن عمل`;
+          notificationBody = `${userName} يبحث عن وظيفة ${simplifiedCategory}`;
+        } else if (title && (title.includes('ابحث عن موظفين') || title.includes('أبحث عن موظفين'))) {
+          // صاحب عمل يبحث عن موظفين
+          notificationTitle = `${simplifiedCategory} - فرصة عمل`;
+          notificationBody = `${userName} يبحث عن ${simplifiedCategory}`;
+        } else {
+          notificationTitle = `وظيفة جديدة - ${simplifiedCategory}`;
+          notificationBody = `${userName} نشر إعلان وظيفة`;
+        }
       } else if (displayPage === 'haraj') {
-        notificationType = 'إعلان حراج جديد';
-      } else if (isShort) {
-        notificationType = 'فيديو قصير جديد';
+        notificationTitle = `حراج - ${simplifiedCategory}`;
+        notificationBody = `${userName} نشر إعلان في ${simplifiedCategory}`;
+      } else {
+        notificationTitle = `منشور جديد - ${simplifiedCategory}`;
+        notificationBody = `${userName} نشر محتوى جديد`;
       }
 
-      // إنشاء عنوان ونص الإشعار
-      const notificationTitle = `${notificationType} - ${category}`;
-      const notificationBody = title || finalContent.substring(0, 100) || 'تحقق من المحتوى الجديد!';
-
       console.log('📋 Notification Details:');
-      console.log('   - Notification Type:', notificationType);
+      console.log('   - User Name:', userName);
+      console.log('   - Original Category:', category);
+      console.log('   - Simplified Category:', simplifiedCategory);
       console.log('   - Notification Title:', notificationTitle);
       console.log('   - Notification Body:', notificationBody);
       console.log('🚀 Calling sendNotificationByCategory...');
