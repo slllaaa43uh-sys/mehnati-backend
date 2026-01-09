@@ -392,66 +392,55 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     
     console.log(`📤 Category to Topic: ${category} -> ${topic}`);
 
-    // Build list of topics to send to
-    const topics = [];
+    // ============================================
+    // SEND TO ONLY ONE TOPIC (most specific)
+    // ============================================
+    // To avoid multiple notifications, we send to only ONE topic
+    // Users subscribe to the most specific topic they want
+    // ============================================
+    
+    let targetTopic = topic;
     
     // ============================================
-    // JOBS: Send to specific seeker/employer topics
+    // JOBS: Determine the specific topic
     // ============================================
     if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
       // Determine job type from post title
       const postTitle = additionalData.postTitle || '';
-      let jobType = null;
       
       // Check if seeker (looking for job) or employer (looking for employees)
       if (postTitle.includes('ابحث عن وظيفة') || postTitle.includes('أبحث عن وظيفة')) {
         // Person looking for job -> notify employers who want to hire
-        jobType = 'employer';
+        targetTopic = `${topic}_employer`;
         console.log('   📌 Post is from JOB SEEKER -> Notifying EMPLOYERS');
+        console.log(`   📤 Sending to: ${targetTopic}`);
       } else if (postTitle.includes('ابحث عن موظفين') || postTitle.includes('أبحث عن موظفين')) {
         // Company looking for employees -> notify job seekers
-        jobType = 'seeker';
+        targetTopic = `${topic}_seeker`;
         console.log('   📌 Post is from EMPLOYER -> Notifying JOB SEEKERS');
-      }
-      
-      if (jobType) {
-        // Add specific topic with suffix (e.g., jobs_driver_seeker)
-        topics.push(`${topic}_${jobType}`);
-        console.log(`   + Adding ${topic}_${jobType} topic`);
-      }
-      
-      // Also send to base topic (for users subscribed without suffix)
-      topics.push(topic);
-      console.log(`   + Adding ${topic} topic (base)`);
-      
-      // Also send to jobs_all for general job notifications
-      topics.push('jobs_all');
-      console.log('   + Adding jobs_all topic');
-      
-      // Add jobs_all with suffix if jobType is determined
-      if (jobType) {
-        topics.push(`jobs_all_${jobType}`);
-        console.log(`   + Adding jobs_all_${jobType} topic`);
+        console.log(`   📤 Sending to: ${targetTopic}`);
+      } else {
+        // Default: send to base topic
+        console.log('   📌 Unknown job type -> Sending to base topic');
+        console.log(`   📤 Sending to: ${targetTopic}`);
       }
     }
     // ============================================
-    // HARAJ: Send to category and haraj_all
+    // HARAJ: Send to category topic only
     // ============================================
-    else if (topic.startsWith('haraj_') && topic !== 'haraj_all') {
-      topics.push(topic);
-      topics.push('haraj_all');
-      console.log('   + Adding haraj topics:', topic, 'haraj_all');
+    else if (topic.startsWith('haraj_')) {
+      console.log(`   📤 Haraj notification -> Sending to: ${targetTopic}`);
     }
     // ============================================
     // OTHER: Just send to the topic
     // ============================================
     else {
-      topics.push(topic);
+      console.log(`   📤 Other notification -> Sending to: ${targetTopic}`);
     }
 
-    // Remove duplicates
-    const uniqueTopics = [...new Set(topics)];
-    console.log('📋 Final Topics to send:', uniqueTopics);
+    // Only one topic - no duplicates
+    const uniqueTopics = [targetTopic];
+    console.log('📋 Final Topic to send (SINGLE):', uniqueTopics);
 
     // ============================================
     // EXCLUDE CREATOR FROM NOTIFICATION
