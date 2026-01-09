@@ -409,21 +409,21 @@ exports.createPost = async (req, res, next) => {
       if (displayPage === 'jobs') {
         if (title && (title.includes('ابحث عن وظيفة') || title.includes('أبحث عن وظيفة'))) {
           // شخص يبحث عن وظيفة
-          notificationTitle = `${simplifiedCategory} - باحث عن عمل`;
-          notificationBody = `${userName} يبحث عن وظيفة ${simplifiedCategory}`;
+          notificationTitle = `${simplifiedCategory}`;
+          notificationBody = `${userName} يبحث عن وظيفة`;
         } else if (title && (title.includes('ابحث عن موظفين') || title.includes('أبحث عن موظفين'))) {
           // صاحب عمل يبحث عن موظفين
-          notificationTitle = `${simplifiedCategory} - فرصة عمل`;
-          notificationBody = `${userName} يبحث عن ${simplifiedCategory}`;
+          notificationTitle = `${simplifiedCategory}`;
+          notificationBody = `${userName} يبحث عن موظفين`;
         } else {
-          notificationTitle = `وظيفة جديدة - ${simplifiedCategory}`;
+          notificationTitle = `${simplifiedCategory}`;
           notificationBody = `${userName} نشر إعلان وظيفة`;
         }
       } else if (displayPage === 'haraj') {
-        notificationTitle = `حراج - ${simplifiedCategory}`;
-        notificationBody = `${userName} نشر إعلان في ${simplifiedCategory}`;
+        notificationTitle = `${simplifiedCategory}`;
+        notificationBody = `${userName} نشر إعلان في الحراج`;
       } else {
-        notificationTitle = `منشور جديد - ${simplifiedCategory}`;
+        notificationTitle = `منشور جديد`;
         notificationBody = `${userName} نشر محتوى جديد`;
       }
 
