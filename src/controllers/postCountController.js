@@ -12,16 +12,16 @@ const Post = require('../models/Post');
 // @access  Public
 exports.getPostCounts = async (req, res) => {
   try {
-    // Get counts for jobs section
+    // Get counts for jobs section - using regex for better matching
     const jobsSeekerCount = await Post.countDocuments({
       displayPage: 'jobs',
-      title: { $in: ['ابحث عن وظيفة', 'أبحث عن وظيفة'] },
+      title: { $regex: 'ابحث عن وظيفة|أبحث عن وظيفة', $options: 'i' },
       isShort: { $ne: true }
     });
 
     const jobsEmployerCount = await Post.countDocuments({
       displayPage: 'jobs',
-      title: { $in: ['ابحث عن موظفين', 'أبحث عن موظفين'] },
+      title: { $regex: 'ابحث عن موظفين|أبحث عن موظفين', $options: 'i' },
       isShort: { $ne: true }
     });
 
@@ -51,13 +51,13 @@ exports.getPostCounts = async (req, res) => {
       const seekerCount = await Post.countDocuments({
         displayPage: 'jobs',
         category: category,
-        title: { $in: ['ابحث عن وظيفة', 'أبحث عن وظيفة'] },
+        title: { $regex: 'ابحث عن وظيفة|أبحث عن وظيفة', $options: 'i' },
         isShort: { $ne: true }
       });
       const employerCount = await Post.countDocuments({
         displayPage: 'jobs',
         category: category,
-        title: { $in: ['ابحث عن موظفين', 'أبحث عن موظفين'] },
+        title: { $regex: 'ابحث عن موظفين|أبحث عن موظفين', $options: 'i' },
         isShort: { $ne: true }
       });
       jobCategoryCounts[category] = {
