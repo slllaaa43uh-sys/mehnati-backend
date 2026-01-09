@@ -12,6 +12,16 @@ const Post = require('../models/Post');
 // @access  Public
 exports.getPostCounts = async (req, res) => {
   try {
+    // DEBUG: Log sample posts to understand the data structure
+    const samplePosts = await Post.find({ displayPage: 'jobs', isShort: { $ne: true } })
+      .select('title category displayPage')
+      .limit(10);
+    console.log('=== DEBUG: Sample Jobs Posts ===');
+    samplePosts.forEach(p => {
+      console.log(`Title: "${p.title}" | Category: "${p.category}" | DisplayPage: "${p.displayPage}"`);
+    });
+    console.log('=================================');
+
     // Get counts for jobs section - using regex for better matching
     const jobsSeekerCount = await Post.countDocuments({
       displayPage: 'jobs',
