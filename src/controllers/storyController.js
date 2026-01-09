@@ -359,7 +359,11 @@ exports.deleteStory = async (req, res, next) => {
 exports.getStoryViewers = async (req, res, next) => {
   try {
     const story = await Story.findById(req.params.id)
-      .populate('views.user', '_id name avatar');
+      .populate({
+        path: 'views.user',
+        select: '_id name avatar email',
+        model: 'User'
+      });
 
     if (!story) {
       return res.status(404).json({
@@ -382,16 +386,29 @@ exports.getStoryViewers = async (req, res, next) => {
     res.status(200).json({
       success: true,
       viewsCount: validViewers.length,
-      viewers: validViewers.map(v => ({
-        user: {
-          _id: v.user._id,
-          name: v.user.name || 'مستخدم',
-          avatar: v.user.avatar || null
-        },
-        viewedAt: v.viewedAt
-      }))
+      viewers: validViewers.map(v => {
+        // استخراج الاسم من البريد إذا لم يكن الاسم موجود
+        let displayName = v.user.name;
+        if (!displayName && v.user.email) {
+          // استخراج الجزء قبل @ من البريد
+          displayName = v.user.email.split('@')[0];
+        }
+        if (!displayName) {
+          displayName = 'مستخدم';
+        }
+        
+        return {
+          user: {
+            _id: v.user._id,
+            name: displayName,
+            avatar: v.user.avatar || null
+          },
+          viewedAt: v.viewedAt
+        };
+      })
     });
   } catch (error) {
+    console.error('Error getting story viewers:', error);
     next(error);
   }
 };
