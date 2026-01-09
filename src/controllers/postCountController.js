@@ -12,15 +12,14 @@ const Post = require('../models/Post');
 // @access  Public
 exports.getPostCounts = async (req, res) => {
   try {
-    // DEBUG: Log sample posts to understand the data structure
-    const samplePosts = await Post.find({ displayPage: 'jobs', isShort: { $ne: true } })
-      .select('title category displayPage')
-      .limit(10);
-    console.log('=== DEBUG: Sample Jobs Posts ===');
-    samplePosts.forEach(p => {
-      console.log(`Title: "${p.title}" | Category: "${p.category}" | DisplayPage: "${p.displayPage}"`);
-    });
-    console.log('=================================');
+    // DEBUG: Log all unique categories in jobs
+    const allJobPosts = await Post.find({ displayPage: 'jobs', isShort: { $ne: true } })
+      .select('title category');
+    const uniqueCategories = [...new Set(allJobPosts.map(p => p.category).filter(c => c))];
+    console.log('=== DEBUG: All unique job categories ===');
+    console.log(uniqueCategories);
+    console.log('Total jobs posts:', allJobPosts.length);
+    console.log('=========================================');
 
     // Get counts for jobs section - using regex for better matching
     const jobsSeekerCount = await Post.countDocuments({
@@ -47,30 +46,48 @@ exports.getPostCounts = async (req, res) => {
       isShort: { $ne: true }
     });
 
-    // Get counts by job category
-    const jobCategories = [
-      'سائق خاص', 'حارس أمن', 'طباخ', 'محاسب', 'مهندس مدني',
-      'طبيب/ممرض', 'نجار', 'كاتب محتوى', 'كهربائي', 'ميكانيكي',
-      'بائع / كاشير', 'مبرمج', 'مصمم جرافيك', 'مترجم', 'مدرس خصوصي',
-      'مدير مشاريع', 'خدمة عملاء', 'مقدم طعام', 'توصيل', 'حلاق / خياط',
-      'مزارع', 'وظائف أخرى'
-    ];
+    // Job categories with possible alternative names
+    // Maps display name to possible database values
+    const jobCategoryMappings = {
+      'سائق خاص': ['سائق خاص', 'سائق'],
+      'حارس أمن': ['حارس أمن', 'حارس'],
+      'طباخ': ['طباخ'],
+      'محاسب': ['محاسب'],
+      'مهندس مدني': ['مهندس مدني', 'مهندس'],
+      'طبيب/ممرض': ['طبيب/ممرض', 'طبيب', 'ممرض'],
+      'نجار': ['نجار'],
+      'كاتب محتوى': ['كاتب محتوى', 'كاتب'],
+      'كهربائي': ['كهربائي'],
+      'ميكانيكي': ['ميكانيكي'],
+      'بائع / كاشير': ['بائع / كاشير', 'بائع', 'كاشير'],
+      'مبرمج': ['مبرمج'],
+      'مصمم جرافيك': ['مصمم جرافيك', 'مصمم'],
+      'مترجم': ['مترجم'],
+      'مدرس خصوصي': ['مدرس خصوصي', 'مدرس'],
+      'مدير مشاريع': ['مدير مشاريع', 'مدير'],
+      'خدمة عملاء': ['خدمة عملاء'],
+      'مقدم طعام': ['مقدم طعام'],
+      'توصيل': ['توصيل'],
+      'حلاق / خياط': ['حلاق / خياط', 'حلاق', 'خياط'],
+      'مزارع': ['مزارع'],
+      'وظائف أخرى': ['وظائف أخرى', 'أخرى']
+    };
 
     const jobCategoryCounts = {};
-    for (const category of jobCategories) {
+    for (const [displayName, possibleValues] of Object.entries(jobCategoryMappings)) {
       const seekerCount = await Post.countDocuments({
         displayPage: 'jobs',
-        category: category,
+        category: { $in: possibleValues },
         title: { $regex: 'ابحث عن وظيفة|أبحث عن وظيفة', $options: 'i' },
         isShort: { $ne: true }
       });
       const employerCount = await Post.countDocuments({
         displayPage: 'jobs',
-        category: category,
+        category: { $in: possibleValues },
         title: { $regex: 'ابحث عن موظفين|أبحث عن موظفين', $options: 'i' },
         isShort: { $ne: true }
       });
-      jobCategoryCounts[category] = {
+      jobCategoryCounts[displayName] = {
         seeker: seekerCount,
         employer: employerCount,
         total: seekerCount + employerCount
