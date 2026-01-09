@@ -402,28 +402,42 @@ exports.createPost = async (req, res, next) => {
       };
       const simplifiedCategory = SIMPLIFIED_CATEGORIES[category] || category;
       
-      // تحديد نوع البحث (وظيفة أو موظفين)
+      // تحديد نوع البحث (وظيفة أو موظفين) - نتحقق من title أولاً
       let notificationTitle = '';
       let notificationBody = '';
       
-      if (displayPage === 'jobs') {
-        if (title && (title.includes('ابحث عن وظيفة') || title.includes('أبحث عن وظيفة'))) {
-          // شخص يبحث عن وظيفة
-          notificationTitle = `${simplifiedCategory}`;
-          notificationBody = `${userName} يبحث عن وظيفة`;
-        } else if (title && (title.includes('ابحث عن موظفين') || title.includes('أبحث عن موظفين'))) {
-          // صاحب عمل يبحث عن موظفين
-          notificationTitle = `${simplifiedCategory}`;
-          notificationBody = `${userName} يبحث عن موظفين`;
-        } else {
-          notificationTitle = `${simplifiedCategory}`;
-          notificationBody = `${userName} نشر إعلان وظيفة`;
-        }
-      } else if (displayPage === 'haraj') {
+      // التحقق من نوع المنشور بناءً على العنوان (title)
+      const isJobSeeker = title && (title.includes('ابحث عن وظيفة') || title.includes('أبحث عن وظيفة'));
+      const isEmployer = title && (title.includes('ابحث عن موظفين') || title.includes('أبحث عن موظفين'));
+      const isJobsPage = displayPage === 'jobs' || isJobSeeker || isEmployer;
+      const isHarajPage = displayPage === 'haraj';
+      
+      console.log('🔍 Notification Type Detection:');
+      console.log('   - title:', title);
+      console.log('   - isJobSeeker:', isJobSeeker);
+      console.log('   - isEmployer:', isEmployer);
+      console.log('   - isJobsPage:', isJobsPage);
+      console.log('   - isHarajPage:', isHarajPage);
+      
+      if (isJobSeeker) {
+        // شخص يبحث عن وظيفة
+        notificationTitle = `${simplifiedCategory}`;
+        notificationBody = `${userName} يبحث عن وظيفة`;
+      } else if (isEmployer) {
+        // صاحب عمل يبحث عن موظفين
+        notificationTitle = `${simplifiedCategory}`;
+        notificationBody = `${userName} يبحث عن موظفين`;
+      } else if (isJobsPage) {
+        // منشور وظيفة عام
+        notificationTitle = `${simplifiedCategory}`;
+        notificationBody = `${userName} نشر إعلان وظيفة`;
+      } else if (isHarajPage) {
+        // منشور حراج
         notificationTitle = `${simplifiedCategory}`;
         notificationBody = `${userName} نشر إعلان في الحراج`;
       } else {
-        notificationTitle = `منشور جديد`;
+        // منشور عام - لكن نظهر الفئة
+        notificationTitle = `${simplifiedCategory}`;
         notificationBody = `${userName} نشر محتوى جديد`;
       }
 
