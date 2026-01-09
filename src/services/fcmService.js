@@ -172,12 +172,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         originalTopic: topic
       },
       topic: cleanTopic,
-      // إعدادات Android
+      // إعدادات Android - مطابقة لقناة التطبيق
       android: {
         priority: 'high',
         notification: {
+          channelId: 'mehnati_pro_channel_v7',
           sound: 'notify',
-          channelId: 'fcm_default_channel',
           priority: 'high',
           clickAction: 'FCM_PLUGIN_ACTIVITY',
           defaultVibrateTimings: true
@@ -323,11 +323,12 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         timestamp: new Date().toISOString()
       },
       token: deviceToken,
+      // إعدادات Android - مطابقة لقناة التطبيق
       android: {
         priority: 'high',
         notification: {
+          channelId: 'mehnati_pro_channel_v7',
           sound: 'notify',
-          channelId: 'fcm_default_channel',
           priority: 'high',
           clickAction: 'FCM_PLUGIN_ACTIVITY'
         }
