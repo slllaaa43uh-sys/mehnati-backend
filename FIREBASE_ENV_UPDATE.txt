@@ -1,0 +1,136 @@
+═══════════════════════════════════════════════════════════════
+    🔥 تحديث متغيرات Firebase البيئية - دليل سريع
+═══════════════════════════════════════════════════════════════
+
+📋 الخطوات المطلوبة:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ الحصول على Service Account Key الجديد:
+   
+   🔗 افتح الرابط:
+   https://console.firebase.google.com/project/mehnati-d7ab9/settings/serviceaccounts/adminsdk
+   
+   📥 اضغط على "Generate new private key"
+   
+   💾 سيتم تنزيل ملف JSON
+
+
+2️⃣ تحديث متغيرات البيئة في الخادم:
+   
+   📝 افتح ملف .env في الخادم
+   
+   🔄 حدّث المتغيرات الثلاثة التالية:
+
+───────────────────────────────────────────────────────────────
+# ❌ OLD VALUES (احذف أو استبدل)
+FIREBASE_PROJECT_ID=mihnty-e94ca
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@mihnty-e94ca.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...(old key)...\n-----END PRIVATE KEY-----\n"
+
+# ✅ NEW VALUES (من ملف JSON المُنزّل)
+FIREBASE_PROJECT_ID=mehnati-d7ab9
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@mehnati-d7ab9.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...(new key from downloaded JSON)...\n-----END PRIVATE KEY-----\n"
+───────────────────────────────────────────────────────────────
+
+   ⚠️ ملاحظات مهمة:
+   
+   • FIREBASE_PROJECT_ID:
+     ✓ القيمة الجديدة: mehnati-d7ab9
+     ✓ انسخها من حقل "project_id" في ملف JSON
+   
+   • FIREBASE_CLIENT_EMAIL:
+     ✓ انسخها من حقل "client_email" في ملف JSON
+     ✓ يجب أن تنتهي بـ @mehnati-d7ab9.iam.gserviceaccount.com
+   
+   • FIREBASE_PRIVATE_KEY:
+     ✓ انسخها من حقل "private_key" في ملف JSON
+     ✓ يجب أن تكون محاطة بعلامات اقتباس مزدوجة "..."
+     ✓ يجب أن تحتوي على \n (وليس أسطر جديدة حقيقية)
+     ✓ مثال: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBAD...\n-----END PRIVATE KEY-----\n"
+
+
+3️⃣ إعادة تشغيل الخادم:
+   
+   🔄 نفّذ الأمر:
+   pm2 restart mehnati-backend
+   
+   # أو إذا كنت تستخدم npm:
+   npm run start
+
+
+4️⃣ التحقق من نجاح التحديث:
+   
+   📊 راقب logs الخادم:
+   pm2 logs mehnati-backend
+   
+   ✅ يجب أن ترى:
+   ========================================
+   ✅ Firebase Admin SDK تم تهيئته بنجاح
+   📬 خدمة FCM جاهزة لإرسال الإشعارات
+   ========================================
+
+═══════════════════════════════════════════════════════════════
+
+📝 مثال على كيفية استخراج القيم من ملف JSON:
+
+إذا كان محتوى الملف المُنزّل كالتالي:
+
+{
+  "type": "service_account",
+  "project_id": "mehnati-d7ab9",
+  "private_key_id": "abc123...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC...\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-xyz@mehnati-d7ab9.iam.gserviceaccount.com",
+  "client_id": "123456789",
+  ...
+}
+
+فإن المتغيرات تكون:
+
+FIREBASE_PROJECT_ID=mehnati-d7ab9
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xyz@mehnati-d7ab9.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC...\n-----END PRIVATE KEY-----\n"
+
+═══════════════════════════════════════════════════════════════
+
+⚠️ تحذيرات أمنية:
+
+🔒 لا تشارك ملف Service Account مع أحد
+🔒 لا تضعه في Git Repository
+🔒 احتفظ بنسخة احتياطية آمنة
+
+═══════════════════════════════════════════════════════════════
+
+❓ الأسئلة الشائعة:
+
+Q: هل أحتاج لتعديل كود Backend؟
+A: ❌ لا، الكود صحيح. فقط حدّث متغيرات البيئة.
+
+Q: هل يمكنني استخدام ملف JSON بدلاً من متغيرات البيئة؟
+A: ✅ نعم، ضع ملف باسم "firebase-service-account.json" في المجلد الرئيسي.
+
+Q: ما الفرق بين google-services.json و Service Account Key؟
+A: google-services.json للتطبيق فقط، Service Account Key للـ Backend.
+
+Q: هل يجب تحديث شيء آخر غير المتغيرات الثلاثة؟
+A: ❌ لا، فقط المتغيرات الثلاثة المذكورة أعلاه.
+
+═══════════════════════════════════════════════════════════════
+
+✅ Checklist:
+
+□ تنزيل Service Account Key الجديد من Firebase Console
+□ تحديث FIREBASE_PROJECT_ID في .env
+□ تحديث FIREBASE_CLIENT_EMAIL في .env
+□ تحديث FIREBASE_PRIVATE_KEY في .env
+□ إعادة تشغيل الخادم (pm2 restart)
+□ التحقق من logs (يجب أن يظهر "Firebase Admin SDK تم تهيئته بنجاح")
+□ اختبار إرسال إشعار من التطبيق
+
+═══════════════════════════════════════════════════════════════
+
+📞 إذا واجهت أي مشاكل، راجع الملف:
+   FIREBASE_MIGRATION_REPORT.md
+
+═══════════════════════════════════════════════════════════════

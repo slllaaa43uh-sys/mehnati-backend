@@ -30,9 +30,13 @@ const {
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const { getPostCounts } = require('../controllers/postCountController');
 
 // Public routes
 router.get('/', optionalAuth, getPosts);
+
+// Post counts for badges (must be before /:id)
+router.get('/counts', getPostCounts);
 
 // Shorts routes (must be before /:id to avoid conflicts)
 router.get('/shorts/for-you', optionalAuth, getShortsForYou);
