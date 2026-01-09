@@ -412,6 +412,7 @@ exports.createPost = async (req, res, next) => {
           type: type || 'general',
           displayPage: displayPage || 'home',
           userId: req.user.id,
+          creatorId: req.user.id, // معرف صاحب المنشور لاستثنائه من الإشعار
           postTitle: title || '' // عنوان المنشور لتحديد نوع الوظيفة
         }
       ).then(result => {
