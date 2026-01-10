@@ -402,14 +402,41 @@ exports.createPost = async (req, res, next) => {
       };
       const simplifiedCategory = SIMPLIFIED_CATEGORIES[category] || category;
       
-      // إنشاء عنوان ونص الإشعار - شكل بسيط
-      const notificationTitle = `منشور جديد - ${simplifiedCategory}`;
-      const notificationBody = `${userName} نشر إعلان جديد`;
+      // تحديد نوع الوظيفة (يبحث عن وظيفة / يبحث عن موظفين)
+      let jobTypeText = '';
+      if (title) {
+        if (title.includes('ابحث عن وظيفة') || title.includes('أبحث عن وظيفة')) {
+          jobTypeText = 'يبحث عن وظيفة';
+        } else if (title.includes('ابحث عن موظفين') || title.includes('أبحث عن موظفين')) {
+          jobTypeText = 'يبحث عن موظفين';
+        }
+      }
+      
+      // إنشاء عنوان ونص الإشعار - يظهر نوع الوظيفة وجزء من النص
+      const notificationTitle = `إعلان جديد - ${simplifiedCategory}`;
+      
+      // استخراج جزء من النص للإشعار (أول 80 حرف)
+      const contentPreview = finalContent ? finalContent.substring(0, 80).trim() : '';
+      
+      // بناء نص الإشعار
+      let notificationBody = '';
+      if (jobTypeText) {
+        // إذا كان منشور وظيفة: "أحمد يبحث عن وظيفة: نص المنشور..."
+        notificationBody = contentPreview 
+          ? `${userName} ${jobTypeText}: ${contentPreview}${finalContent.length > 80 ? '...' : ''}`
+          : `${userName} ${jobTypeText}`;
+      } else {
+        // إذا لم يكن وظيفة: "أحمد: نص المنشور..."
+        notificationBody = contentPreview 
+          ? `${userName}: ${contentPreview}${finalContent.length > 80 ? '...' : ''}`
+          : `${userName} نشر إعلان جديد`;
+      }
 
       console.log('📋 Notification Details:');
       console.log('   - User Name:', userName);
       console.log('   - Original Category:', category);
       console.log('   - Simplified Category:', simplifiedCategory);
+      console.log('   - Job Type:', jobTypeText || 'NOT A JOB POST');
       console.log('   - Notification Title:', notificationTitle);
       console.log('   - Notification Body:', notificationBody);
       console.log('🚀 Calling sendNotificationByCategory...');
