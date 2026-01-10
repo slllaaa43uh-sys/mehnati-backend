@@ -184,10 +184,34 @@ const uploadStoryMedia = async (buffer, originalName, mimeType) => {
   const isVideo = mimeType.startsWith('video/');
   
   if (isVideo) {
-    return uploadVideo(buffer, originalName, mimeType, {
-      folder: FOLDERS.STORIES,
-      generateThumbnail: false
-    });
+    // رفع الفيديو مباشرة بدون ضغط لتجنب مشاكل FFmpeg
+    const timestamp = Date.now();
+    const uniqueId = require('uuid').v4().split('-')[0];
+    const safeName = originalName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
+    const fileName = `${FOLDERS.STORIES}/${timestamp}_${uniqueId}_${safeName}.mp4`;
+    
+    // رفع مباشر إلى Backblaze B2
+    const uploadResult = await uploadFile(
+      buffer,
+      fileName,
+      mimeType
+    );
+    
+    console.log('📹 تم رفع فيديو القصة مباشرة (بدون ضغط):', uploadResult.url);
+    
+    return {
+      success: true,
+      file: {
+        url: uploadResult.url,
+        fileId: uploadResult.fileId,
+        fileName: uploadResult.fileName,
+        fileType: 'video',
+        contentType: mimeType,
+        originalSize: buffer.length,
+        compressedSize: buffer.length,
+        compressionRatio: 0
+      }
+    };
   } else {
     return uploadImage(buffer, originalName, mimeType, {
       folder: FOLDERS.STORIES,
