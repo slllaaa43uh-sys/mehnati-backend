@@ -474,7 +474,8 @@ exports.getPosts = async (req, res, next) => {
       displayPage,
       isShort,
       isFeatured,
-      userId
+      userId,
+      postType // فلتر حسب العنوان (ابحث عن وظيفة / ابحث عن موظفين)
     } = req.query;
 
     const query = { status: 'approved' };
@@ -506,6 +507,17 @@ exports.getPosts = async (req, res, next) => {
     if (isShort !== undefined) query.isShort = isShort === 'true';
     if (isFeatured !== undefined) query.isFeatured = isFeatured === 'true';
     if (userId) query.user = userId;
+    
+    // فلتر حسب نوع المنشور (ابحث عن وظيفة / ابحث عن موظفين)
+    if (postType) {
+      // استخدام regex للتعامل مع الاختلافات في الكتابة (ابحث/أبحث)
+      if (postType.includes('وظيفة')) {
+        query.title = { $regex: 'ابحث عن وظيفة|أبحث عن وظيفة', $options: 'i' };
+      } else if (postType.includes('موظفين')) {
+        query.title = { $regex: 'ابحث عن موظفين|أبحث عن موظفين', $options: 'i' };
+      }
+      console.log('Filtering by postType:', postType, '| Query title:', query.title);
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
