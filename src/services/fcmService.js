@@ -77,6 +77,192 @@ const CATEGORY_TO_TOPIC_MAP = {
 };
 
 /**
+ * ============================================
+ * CATEGORY TO CHANNEL MAPPING FOR ANDROID DEEP LINKING
+ * ============================================
+ * Maps category names to Android notification channel names
+ * All values are in English, lowercase, safe for Android Intent extras
+ */
+const CATEGORY_TO_CHANNEL_MAP = {
+  // ============ JOB CHANNELS ============
+  'سائق خاص': 'jobs_driver',
+  'driver': 'jobs_driver',
+  'حارس أمن': 'jobs_security',
+  'security': 'jobs_security',
+  'طباخ': 'jobs_cook',
+  'cook': 'jobs_cook',
+  'نجار': 'jobs_carpenter',
+  'carpenter': 'jobs_carpenter',
+  'كهربائي': 'jobs_electrician',
+  'electrician': 'jobs_electrician',
+  'plumber': 'jobs_plumber',
+  'سباك': 'jobs_plumber',
+  'cleaner': 'jobs_cleaner',
+  'عامل نظافة': 'jobs_cleaner',
+  'محاسب': 'jobs_accountant',
+  'accountant': 'jobs_accountant',
+  'مهندس مدني': 'jobs_engineer',
+  'engineer': 'jobs_engineer',
+  'طبيب/ممرض': 'jobs_medical',
+  'medical': 'jobs_medical',
+  'كاتب محتوى': 'jobs_writer',
+  'writer': 'jobs_writer',
+  'ميكانيكي': 'jobs_mechanic',
+  'mechanic': 'jobs_mechanic',
+  'بائع / كاشير': 'jobs_sales',
+  'sales': 'jobs_sales',
+  'مبرمج': 'jobs_programmer',
+  'programmer': 'jobs_programmer',
+  'مصمم جرافيك': 'jobs_designer',
+  'designer': 'jobs_designer',
+  'مترجم': 'jobs_translator',
+  'translator': 'jobs_translator',
+  'مدرس خصوصي': 'jobs_teacher',
+  'teacher': 'jobs_teacher',
+  'مدير مشاريع': 'jobs_manager',
+  'manager': 'jobs_manager',
+  'خدمة عملاء': 'jobs_support',
+  'support': 'jobs_support',
+  'مقدم طعام': 'jobs_waiter',
+  'waiter': 'jobs_waiter',
+  'توصيل': 'jobs_delivery',
+  'delivery': 'jobs_delivery',
+  'حلاق / خياط': 'jobs_barber',
+  'barber': 'jobs_barber',
+  'مزارع': 'jobs_farmer',
+  'farmer': 'jobs_farmer',
+  'وظائف أخرى': 'jobs_other',
+  'jobs_other': 'jobs_other',
+  
+  // ============ MARKET (HARAJ) CHANNELS ============
+  'سيارات': 'market_cars',
+  'cars': 'market_cars',
+  'trucks': 'market_trucks',
+  'شاحنات': 'market_trucks',
+  'electronics': 'market_electronics',
+  'إلكترونيات': 'market_electronics',
+  'أجهزة منزلية': 'market_electronics',
+  'أثاث ومفروشات': 'market_furniture',
+  'furniture': 'market_furniture',
+  'جوالات': 'market_mobile',
+  'mobile': 'market_mobile',
+  'عقارات': 'market_real_estate',
+  'real_estate': 'market_real_estate',
+  'services': 'market_services',
+  'خدمات': 'market_services',
+  'لابتوبات وكمبيوتر': 'market_electronics',
+  'كاميرات وتصوير': 'market_electronics',
+  'ألعاب فيديو': 'market_electronics',
+  'ملابس وموضة': 'market_fashion',
+  'ساعات ومجوهرات': 'market_jewelry',
+  'حيوانات أليفة': 'market_pets',
+  'طيور': 'market_pets',
+  'معدات ثقيلة': 'market_equipment',
+  'قطع غيار': 'market_parts',
+  'تحف ومقتنيات': 'market_antiques',
+  'كتب ومجلات': 'market_books',
+  'أدوات رياضية': 'market_sports',
+  'مستلزمات أطفال': 'market_kids',
+  'خيم وتخييم': 'market_camping',
+  'أرقام مميزة': 'market_numbers',
+  'نقل عفش': 'market_services',
+  'أدوات أخرى': 'market_other',
+  
+  // ============ GENERAL CONTENT CHANNELS ============
+  'post': 'general_posts',
+  'story': 'general_stories',
+  'video': 'general_videos',
+  'shorts': 'general_shorts',
+  'general': 'general_posts'
+};
+
+/**
+ * ============================================
+ * HELPER FUNCTION: Get Deep Link Data for Android
+ * ============================================
+ * Generates structured data payload for Android native deep linking
+ * All values are in English, lowercase, safe for Android Intent extras
+ * 
+ * @param {object} options - Options for generating deep link data
+ * @param {string} options.type - Main content type (job, market, post, story, video, shorts)
+ * @param {string} options.category - Category name (Arabic or English)
+ * @param {string} options.itemId - Unique identifier of the item
+ * @param {string} options.displayPage - Display page type
+ * @returns {object} - Structured data for Android deep linking
+ */
+const getDeepLinkData = (options = {}) => {
+  const { type, category, itemId, displayPage } = options;
+  
+  // Determine the main content type
+  let contentType = 'post';
+  if (displayPage === 'jobs' || type === 'job' || (category && CATEGORY_TO_TOPIC_MAP[category]?.startsWith('jobs_'))) {
+    contentType = 'job';
+  } else if (displayPage === 'haraj' || type === 'market' || (category && CATEGORY_TO_TOPIC_MAP[category]?.startsWith('haraj_'))) {
+    contentType = 'market';
+  } else if (type === 'story' || displayPage === 'stories') {
+    contentType = 'story';
+  } else if (type === 'video' || displayPage === 'videos') {
+    contentType = 'video';
+  } else if (type === 'shorts' || displayPage === 'shorts') {
+    contentType = 'shorts';
+  } else if (type === 'post' || displayPage === 'home') {
+    contentType = 'post';
+  }
+  
+  // Get English category name (lowercase)
+  let englishCategory = 'general';
+  if (category) {
+    // Check if category is in the topic map
+    const topicName = CATEGORY_TO_TOPIC_MAP[category];
+    if (topicName) {
+      // Extract category from topic name (e.g., 'jobs_driver' -> 'driver')
+      const parts = topicName.split('_');
+      if (parts.length > 1) {
+        englishCategory = parts.slice(1).join('_');
+      } else {
+        englishCategory = topicName;
+      }
+    } else {
+      // If not in map, convert to safe English string
+      englishCategory = category
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+      if (!englishCategory) {
+        englishCategory = 'general';
+      }
+    }
+  }
+  
+  // Get Android notification channel
+  let channel = CATEGORY_TO_CHANNEL_MAP[category] || CATEGORY_TO_CHANNEL_MAP[englishCategory];
+  if (!channel) {
+    // Generate channel based on content type
+    if (contentType === 'job') {
+      channel = 'jobs_other';
+    } else if (contentType === 'market') {
+      channel = 'market_other';
+    } else if (contentType === 'story') {
+      channel = 'general_stories';
+    } else if (contentType === 'video') {
+      channel = 'general_videos';
+    } else if (contentType === 'shorts') {
+      channel = 'general_shorts';
+    } else {
+      channel = 'general_posts';
+    }
+  }
+  
+  return {
+    type: contentType,
+    category: englishCategory,
+    itemId: String(itemId || ''),
+    channel: channel
+  };
+};
+
+/**
  * Convert Arabic category name to English topic name
  * @param {string} category - Arabic category name
  * @param {string} type - Optional type (seeker/employer for jobs)
@@ -160,6 +346,16 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     // استخراج صورة المنشور للإشعارات الغنية (مثل يوتيوب)
     const postImage = data.postImage || null;
     
+    // Generate deep link data for Android
+    const deepLinkData = getDeepLinkData({
+      type: data.type || 'post',
+      category: data.category || topic,
+      itemId: data.postId || data.itemId || '',
+      displayPage: data.displayPage || 'home'
+    });
+    
+    console.log('🔗 Deep Link Data:', JSON.stringify(deepLinkData, null, 2));
+    
     // إنشاء رسالة الإشعار
     const message = {
       notification: {
@@ -169,12 +365,18 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         ...(postImage && { imageUrl: postImage })
       },
       data: {
+        // Existing data fields (converted to strings)
         ...Object.fromEntries(
           Object.entries(data).map(([k, v]) => [k, String(v)])
         ),
         timestamp: new Date().toISOString(),
         topic: cleanTopic,
-        originalTopic: topic
+        originalTopic: topic,
+        // Android deep linking data (all lowercase English)
+        type: deepLinkData.type,
+        category: deepLinkData.category,
+        itemId: deepLinkData.itemId,
+        channel: deepLinkData.channel
       },
       topic: cleanTopic,
       // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
@@ -328,6 +530,16 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     // استخراج صورة المنشور للإشعارات الغنية
     const postImage = data.postImage || null;
     
+    // Generate deep link data for Android
+    const deepLinkData = getDeepLinkData({
+      type: data.type || 'post',
+      category: data.category || 'general',
+      itemId: data.postId || data.itemId || '',
+      displayPage: data.displayPage || 'home'
+    });
+    
+    console.log('🔗 Deep Link Data:', JSON.stringify(deepLinkData, null, 2));
+    
     const message = {
       notification: {
         title: title,
@@ -336,10 +548,16 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         ...(postImage && { imageUrl: postImage })
       },
       data: {
+        // Existing data fields (converted to strings)
         ...Object.fromEntries(
           Object.entries(data).map(([k, v]) => [k, String(v)])
         ),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        // Android deep linking data (all lowercase English)
+        type: deepLinkData.type,
+        category: deepLinkData.category,
+        itemId: deepLinkData.itemId,
+        channel: deepLinkData.channel
       },
       token: deviceToken,
       // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
@@ -665,5 +883,7 @@ module.exports = {
   unsubscribeFromTopic,
   categoryToTopic,
   getCategoryTopicMap,
-  CATEGORY_TO_TOPIC_MAP
+  getDeepLinkData,
+  CATEGORY_TO_TOPIC_MAP,
+  CATEGORY_TO_CHANNEL_MAP
 };
