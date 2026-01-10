@@ -247,10 +247,14 @@ exports.getRecommendedShorts = async (userId, page = 1, limit = 10) => {
     }
   }
 
-  // 2. جلب المرشحين - بدون حد أقصى لضمان عرض جميع الفيديوهات
+  // 2. جلب المرشحين - مع تحديد الحقول المطلوبة فقط لتوفير الذاكرة
+  // تحديد عدد المرشحين لتجنب استهلاك الذاكرة
+  const maxCandidates = Math.min(500, limitNum * 20); // حد أقصى 500 مرشح
   const candidates = await Post.find(candidateQuery)
+    .select('user media coverImage content attractiveTitle views reactions comments shares hiddenBy createdAt recommendation category privacy allowComments allowDownloads allowRepost repostsCount isRepost originalPost')
     .populate('user', 'name avatar isVerified')
     .sort({ createdAt: -1 })
+    .limit(maxCandidates)
     .lean();
 
   // 3. حساب التقييم والترتيب لكل فيديو

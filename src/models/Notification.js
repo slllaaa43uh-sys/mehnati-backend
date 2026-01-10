@@ -21,6 +21,13 @@ const mongoose = require('mongoose');
  * - short_comment_like: أعجب بتعليقك (في الشورتس)
  * - short_reply_like: أعجب بردك (في الشورتس)
  * - short_repost: أعاد نشر فيديوهك
+ * 
+ * إشعارات القنوات والإعلانات (مثل يوتيوب):
+ * - channel_post: منشور جديد من قناة متابَعة
+ * - new_ad: إعلان جديد في تصنيف متابَع (مع صورة وجزء من النص)
+ * - story_view: شاهد قصتك
+ * 
+ * ملاحظة: يمكن للإشعارات أن تحتوي على صورة المنشور في metadata.postImage
  */
 
 const notificationSchema = new mongoose.Schema({
@@ -54,7 +61,11 @@ const notificationSchema = new mongoose.Schema({
       'short_reply',        // رد على تعليقك (في الشورتس)
       'short_comment_like', // أعجب بتعليقك (في الشورتس)
       'short_reply_like',   // أعجب بردك (في الشورتس)
-      'short_repost'        // أعاد نشر فيديوهك
+      'short_repost',       // أعاد نشر فيديوهك
+      // إشعارات القنوات والإعلانات الجديدة (مثل يوتيوب)
+      'channel_post',       // منشور جديد من قناة متابَعة
+      'new_ad',             // إعلان جديد في تصنيف متابَع
+      'story_view'          // شاهد قصتك
     ],
     required: true
   },
@@ -83,7 +94,11 @@ const notificationSchema = new mongoose.Schema({
     // بيانات الشورتس
     shortTitle: String,       // عنوان الفيديو القصير
     shortThumbnail: String,   // صورة مصغرة للفيديو
-    isShort: Boolean          // هل هو شورتس
+    isShort: Boolean,         // هل هو شورتس
+    // بيانات صورة المنشور (للإشعارات الغنية مثل يوتيوب)
+    postImage: String,        // رابط صورة المنشور أو الصورة المصغرة للفيديو
+    postTitle: String,        // عنوان المنشور
+    category: String          // تصنيف المنشور
   },
   // حالة القراءة
   isRead: {

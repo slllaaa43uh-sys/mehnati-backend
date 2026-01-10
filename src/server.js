@@ -49,29 +49,43 @@ initializeB2().catch(err => {
 // Initialize Firebase Admin SDK for FCM
 initializeFirebase();
 
-// Setup recommendation cron job (updates scores every 60 minutes instead of 30 to reduce memory usage)
-setupCronJob(60);
+// Setup recommendation cron job (updates scores every 120 minutes to reduce memory usage)
+// تم زيادة الفترة من 60 إلى 120 دقيقة لتقليل استهلاك الذاكرة
+setupCronJob(120);
 
 // Setup featured posts cron job (runs every hour)
 setupFeaturedCron();
 
-// مراقبة استخدام الذاكرة
+// مراقبة استخدام الذاكرة - محسنة للكشف المبكر عن الاستنزاف
 const logMemoryUsage = () => {
   const used = process.memoryUsage();
-  console.log(`📊 استخدام الذاكرة: RSS=${Math.round(used.rss / 1024 / 1024)}MB, Heap=${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`);
+  const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024);
+  const rssMB = Math.round(used.rss / 1024 / 1024);
+  const externalMB = Math.round(used.external / 1024 / 1024);
   
-  // تحذير إذا تجاوزت الذاكرة 400MB
-  if (used.heapUsed > 400 * 1024 * 1024) {
+  console.log(`📊 استخدام الذاكرة: RSS=${rssMB}MB, Heap=${heapUsedMB}/${heapTotalMB}MB, External=${externalMB}MB`);
+  
+  // تحذير إذا تجاوزت الذاكرة 250MB (تم تقليلها من 400MB)
+  if (used.heapUsed > 250 * 1024 * 1024) {
     console.warn('⚠️ تحذير: استخدام الذاكرة مرتفع!');
     if (global.gc) {
       console.log('🧹 تشغيل Garbage Collector...');
       global.gc();
+      // تسجيل الذاكرة بعد التنظيف
+      const afterGC = process.memoryUsage();
+      console.log(`✅ بعد التنظيف: Heap=${Math.round(afterGC.heapUsed / 1024 / 1024)}MB`);
     }
+  }
+  
+  // تحذير حرج إذا تجاوزت 400MB
+  if (used.heapUsed > 400 * 1024 * 1024) {
+    console.error('🚨 تحذير حرج: استخدام الذاكرة مرتفع جداً!');
   }
 };
 
-// تسجيل استخدام الذاكرة كل 5 دقائق
-setInterval(logMemoryUsage, 5 * 60 * 1000);
+// تسجيل استخدام الذاكرة كل 3 دقائق (تم تقليلها من 5 دقائق)
+setInterval(logMemoryUsage, 3 * 60 * 1000);
 logMemoryUsage(); // تسجيل فوري عند البدء
 
 // Middleware - تكوين helmet مع السماح بتحميل الوسائط من Backblaze B2
@@ -216,6 +230,11 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   // Initialize Socket.IO after server starts
   initializeSocket(server);
+  
+  // زيادة مهلة الخادم إلى 5 دقائق (300 ثانية) لدعم رفع الملفات على الشبكات البطيئة
+  server.timeout = 300000; // 5 minutes
+  server.keepAliveTimeout = 300000; // 5 minutes
+  server.headersTimeout = 310000; // 5 minutes + 10 seconds
   console.log(`
 ╔════════════════════════════════════════════════════╗
 ║     🚀 مهنتي لي API Server v2.0                    ║

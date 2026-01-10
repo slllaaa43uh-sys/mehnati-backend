@@ -6,30 +6,31 @@ const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
 // إعدادات الضغط المحسنة - جودة متوازنة للصور (1080p) والفيديو (720p)
+// تم تحسينها لتوفير الذاكرة
 const COMPRESSION_CONFIG = {
   image: {
     // إعدادات ضغط الصور - جودة محسنة ومتوازنة
     maxWidth: 1080,           // عرض متوسط لجودة أفضل
     maxHeight: 1920,          // ارتفاع متوسط
-    quality: 65,              // جودة متوسطة لتوازن بين الحجم والوضوح
+    quality: 60,              // جودة متوسطة لتوفير الذاكرة (تم تقليلها من 65)
     format: 'webp',           // تنسيق WebP الأصغر حجماً
-    avatarSize: 200,          // حجم معقول لصور الملف الشخصي
-    avatarQuality: 70,        // جودة جيدة للأفاتار
+    avatarSize: 150,          // حجم معقول لصور الملف الشخصي (تم تقليله من 200)
+    avatarQuality: 65,        // جودة جيدة للأفاتار (تم تقليلها من 70)
     storyMaxWidth: 720,       // عرض القصص محسن
-    storyQuality: 68,         // جودة جيدة للقصص
+    storyQuality: 60,         // جودة جيدة للقصص (تم تقليلها من 68)
     // إعدادات إضافية للضغط المتوازن
-    thumbnailWidth: 300,      // عرض الصور المصغرة
-    thumbnailQuality: 60,     // جودة معقولة للصور المصغرة
-    webpEffort: 4,            // جهد ضغط متوازن WebP
-    mozjpegQuality: 65        // جودة معقولة لـ JPEG
+    thumbnailWidth: 250,      // عرض الصور المصغرة (تم تقليله من 300)
+    thumbnailQuality: 55,     // جودة معقولة للصور المصغرة (تم تقليلها من 60)
+    webpEffort: 3,            // جهد ضغط متوازن WebP (تم تقليله من 4 لتوفير الذاكرة)
+    mozjpegQuality: 60        // جودة معقولة لـ JPEG (تم تقليلها من 65)
   },
   video: {
-    // إعدادات ضغط الفيديو - جودة 720p
+    // إعدادات ضغط الفيديو - جودة 720p مع توفير الذاكرة
     maxWidth: 1280,           // عرض 720p
     maxHeight: 720,           // ارتفاع 720p
-    crf: 28,                  // ضغط متوازن لجودة جيدة
-    preset: 'medium',         // توازن بين السرعة والجودة
-    audioBitrate: '128k',     // معدل بت صوت جيد
+    crf: 30,                  // ضغط أعلى لتوفير الذاكرة (تم زيادته من 28)
+    preset: 'fast',           // سرعة أعلى لتقليل استخدام الذاكرة (تم تغييره من medium)
+    audioBitrate: '96k',      // معدل بت صوت مقبول (تم تقليله من 128k)
     maxDuration: 60,          // الحد الأقصى للمدة بالثواني
     format: 'mp4',            // تنسيق الإخراج
     videoCodec: 'libx264',    // ترميز الفيديو
@@ -197,8 +198,9 @@ const compressVideo = async (inputBuffer, options = {}) => {
     await fs.writeFile(inputPath, inputBuffer);
     inputBuffer = null;
     
-    // أمر FFmpeg للضغط - صيغة مبسطة ومستقرة
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" -vf "scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,pad=${maxWidth}:${maxHeight}:(ow-iw)/2:(oh-ih)/2,format=${config.pixelFormat}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 2 -ar 44100 -movflags +faststart -y "${outputPath}"`;
+    // أمر FFmpeg للضغط - صيغة مبسطة ومستقرة مع تحديد استخدام الذاكرة
+    // إضافة -threads 1 لتقليل استخدام الذاكرة
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,format=${config.pixelFormat}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 1 -ar 22050 -movflags +faststart -y "${outputPath}"`;
     
     await new Promise((resolve, reject) => {
       exec(ffmpegCommand, { 
@@ -332,27 +334,36 @@ const generateImageThumbnail = async (imageBuffer) => {
 };
 
 /**
- * تنظيف الملفات المؤقتة القديمة
+ * تنظيف الملفات المؤقتة القديمة - محسن لتوفير الذاكرة
  */
 const cleanupTempFiles = async () => {
   const tempDir = os.tmpdir();
   try {
     const files = await fs.readdir(tempDir);
     const now = Date.now();
-    const maxAge = 30 * 60 * 1000;
+    const maxAge = 10 * 60 * 1000; // تم تقليلها من 30 إلى 10 دقائق
+    let deletedCount = 0;
     
     for (const file of files) {
-      if (file.startsWith('input_') || file.startsWith('output_') || file.startsWith('thumb_')) {
+      if (file.startsWith('input_') || file.startsWith('output_') || file.startsWith('thumb_') || file.startsWith('ffmpeg')) {
         const filePath = path.join(tempDir, file);
         try {
           const stats = await fs.stat(filePath);
           if (now - stats.mtimeMs > maxAge) {
             await fs.unlink(filePath);
-            console.log(`🧹 تم حذف ملف مؤقت قديم: ${file}`);
+            deletedCount++;
           }
         } catch (e) {
           // تجاهل الأخطاء
         }
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`🧹 تم حذف ${deletedCount} ملف مؤقت`);
+      // تشغيل GC بعد التنظيف
+      if (global.gc) {
+        global.gc();
       }
     }
   } catch (error) {
@@ -360,7 +371,10 @@ const cleanupTempFiles = async () => {
   }
 };
 
-setInterval(cleanupTempFiles, 15 * 60 * 1000);
+// تشغيل التنظيف كل 5 دقائق (تم تقليلها من 15 دقيقة)
+setInterval(cleanupTempFiles, 5 * 60 * 1000);
+// تشغيل فوري عند بدء الخادم
+cleanupTempFiles();
 
 module.exports = {
   compressImage,

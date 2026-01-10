@@ -157,11 +157,16 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     console.log('   - Converted:', cleanTopic);
     console.log('   - Topic exists in map:', CATEGORY_TO_TOPIC_MAP[topic] ? 'YES' : 'NO (generated)');
 
+    // استخراج صورة المنشور للإشعارات الغنية (مثل يوتيوب)
+    const postImage = data.postImage || null;
+    
     // إنشاء رسالة الإشعار
     const message = {
       notification: {
         title: title,
-        body: body
+        body: body,
+        // إضافة الصورة إلى الإشعار (مثل يوتيوب)
+        ...(postImage && { imageUrl: postImage })
       },
       data: {
         ...Object.fromEntries(
@@ -172,7 +177,7 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         originalTopic: topic
       },
       topic: cleanTopic,
-      // إعدادات Android - مطابقة لقناة التطبيق
+      // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
       android: {
         priority: 'high',
         notification: {
@@ -180,19 +185,28 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
           sound: 'notify',
           priority: 'high',
           clickAction: 'FCM_PLUGIN_ACTIVITY',
-          defaultVibrateTimings: true
+          defaultVibrateTimings: true,
+          // إضافة الصورة للإشعارات الغنية على Android
+          ...(postImage && { imageUrl: postImage })
         }
       },
-      // إعدادات iOS
+      // إعدادات iOS مع دعم الصور
       apns: {
         payload: {
           aps: {
             sound: 'default',
-            badge: 1
+            badge: 1,
+            'mutable-content': 1 // لدعم الإشعارات الغنية على iOS
           }
+        },
+        fcm_options: {
+          // إضافة الصورة للإشعارات الغنية على iOS
+          ...(postImage && { image: postImage })
         }
       }
     };
+    
+    console.log('   - Post Image in notification:', postImage || 'NONE');
 
     console.log('📦 Message Payload:');
     console.log(JSON.stringify(message, null, 2));
@@ -311,10 +325,15 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
 
     const admin = getFirebaseAdmin();
 
+    // استخراج صورة المنشور للإشعارات الغنية
+    const postImage = data.postImage || null;
+    
     const message = {
       notification: {
         title: title,
-        body: body
+        body: body,
+        // إضافة الصورة إلى الإشعار (مثل يوتيوب)
+        ...(postImage && { imageUrl: postImage })
       },
       data: {
         ...Object.fromEntries(
@@ -323,22 +342,29 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         timestamp: new Date().toISOString()
       },
       token: deviceToken,
-      // إعدادات Android - مطابقة لقناة التطبيق
+      // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
       android: {
         priority: 'high',
         notification: {
           channelId: 'mehnati_pro_channel_v7',
           sound: 'notify',
           priority: 'high',
-          clickAction: 'FCM_PLUGIN_ACTIVITY'
+          clickAction: 'FCM_PLUGIN_ACTIVITY',
+          // إضافة الصورة للإشعارات الغنية على Android
+          ...(postImage && { imageUrl: postImage })
         }
       },
       apns: {
         payload: {
           aps: {
             sound: 'default',
-            badge: 1
+            badge: 1,
+            'mutable-content': 1 // لدعم الإشعارات الغنية على iOS
           }
+        },
+        fcm_options: {
+          // إضافة الصورة للإشعارات الغنية على iOS
+          ...(postImage && { image: postImage })
         }
       }
     };

@@ -414,6 +414,28 @@ exports.createPost = async (req, res, next) => {
       console.log('   - Notification Body:', notificationBody);
       console.log('🚀 Calling sendNotificationByCategory...');
 
+      // استخراج صورة المنشور (للإشعارات الغنية مثل يوتيوب)
+      let postImage = null;
+      if (post.media && post.media.length > 0) {
+        // إذا كان هناك صورة أو صورة مصغرة للفيديو
+        const firstMedia = post.media[0];
+        if (firstMedia.type === 'image') {
+          postImage = firstMedia.url;
+        } else if (firstMedia.type === 'video' && firstMedia.thumbnail) {
+          postImage = firstMedia.thumbnail;
+        }
+      }
+      // إذا كان هناك غلاف مخصص للفيديو
+      if (!postImage && post.coverImage && post.coverImage.url) {
+        postImage = post.coverImage.url;
+      }
+
+      // استخراج جزء من النص (أول 100 حرف)
+      const postContentPreview = finalContent ? finalContent.substring(0, 100) + (finalContent.length > 100 ? '...' : '') : '';
+
+      console.log('   - Post Image:', postImage || 'NO IMAGE');
+      console.log('   - Content Preview:', postContentPreview.substring(0, 50) + '...');
+
       // إرسال الإشعار بشكل غير متزامن (لا ننتظر النتيجة)
       // نمرر postTitle لتحديد نوع الوظيفة (seeker/employer)
       sendNotificationByCategory(
@@ -426,7 +448,11 @@ exports.createPost = async (req, res, next) => {
           displayPage: displayPage || 'home',
           userId: req.user.id,
           creatorId: req.user.id, // معرف صاحب المنشور لاستثنائه من الإشعار
-          postTitle: title || '' // عنوان المنشور لتحديد نوع الوظيفة
+          postTitle: title || '', // عنوان المنشور لتحديد نوع الوظيفة
+          // بيانات إضافية للإشعارات الغنية (مثل يوتيوب)
+          postImage: postImage || '', // صورة المنشور
+          postContent: postContentPreview, // جزء من النص
+          category: category // التصنيف
         }
       ).then(result => {
         console.log('========================================');

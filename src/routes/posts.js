@@ -32,6 +32,14 @@ const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { getPostCounts } = require('../controllers/postCountController');
 
+// Middleware لزيادة مهلة الطلب إلى 5 دقائق لرفع الملفات (للشبكات البطيئة)
+const extendTimeout = (req, res, next) => {
+  // 5 دقائق = 300000 مللي ثانية
+  req.setTimeout(300000);
+  res.setTimeout(300000);
+  next();
+};
+
 // Public routes
 router.get('/', optionalAuth, getPosts);
 
@@ -51,7 +59,7 @@ router.get('/user/:userId', optionalAuth, getUserPosts);
 router.get('/:id', optionalAuth, getPost);
 
 // Protected routes
-router.post('/', protect, upload.media, createPost);
+router.post('/', protect, extendTimeout, upload.media, createPost);
 router.put('/:id', protect, updatePost);
 router.delete('/:id', protect, deletePost);
 
