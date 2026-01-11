@@ -346,6 +346,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     // استخراج صورة المنشور للإشعارات الغنية (مثل يوتيوب)
     const postImage = data.postImage || null;
     
+    // استخراج بيانات المستخدم للإشعار (مثل واتساب)
+    const userAvatar = data.userAvatar || null;
+    const userInitial = data.userInitial || '';
+    const userName = data.userName || '';
+    const url = data.url || '';
+    
     // Generate deep link data for Android
     const deepLinkData = getDeepLinkData({
       type: data.type || 'post',
@@ -376,7 +382,13 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         type: deepLinkData.type,
         category: deepLinkData.category,
         itemId: deepLinkData.itemId,
-        channel: deepLinkData.channel
+        channel: deepLinkData.channel,
+        // رابط مباشر للانتقال (Deep Link URL)
+        url: url,
+        // بيانات صورة المستخدم للإشعار (مثل واتساب)
+        userAvatar: userAvatar || '',
+        userInitial: userInitial,
+        userName: userName
       },
       topic: cleanTopic,
       // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
@@ -409,6 +421,10 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     };
     
     console.log('   - Post Image in notification:', postImage || 'NONE');
+    console.log('   - User Avatar:', userAvatar || 'NONE');
+    console.log('   - User Initial:', userInitial || 'NONE');
+    console.log('   - User Name:', userName || 'NONE');
+    console.log('   - URL:', url || 'NONE');
 
     console.log('📦 Message Payload:');
     console.log(JSON.stringify(message, null, 2));
@@ -530,6 +546,12 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     // استخراج صورة المنشور للإشعارات الغنية
     const postImage = data.postImage || null;
     
+    // استخراج بيانات المستخدم للإشعار (مثل واتساب)
+    const userAvatar = data.userAvatar || null;
+    const userInitial = data.userInitial || '';
+    const userName = data.userName || '';
+    const url = data.url || '';
+    
     // Generate deep link data for Android
     const deepLinkData = getDeepLinkData({
       type: data.type || 'post',
@@ -557,7 +579,13 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         type: deepLinkData.type,
         category: deepLinkData.category,
         itemId: deepLinkData.itemId,
-        channel: deepLinkData.channel
+        channel: deepLinkData.channel,
+        // رابط مباشر للانتقال (Deep Link URL)
+        url: url,
+        // بيانات صورة المستخدم للإشعار (مثل واتساب)
+        userAvatar: userAvatar || '',
+        userInitial: userInitial,
+        userName: userName
       },
       token: deviceToken,
       // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور

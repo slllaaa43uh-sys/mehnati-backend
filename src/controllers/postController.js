@@ -384,6 +384,11 @@ exports.createPost = async (req, res, next) => {
       // اسم المستخدم للإشعار
       const userName = post.user?.name || req.user?.name || 'مستخدم';
       
+      // صورة المستخدم (avatar) للإشعار - مثل واتساب
+      const userAvatar = post.user?.avatar || null;
+      // أول حرف من اسم المستخدم (في حالة عدم وجود صورة)
+      const userInitial = userName ? userName.charAt(0).toUpperCase() : 'م';
+      
       // تبسيط اسم الفئة (سائق بدلاً من سائق خاص)
       const SIMPLIFIED_CATEGORIES = {
         'سائق خاص': 'سائق',
@@ -479,7 +484,18 @@ exports.createPost = async (req, res, next) => {
           // بيانات إضافية للإشعارات الغنية (مثل يوتيوب)
           postImage: postImage || '', // صورة المنشور
           postContent: postContentPreview, // جزء من النص
-          category: category // التصنيف
+          category: category, // التصنيف
+          // ============================================
+          // بيانات Deep Linking للتطبيق (Android/iOS)
+          // ============================================
+          url: `/your-path`, // رابط مباشر للانتقال
+          itemId: post._id.toString(), // معرف العنصر
+          // ============================================
+          // بيانات صورة المستخدم للإشعار (مثل واتساب)
+          // ============================================
+          userAvatar: userAvatar || '', // صورة المستخدم
+          userInitial: userInitial, // أول حرف من اسم المستخدم
+          userName: userName // اسم المستخدم
         }
       ).then(result => {
         console.log('========================================');
