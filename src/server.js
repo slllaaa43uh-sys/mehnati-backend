@@ -132,12 +132,22 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration updated to allow Android WebView (file:// and null origins) and reflect origin
+// CORS configuration updated to allow Android WebView (file:// and null origins), Capacitor, and reflect origin
+const allowedOrigins = [
+  "https://mihntyl.netlify.app",  // Web URL
+  "https://localhost",            // Android Capacitor
+  "capacitor://localhost"         // iOS Capacitor
+];
+
 app.use(cors({
   origin: function(origin, callback){
     // Allow requests with no origin (e.g., local files in Android WebView report origin as null)
     // Also explicitly allow 'null' and file:// origins
     if (!origin || origin === 'null' || (typeof origin === 'string' && origin.startsWith('file://'))) {
+      return callback(null, true);
+    }
+    // Allow Capacitor origins (Android and iOS)
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     // For other origins, reflect the origin (allow). If you want to restrict, add checks here.
