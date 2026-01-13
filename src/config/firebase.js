@@ -10,11 +10,55 @@ const fs = require('fs');
  * لإرسال الإشعارات عبر FCM (Firebase Cloud Messaging)
  * 
  * يدعم طريقتين للإعداد:
- * 1. ملف Service Account JSON (للتطوير المحلي)
- * 2. متغيرات البيئة (للخوادم الإنتاجية) - الطريقة الموصى بها
+ * 1. متغيرات البيئة (للخوادم الإنتاجية) - الطريقة الموصى بها
+ * 2. ملف Service Account JSON (للتطوير المحلي)
  */
 
 let firebaseInitialized = false;
+
+/**
+ * معالجة المفتاح الخاص من متغيرات البيئة
+ * يدعم عدة صيغ للمفتاح الخاص
+ */
+const processPrivateKey = (privateKey) => {
+  if (!privateKey) return null;
+  
+  let processedKey = privateKey;
+  
+  // إزالة علامات التنصيص إذا كانت موجودة في البداية والنهاية
+  if ((processedKey.startsWith('"') && processedKey.endsWith('"')) ||
+      (processedKey.startsWith("'") && processedKey.endsWith("'"))) {
+    processedKey = processedKey.slice(1, -1);
+  }
+  
+  // تحويل \\n إلى \n (في حالة الـ escape المزدوج)
+  processedKey = processedKey.replace(/\\\\n/g, '\n');
+  
+  // تحويل \n النصية إلى أسطر جديدة حقيقية
+  processedKey = processedKey.replace(/\\n/g, '\n');
+  
+  // التأكد من وجود سطر جديد في نهاية المفتاح
+  if (!processedKey.endsWith('\n')) {
+    processedKey = processedKey + '\n';
+  }
+  
+  return processedKey;
+};
+
+/**
+ * محاولة تحليل المفتاح كـ JSON (في حالة تمرير كائن JSON كامل)
+ */
+const tryParseAsJSON = (value) => {
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch (e) {
+    // ليس JSON، نتجاهل الخطأ
+  }
+  return null;
+};
 
 /**
  * تهيئة Firebase Admin SDK
@@ -35,12 +79,16 @@ const initializeFirebase = () => {
     let credential;
 
     // ============================================
-    // Check environment variables
+    // طباعة معلومات التشخيص
     // ============================================
     console.log('📋 Checking Firebase Environment Variables:');
     console.log('   - FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? '✓ SET (' + process.env.FIREBASE_PROJECT_ID + ')' : '✗ NOT SET');
     console.log('   - FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL ? '✓ SET (' + process.env.FIREBASE_CLIENT_EMAIL + ')' : '✗ NOT SET');
     console.log('   - FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY ? '✓ SET (length: ' + process.env.FIREBASE_PRIVATE_KEY.length + ' chars)' : '✗ NOT SET');
+    
+    // طباعة مسار ملف .env للتشخيص
+    console.log('📂 Current Working Directory:', process.cwd());
+    console.log('📂 __dirname:', __dirname);
 
     // ============================================
     // الطريقة 1: استخدام متغيرات البيئة (للخوادم الإنتاجية)
@@ -51,14 +99,19 @@ const initializeFirebase = () => {
       
       console.log('🔐 استخدام إعدادات Firebase من متغيرات البيئة...');
       
-      // تحويل \n إلى أسطر جديدة حقيقية في المفتاح الخاص
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+      // معالجة المفتاح الخاص
+      const privateKey = processPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
       
       console.log('🔑 Private Key Processing:');
       console.log('   - Original length:', process.env.FIREBASE_PRIVATE_KEY.length);
-      console.log('   - Processed length:', privateKey.length);
-      console.log('   - Starts with "-----BEGIN PRIVATE KEY-----":', privateKey.startsWith('-----BEGIN PRIVATE KEY-----') ? '✓ YES' : '✗ NO');
-      console.log('   - Ends with "-----END PRIVATE KEY-----":', privateKey.trim().endsWith('-----END PRIVATE KEY-----\n') || privateKey.trim().endsWith('-----END PRIVATE KEY-----') ? '✓ YES' : '✗ NO');
+      console.log('   - Processed length:', privateKey ? privateKey.length : 0);
+      console.log('   - Starts with "-----BEGIN PRIVATE KEY-----":', privateKey && privateKey.startsWith('-----BEGIN PRIVATE KEY-----') ? '✓ YES' : '✗ NO');
+      console.log('   - Ends with "-----END PRIVATE KEY-----":', privateKey && (privateKey.trim().endsWith('-----END PRIVATE KEY-----\n') || privateKey.trim().endsWith('-----END PRIVATE KEY-----')) ? '✓ YES' : '✗ NO');
+      
+      // طباعة أول 50 حرف للتشخيص (بدون كشف المفتاح الكامل)
+      if (privateKey) {
+        console.log('   - First 50 chars:', privateKey.substring(0, 50) + '...');
+      }
       
       try {
         credential = admin.credential.cert({
@@ -69,6 +122,7 @@ const initializeFirebase = () => {
         console.log('✅ تم إنشاء credential من متغيرات البيئة');
       } catch (certError) {
         console.error('❌ Error creating credential from env vars:', certError.message);
+        console.error('   - Error Code:', certError.code || 'N/A');
         throw certError;
       }
 
@@ -80,16 +134,34 @@ const initializeFirebase = () => {
     // الطريقة 2: استخدام ملف JSON (للتطوير المحلي)
     // ============================================
     else {
-      console.log('📄 محاولة تحميل ملف firebase-service-account.json...');
+      console.log('📄 متغيرات البيئة غير مكتملة، محاولة تحميل ملف firebase-service-account.json...');
       
-      const serviceAccountPath = path.join(__dirname, '../../firebase-service-account.json');
+      // محاولة عدة مسارات للملف
+      const possiblePaths = [
+        path.join(process.cwd(), 'firebase-service-account.json'),
+        path.join(__dirname, '../../firebase-service-account.json'),
+        path.join(__dirname, '../firebase-service-account.json'),
+        '/root/mehnati-backend/firebase-service-account.json'
+      ];
       
-      console.log('📂 Service Account Path:', serviceAccountPath);
-      console.log('📂 File exists:', fs.existsSync(serviceAccountPath) ? '✓ YES' : '✗ NO');
+      let serviceAccount = null;
+      let foundPath = null;
       
-      try {
-        const serviceAccount = require(serviceAccountPath);
-        
+      for (const filePath of possiblePaths) {
+        console.log(`📂 Checking path: ${filePath} - ${fs.existsSync(filePath) ? '✓ EXISTS' : '✗ NOT FOUND'}`);
+        if (fs.existsSync(filePath)) {
+          try {
+            serviceAccount = require(filePath);
+            foundPath = filePath;
+            break;
+          } catch (e) {
+            console.log(`   ⚠️ Found but failed to load: ${e.message}`);
+          }
+        }
+      }
+      
+      if (serviceAccount) {
+        console.log(`✅ تم العثور على الملف في: ${foundPath}`);
         console.log('📋 Service Account File Contents:');
         console.log('   - type:', serviceAccount.type);
         console.log('   - project_id:', serviceAccount.project_id);
@@ -102,20 +174,24 @@ const initializeFirebase = () => {
         
         console.log('✅ تم تحميل ملف firebase-service-account.json');
         console.log(`📱 Project ID: ${serviceAccount.project_id}`);
-      } catch (error) {
+      } else {
         console.error('========================================');
         console.error('❌ FIREBASE CONFIGURATION ERROR');
         console.error('========================================');
         console.error('⚠️ لم يتم العثور على إعدادات Firebase');
-        console.error('⚠️ Error:', error.message);
         console.error('');
         console.error('⚠️ يرجى إضافة أحد الخيارات التالية:');
-        console.error('   1. ملف firebase-service-account.json في المجلد الرئيسي');
-        console.error('      Path:', serviceAccountPath);
-        console.error('   2. متغيرات البيئة:');
-        console.error('      - FIREBASE_PROJECT_ID');
-        console.error('      - FIREBASE_PRIVATE_KEY');
-        console.error('      - FIREBASE_CLIENT_EMAIL');
+        console.error('');
+        console.error('   الخيار 1: متغيرات البيئة في ملف .env:');
+        console.error('   ─────────────────────────────────────');
+        console.error('   FIREBASE_PROJECT_ID=your-project-id');
+        console.error('   FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com');
+        console.error('   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nYOUR_KEY_HERE\\n-----END PRIVATE KEY-----\\n"');
+        console.error('');
+        console.error('   الخيار 2: ملف firebase-service-account.json');
+        console.error('   ─────────────────────────────────────────────');
+        console.error('   ضع الملف في أحد المسارات التالية:');
+        possiblePaths.forEach(p => console.error(`   - ${p}`));
         console.error('');
         console.error('⚠️ سيتم تعطيل خدمة FCM حتى إضافة الإعدادات');
         console.error('========================================');
@@ -147,7 +223,11 @@ const initializeFirebase = () => {
     console.error('📋 Error Details:');
     console.error('   - Code:', error.code || 'N/A');
     console.error('   - Stack:', error.stack);
-    console.error('💡 تأكد من صحة الإعدادات وأن المفتاح الخاص صحيح');
+    console.error('');
+    console.error('💡 نصائح لحل المشكلة:');
+    console.error('   1. تأكد من أن FIREBASE_PRIVATE_KEY محاط بعلامات تنصيص مزدوجة');
+    console.error('   2. تأكد من أن \\n موجودة بين أجزاء المفتاح');
+    console.error('   3. تأكد من نسخ المفتاح كاملاً من ملف JSON');
     console.error('========================================');
     return false;
   }
