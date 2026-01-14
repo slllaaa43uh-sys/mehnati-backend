@@ -132,31 +132,67 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration - إعدادات محسنة للسماح بتطبيقات الموبايل
+// CORS configuration - إعدادات محسنة للسماح بتطبيقات الموبايل والويب
+// تم تحديث الإعدادات لحل مشكلة CORS مع تطبيقات Capacitor/Android
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // السماح بالطلبات بدون origin (مثل تطبيقات الموبايل أو curl)
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
       "https://mihnt.netlify.app",
       "https://localhost",
+      "http://localhost",
       "capacitor://localhost",
-      "http://localhost"
+      "ionic://localhost",
+      "https://localhost:3000",
+      "https://localhost:5000",
+      "http://localhost:3000",
+      "http://localhost:5000",
+      "https://mehnati-api.xyz"
     ];
     
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('file://')) {
+    // السماح بـ file:// و data: و blob:
+    if (origin.startsWith('file://') || 
+        origin.startsWith('data:') ||
+        origin.startsWith('blob:') ||
+        allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      // تسجيل الأصول المرفوضة للتصحيح
+      console.warn(`⚠️ CORS: طلب مرفوض من origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: [
+    'Content-Length',
+    'X-JSON-Response'
+  ],
+  maxAge: 86400, // 24 ساعة - تخزين نتائج preflight
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
+// تطبيق CORS على جميع المسارات
 app.use(cors(corsOptions));
+
+// معالج إضافي للطلبات المسبقة (preflight) لجميع المسارات
+app.options('*', cors(corsOptions));
+
+// معالجات خاصة لمسارات رفع الملفات والقصص
+app.options('/api/v1/upload/*', cors(corsOptions));
+app.options('/api/v1/stories/*', cors(corsOptions));
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
