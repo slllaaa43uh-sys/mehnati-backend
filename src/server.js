@@ -188,11 +188,18 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // معالج إضافي للطلبات المسبقة (preflight) لجميع المسارات
-app.options('*', cors(corsOptions));
-
-// معالجات خاصة لمسارات رفع الملفات والقصص
-app.options('/api/v1/upload/*', cors(corsOptions));
-app.options('/api/v1/stories/*', cors(corsOptions));
+// ملاحظة: تم استخدام middleware بدلاً من app.options('*') للتوافق مع path-to-regexp v8+
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '86400');
+    return res.status(204).send();
+  }
+  next();
+});
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
