@@ -132,17 +132,33 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration - السماح بالمصادر المحددة فقط
-app.use(cors({
-  origin: [
-    "https://mihntyl.netlify.app",  // Web URL
-    "https://localhost",            // Android Capacitor
-    "capacitor://localhost"         // iOS Capacitor
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+// CORS configuration - إعدادات محسنة للسماح بتطبيقات الموبايل
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      "https://mihnt.netlify.app",
+      "https://localhost",
+      "capacitor://localhost",
+      "http://localhost"
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('file://')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
