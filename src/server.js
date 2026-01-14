@@ -157,8 +157,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Handle preflight requests
-app.options('/(.*)', cors(corsOptions));
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
