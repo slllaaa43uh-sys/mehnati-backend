@@ -83,8 +83,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
-// معالج OPTIONS لجميع المسارات
-app.options('*', cors());
+// معالج OPTIONS لجميع المسارات - متوافق مع Express 5
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.status(204).send();
+  }
+  next();
+});
 
 // Helmet مع تعطيل القيود
 app.use(helmet({
