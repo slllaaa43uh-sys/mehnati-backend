@@ -14,19 +14,13 @@ const {
   likeReply,
   deleteComment,
   deleteReply,
-  getShortsForYou,
-  getShortsFriends,
   getUserPosts,
   repostPost,
   undoRepost,
   hidePost,
   unhidePost,
   updateJobStatus,
-  // دوال الشورتس الجديدة
-  getShortsByCategory,
-  incrementShortView,
-  getMyShorts,
-  updateShortSettings
+  incrementShortView
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -45,12 +39,6 @@ router.get('/', optionalAuth, getPosts);
 
 // Post counts for badges (must be before /:id)
 router.get('/counts', getPostCounts);
-
-// Shorts routes (must be before /:id to avoid conflicts)
-router.get('/shorts/for-you', optionalAuth, getShortsForYou);
-router.get('/shorts/friends', protect, getShortsFriends);
-router.get('/shorts/my', protect, getMyShorts);
-router.get('/shorts/category/:category', optionalAuth, getShortsByCategory);
 
 // User posts
 router.get('/user/:userId', optionalAuth, getUserPosts);
@@ -84,8 +72,7 @@ router.delete('/:id/hide', protect, unhidePost);
 // Job status route
 router.put('/:id/job-status', protect, updateJobStatus);
 
-// Shorts specific routes
+// View tracking route
 router.post('/:id/view', optionalAuth, incrementShortView);
-router.put('/:id/short-settings', protect, updateShortSettings);
 
 module.exports = router;

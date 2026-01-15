@@ -103,10 +103,5 @@ module.exports = {
   avatar: avatarUpload.single('avatar'),
   media: postUpload.array('media', 5), // Max 5 files (تم تقليله من 10)
   storyMedia: storyUpload.single('file'),
-  cover: coverUpload.single('cover'),
-  // Combined upload for shorts (video + cover)
-  shortsMedia: postUpload.fields([
-    { name: 'media', maxCount: 1 },
-    { name: 'cover', maxCount: 1 }
-  ])
+  cover: coverUpload.single('cover')
 };

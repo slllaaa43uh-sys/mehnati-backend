@@ -33,6 +33,7 @@ const shareRoutes = require('./routes/share');
 const fcmRoutes = require('./routes/fcm');
 const paymentRoutes = require('./routes/payment');
 const locationRoutes = require('./routes/location');
+const externalJobsRoutes = require('./routes/externalJobs');
 
 // Initialize express app
 const app = express();
@@ -123,6 +124,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/fcm', fcmRoutes);
 app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/location', locationRoutes);
+app.use('/api/v1/external-jobs', externalJobsRoutes);
 
 // Share pages
 app.use('/share', shareRoutes);
@@ -137,7 +139,7 @@ app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'مرحباً بك في API مهنتي لي 🚀',
-    version: '2.1.0',
+    version: '2.2.0',
     storage: 'Backblaze B2 with compression',
     cors: 'Open for all origins',
     endpoints: {
@@ -150,7 +152,8 @@ app.get('/', (req, res) => {
       upload: '/api/v1/upload',
       notifications: '/api/v1/notifications',
       fcm: '/api/v1/fcm',
-      location: '/api/v1/location'
+      location: '/api/v1/location',
+      externalJobs: '/api/v1/external-jobs'
     }
   });
 });
@@ -183,12 +186,13 @@ const server = app.listen(PORT, () => {
   
   console.log(`
 ╔════════════════════════════════════════════════════╗
-║     🚀 مهنتي لي API Server v2.1.0                  ║
+║     🚀 مهنتي لي API Server v2.2.0                  ║
 ║     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    ║
 ║     🌐 Port: ${PORT}                                  ║
 ║     📦 Environment: ${process.env.NODE_ENV || 'development'}                   ║
 ║     💾 Storage: Backblaze B2                       ║
 ║     🔓 CORS: Open for all origins                  ║
+║     🌍 External Jobs: Adzuna API                   ║
 ║     ✅ Server is running...                        ║
 ╚════════════════════════════════════════════════════╝
   `);
