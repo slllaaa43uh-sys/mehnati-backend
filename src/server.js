@@ -99,6 +99,11 @@ const allowedOrigins = [
   "https://mehnati-api.xyz",
   "https://www.mehnati-api.xyz",
   
+  // Google AI Studio - لدعم تطوير التطبيقات
+  "https://aistudio.google.com",
+  "https://aistudio-pa.clients6.google.com",
+  "https://alkalimakersuite-pa.clients6.google.com",
+  
   // التطوير المحلي
   "http://localhost",
   "https://localhost",
@@ -160,6 +165,12 @@ const corsOptions = {
     // ✅ التحقق من القائمة المسموح بها
     if (allowedOrigins.includes(origin)) {
       console.log(`✅ CORS: طلب من origin مسموح: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // ✅ السماح بجميع الـ subdomains لـ Google (لدعم AI Studio وغيرها)
+    if (origin.includes('.google.com') || origin.includes('google.com')) {
+      console.log(`✅ CORS: طلب من Google: ${origin} - مسموح`);
       return callback(null, true);
     }
     
@@ -236,6 +247,8 @@ app.use((req, res, next) => {
     origin.startsWith('file://') ||
     origin.startsWith('capacitor://') ||
     origin.startsWith('ionic://') ||
+    origin.includes('.google.com') ||
+    origin.includes('google.com') ||
     (process.env.NODE_ENV !== 'production' && (origin.includes('localhost') || origin.includes('127.0.0.1')))
   ) {
     res.header('Access-Control-Allow-Origin', origin);
