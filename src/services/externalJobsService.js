@@ -1,15 +1,16 @@
 /**
  * ============================================
- * خدمة الوظائف الخارجية - Adzuna API + Pixabay
+ * خدمة الوظائف الخارجية - Adzuna API + Pixabay + Translation
  * ============================================
  * 
  * هذه الخدمة تقوم بجلب الوظائف من Adzuna API
  * مع دعم الأولوية حسب دولة المستخدم
- * والترجمة التلقائية للعربية
+ * والترجمة التلقائية الحقيقية باستخدام Google Translate
  * وصور عالية الجودة من Pixabay
  */
 
 const axios = require('axios');
+const { translateText, translateBatch } = require('./translationService');
 
 // إعدادات Adzuna API
 const ADZUNA_CONFIG = {
@@ -125,219 +126,25 @@ const JOB_CATEGORIES = {
   'other-general-jobs': { en: 'Other / General', ar: 'أخرى / عام' }
 };
 
-// قاموس ترجمة المسميات الوظيفية الشائعة
-const JOB_TITLE_TRANSLATIONS = {
-  // تقنية المعلومات
-  'software engineer': 'مهندس برمجيات',
-  'software developer': 'مطور برمجيات',
-  'web developer': 'مطور ويب',
-  'frontend developer': 'مطور واجهات أمامية',
-  'backend developer': 'مطور خلفي',
-  'full stack developer': 'مطور متكامل',
-  'mobile developer': 'مطور تطبيقات جوال',
-  'ios developer': 'مطور iOS',
-  'android developer': 'مطور أندرويد',
-  'data scientist': 'عالم بيانات',
-  'data analyst': 'محلل بيانات',
-  'data engineer': 'مهندس بيانات',
-  'machine learning engineer': 'مهندس تعلم آلي',
-  'ai engineer': 'مهندس ذكاء اصطناعي',
-  'devops engineer': 'مهندس DevOps',
-  'cloud engineer': 'مهندس سحابي',
-  'system administrator': 'مدير أنظمة',
-  'network engineer': 'مهندس شبكات',
-  'security engineer': 'مهندس أمن معلومات',
-  'qa engineer': 'مهندس ضمان جودة',
-  'test engineer': 'مهندس اختبار',
-  'product manager': 'مدير منتج',
-  'project manager': 'مدير مشروع',
-  'scrum master': 'سكرم ماستر',
-  'technical lead': 'قائد تقني',
-  'tech lead': 'قائد تقني',
-  'cto': 'المدير التقني',
-  'it manager': 'مدير تقنية المعلومات',
-  'it support': 'دعم تقني',
-  'help desk': 'مكتب المساعدة',
-  'database administrator': 'مدير قواعد بيانات',
-  'ui designer': 'مصمم واجهات',
-  'ux designer': 'مصمم تجربة المستخدم',
-  'ui/ux designer': 'مصمم واجهات وتجربة المستخدم',
-  
-  // الهندسة
-  'engineer': 'مهندس',
-  'civil engineer': 'مهندس مدني',
-  'mechanical engineer': 'مهندس ميكانيكي',
-  'electrical engineer': 'مهندس كهربائي',
-  'chemical engineer': 'مهندس كيميائي',
-  'industrial engineer': 'مهندس صناعي',
-  'petroleum engineer': 'مهندس بترول',
-  'structural engineer': 'مهندس إنشائي',
-  'architect': 'مهندس معماري',
-  'interior designer': 'مصمم داخلي',
-  
-  // الإدارة والمالية
-  'accountant': 'محاسب',
-  'senior accountant': 'محاسب أول',
-  'chief accountant': 'رئيس الحسابات',
-  'financial analyst': 'محلل مالي',
-  'finance manager': 'مدير مالي',
-  'cfo': 'المدير المالي',
-  'auditor': 'مدقق حسابات',
-  'bookkeeper': 'ماسك دفاتر',
-  'tax specialist': 'أخصائي ضرائب',
-  'payroll specialist': 'أخصائي رواتب',
-  'hr manager': 'مدير موارد بشرية',
-  'hr specialist': 'أخصائي موارد بشرية',
-  'recruiter': 'موظف توظيف',
-  'talent acquisition': 'استقطاب المواهب',
-  'office manager': 'مدير مكتب',
-  'executive assistant': 'مساعد تنفيذي',
-  'administrative assistant': 'مساعد إداري',
-  'secretary': 'سكرتير',
-  'receptionist': 'موظف استقبال',
-  'ceo': 'الرئيس التنفيذي',
-  'coo': 'مدير العمليات',
-  'general manager': 'مدير عام',
-  'operations manager': 'مدير عمليات',
-  'business analyst': 'محلل أعمال',
-  'consultant': 'مستشار',
-  'management consultant': 'مستشار إداري',
-  
-  // المبيعات والتسويق
-  'sales manager': 'مدير مبيعات',
-  'sales representative': 'مندوب مبيعات',
-  'sales executive': 'تنفيذي مبيعات',
-  'account manager': 'مدير حسابات',
-  'business development': 'تطوير أعمال',
-  'marketing manager': 'مدير تسويق',
-  'marketing specialist': 'أخصائي تسويق',
-  'digital marketing': 'تسويق رقمي',
-  'social media manager': 'مدير وسائل التواصل',
-  'content writer': 'كاتب محتوى',
-  'copywriter': 'كاتب إعلاني',
-  'seo specialist': 'أخصائي SEO',
-  'brand manager': 'مدير علامة تجارية',
-  'public relations': 'علاقات عامة',
-  
-  // خدمة العملاء
-  'customer service': 'خدمة عملاء',
-  'customer support': 'دعم العملاء',
-  'call center agent': 'موظف مركز اتصال',
-  'customer success': 'نجاح العملاء',
-  
-  // الصحة والطب
-  'doctor': 'طبيب',
-  'physician': 'طبيب',
-  'nurse': 'ممرض',
-  'registered nurse': 'ممرض مسجل',
-  'pharmacist': 'صيدلي',
-  'dentist': 'طبيب أسنان',
-  'surgeon': 'جراح',
-  'medical assistant': 'مساعد طبي',
-  'lab technician': 'فني مختبر',
-  'radiologist': 'أخصائي أشعة',
-  'physiotherapist': 'أخصائي علاج طبيعي',
-  
-  // التعليم
-  'teacher': 'معلم',
-  'professor': 'أستاذ جامعي',
-  'lecturer': 'محاضر',
-  'trainer': 'مدرب',
-  'tutor': 'مدرس خصوصي',
-  'teaching assistant': 'مساعد تدريس',
-  
-  // الضيافة والسياحة
-  'chef': 'شيف',
-  'cook': 'طباخ',
-  'waiter': 'نادل',
-  'hotel manager': 'مدير فندق',
-  'front desk': 'موظف استقبال',
-  'housekeeper': 'عامل نظافة',
-  'tour guide': 'مرشد سياحي',
-  
-  // النقل واللوجستيات
-  'driver': 'سائق',
-  'truck driver': 'سائق شاحنة',
-  'delivery driver': 'سائق توصيل',
-  'logistics manager': 'مدير لوجستيات',
-  'warehouse manager': 'مدير مستودع',
-  'supply chain': 'سلسلة الإمداد',
-  'procurement': 'مشتريات',
-  'purchasing manager': 'مدير مشتريات',
-  
-  // القانون
-  'lawyer': 'محامي',
-  'legal advisor': 'مستشار قانوني',
-  'paralegal': 'مساعد قانوني',
-  'legal secretary': 'سكرتير قانوني',
-  
-  // التصميم والإبداع
-  'graphic designer': 'مصمم جرافيك',
-  'creative director': 'مدير إبداعي',
-  'art director': 'مدير فني',
-  'photographer': 'مصور',
-  'videographer': 'مصور فيديو',
-  'video editor': 'محرر فيديو',
-  'animator': 'رسام متحرك',
-  '3d artist': 'فنان ثلاثي الأبعاد',
-  
-  // أخرى
-  'manager': 'مدير',
-  'supervisor': 'مشرف',
-  'coordinator': 'منسق',
-  'specialist': 'أخصائي',
-  'analyst': 'محلل',
-  'assistant': 'مساعد',
-  'intern': 'متدرب',
-  'trainee': 'متدرب',
-  'senior': 'أول',
-  'junior': 'مبتدئ',
-  'lead': 'قائد',
-  'head': 'رئيس',
-  'director': 'مدير',
-  'vice president': 'نائب الرئيس',
-  'president': 'رئيس',
-  'founder': 'مؤسس',
-  'co-founder': 'شريك مؤسس',
-  'owner': 'مالك',
-  'freelancer': 'مستقل',
-  'contractor': 'متعاقد',
-  'technician': 'فني',
-  'operator': 'مشغل',
-  'worker': 'عامل',
-  'cleaner': 'عامل نظافة',
-  'security guard': 'حارس أمن',
-  'electrician': 'كهربائي',
-  'plumber': 'سباك',
-  'carpenter': 'نجار',
-  'mechanic': 'ميكانيكي',
-  'welder': 'لحام'
-};
-
 // كاش للصور لتجنب التكرار
 const imageCache = new Map();
 
 /**
  * تحويل اسم الدولة إلى رمز الدولة
- * @param {string} countryName - اسم الدولة (عربي أو إنجليزي)
- * @returns {string|null} - رمز الدولة أو null
  */
 const getCountryCode = (countryName) => {
   if (!countryName) return null;
   
   const normalized = countryName.toLowerCase().trim();
   
-  // إذا كان رمز دولة مباشرة
   if (SUPPORTED_COUNTRIES[normalized]) {
     return normalized;
   }
   
-  // البحث في خريطة الأسماء
   if (COUNTRY_NAME_TO_CODE[normalized]) {
     return COUNTRY_NAME_TO_CODE[normalized];
   }
   
-  // البحث الجزئي
   for (const [name, code] of Object.entries(COUNTRY_NAME_TO_CODE)) {
     if (normalized.includes(name) || name.includes(normalized)) {
       return code;
@@ -348,126 +155,19 @@ const getCountryCode = (countryName) => {
 };
 
 /**
- * ترجمة عنوان الوظيفة إلى العربية
- * @param {string} title - عنوان الوظيفة بالإنجليزية
- * @returns {Object} - العنوان بالعربية والإنجليزية
- */
-const translateJobTitle = (title) => {
-  if (!title) return { ar: 'وظيفة', en: '' };
-  
-  const lowerTitle = title.toLowerCase().trim();
-  
-  // البحث عن ترجمة مباشرة
-  if (JOB_TITLE_TRANSLATIONS[lowerTitle]) {
-    return {
-      ar: JOB_TITLE_TRANSLATIONS[lowerTitle],
-      en: title
-    };
-  }
-  
-  // البحث عن ترجمة جزئية
-  let arabicTitle = title;
-  let foundTranslation = false;
-  
-  for (const [eng, ar] of Object.entries(JOB_TITLE_TRANSLATIONS)) {
-    if (lowerTitle.includes(eng)) {
-      arabicTitle = arabicTitle.replace(new RegExp(eng, 'gi'), ar);
-      foundTranslation = true;
-    }
-  }
-  
-  // إذا لم نجد ترجمة، نستخدم ترجمة عامة
-  if (!foundTranslation) {
-    // محاولة ترجمة الكلمات الفردية
-    const words = lowerTitle.split(/\s+/);
-    const translatedWords = words.map(word => {
-      return JOB_TITLE_TRANSLATIONS[word] || word;
-    });
-    arabicTitle = translatedWords.join(' ');
-  }
-  
-  return {
-    ar: arabicTitle,
-    en: title
-  };
-};
-
-/**
- * ترجمة الوصف إلى العربية (ملخص)
- * @param {string} description - الوصف بالإنجليزية
- * @returns {Object} - الوصف بالعربية والإنجليزية
- */
-const translateDescription = (description) => {
-  if (!description) return { ar: '', en: '' };
-  
-  // تنظيف الوصف
-  let cleanDesc = description
-    .replace(/<[^>]*>/g, '') // إزالة HTML
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  // اختصار الوصف إذا كان طويلاً
-  if (cleanDesc.length > 500) {
-    cleanDesc = cleanDesc.substring(0, 500) + '...';
-  }
-  
-  // ترجمة بعض الكلمات الشائعة في الوصف
-  let arabicDesc = cleanDesc;
-  const descTranslations = {
-    'we are looking for': 'نبحث عن',
-    'looking for': 'نبحث عن',
-    'required': 'مطلوب',
-    'requirements': 'المتطلبات',
-    'responsibilities': 'المسؤوليات',
-    'experience': 'خبرة',
-    'years of experience': 'سنوات خبرة',
-    'skills': 'مهارات',
-    'qualifications': 'المؤهلات',
-    'benefits': 'المزايا',
-    'salary': 'الراتب',
-    'full time': 'دوام كامل',
-    'part time': 'دوام جزئي',
-    'remote': 'عن بعد',
-    'hybrid': 'هجين',
-    'on-site': 'في الموقع',
-    'apply now': 'قدم الآن',
-    'join our team': 'انضم لفريقنا',
-    'opportunity': 'فرصة',
-    'position': 'وظيفة',
-    'role': 'دور',
-    'job': 'وظيفة'
-  };
-  
-  for (const [eng, ar] of Object.entries(descTranslations)) {
-    arabicDesc = arabicDesc.replace(new RegExp(eng, 'gi'), ar);
-  }
-  
-  return {
-    ar: arabicDesc,
-    en: cleanDesc
-  };
-};
-
-/**
  * جلب صورة من Pixabay بناءً على عنوان الوظيفة
- * @param {string} jobTitle - عنوان الوظيفة بالإنجليزية
- * @returns {Promise<Object>} - بيانات الصورة
  */
 const fetchPixabayImage = async (jobTitle) => {
   try {
-    // استخراج كلمة البحث الرئيسية من العنوان
     const searchTerms = extractSearchTerms(jobTitle);
     const cacheKey = searchTerms.join('-');
     
-    // التحقق من الكاش
     if (imageCache.has(cacheKey)) {
       const cachedImages = imageCache.get(cacheKey);
-      // اختيار صورة عشوائية من الكاش
       const randomIndex = Math.floor(Math.random() * cachedImages.length);
       return cachedImages[randomIndex];
     }
     
-    // تحديد نوع الوسائط (صور 90%، فيديو 10%)
     const useVideo = Math.random() < 0.10;
     
     const params = {
@@ -486,7 +186,6 @@ const fetchPixabayImage = async (jobTitle) => {
     let mediaType = 'image';
     
     if (useVideo) {
-      // جلب فيديو
       response = await axios.get('https://pixabay.com/api/videos/', {
         params: {
           key: PIXABAY_CONFIG.API_KEY,
@@ -499,7 +198,6 @@ const fetchPixabayImage = async (jobTitle) => {
       });
       mediaType = 'video';
     } else {
-      // جلب صورة
       response = await axios.get(PIXABAY_CONFIG.BASE_URL, {
         params,
         timeout: 10000
@@ -509,7 +207,6 @@ const fetchPixabayImage = async (jobTitle) => {
     const hits = response.data.hits || [];
     
     if (hits.length === 0) {
-      // إذا لم نجد نتائج، نبحث بكلمة عامة
       const fallbackResponse = await axios.get(PIXABAY_CONFIG.BASE_URL, {
         params: {
           ...params,
@@ -536,7 +233,6 @@ const fetchPixabayImage = async (jobTitle) => {
       return null;
     }
     
-    // تخزين النتائج في الكاش
     const formattedImages = hits.map(hit => {
       if (mediaType === 'video') {
         return {
@@ -562,7 +258,6 @@ const fetchPixabayImage = async (jobTitle) => {
     
     imageCache.set(cacheKey, formattedImages);
     
-    // اختيار صورة عشوائية من أفضل 20 نتيجة
     const randomIndex = Math.floor(Math.random() * Math.min(formattedImages.length, 20));
     return formattedImages[randomIndex];
     
@@ -574,15 +269,12 @@ const fetchPixabayImage = async (jobTitle) => {
 
 /**
  * استخراج كلمات البحث من عنوان الوظيفة
- * @param {string} title - عنوان الوظيفة
- * @returns {Array<string>} - كلمات البحث
  */
 const extractSearchTerms = (title) => {
   if (!title) return ['business', 'work'];
   
   const lowerTitle = title.toLowerCase();
   
-  // كلمات البحث حسب نوع الوظيفة
   const searchMappings = {
     'software': ['software', 'coding', 'programming'],
     'developer': ['developer', 'coding', 'computer'],
@@ -617,7 +309,6 @@ const extractSearchTerms = (title) => {
     }
   }
   
-  // إذا لم نجد تطابق، نستخدم الكلمة الأولى مع كلمات عامة
   const words = title.split(/\s+/).filter(w => w.length > 3);
   if (words.length > 0) {
     return [words[0], 'professional', 'work'];
@@ -627,15 +318,13 @@ const extractSearchTerms = (title) => {
 };
 
 /**
- * جلب الوظائف من Adzuna API مع دعم أولوية دولة المستخدم
- * @param {Object} params - معاملات البحث
- * @returns {Promise<Object>} - قائمة الوظائف
+ * جلب الوظائف من Adzuna API مع دعم أولوية دولة المستخدم والترجمة
  */
 exports.fetchJobs = async (params = {}) => {
   try {
     const {
       country,
-      userCountry, // دولة المستخدم من الحساب
+      userCountry,
       category = '',
       what = '',
       where = '',
@@ -645,34 +334,28 @@ exports.fetchJobs = async (params = {}) => {
       salary_min,
       salary_max,
       contract_type,
-      full_time
+      full_time,
+      lang = 'ar' // اللغة المستهدفة للترجمة
     } = params;
 
-    // تحديد الدولة المستهدفة
     let targetCountry = country;
     
-    // إذا لم يتم تحديد دولة، نستخدم دولة المستخدم
     if (!targetCountry && userCountry) {
       targetCountry = getCountryCode(userCountry);
     }
     
-    // الدول المدعومة فعلياً من Adzuna
     const adzunaSupportedCountries = ['gb', 'us', 'au', 'at', 'be', 'br', 'ca', 'ch', 'de', 'es', 'fr', 'in', 'it', 'mx', 'nl', 'nz', 'pl', 'ru', 'sg', 'za'];
     
-    // إذا كانت الدولة غير مدعومة من Adzuna، نجلب مختلط
     let countryCode = targetCountry?.toLowerCase();
     let isMixedResults = false;
     
     if (!countryCode || !adzunaSupportedCountries.includes(countryCode)) {
-      // جلب من دول متعددة (مختلط)
       isMixedResults = true;
-      countryCode = 'gb'; // نبدأ بالمملكة المتحدة كافتراضي
+      countryCode = 'gb';
     }
 
-    // بناء رابط الـ API
     let url = `${ADZUNA_CONFIG.BASE_URL}/${countryCode}/search/${page}`;
 
-    // بناء معاملات الاستعلام
     const queryParams = {
       app_id: ADZUNA_CONFIG.APP_ID,
       app_key: ADZUNA_CONFIG.APP_KEY,
@@ -680,7 +363,6 @@ exports.fetchJobs = async (params = {}) => {
       sort_by
     };
 
-    // إضافة المعاملات الاختيارية
     if (what) queryParams.what = what;
     if (where) queryParams.where = where;
     if (category && JOB_CATEGORIES[category]) queryParams.category = category;
@@ -689,20 +371,18 @@ exports.fetchJobs = async (params = {}) => {
     if (contract_type) queryParams.contract_type = contract_type;
     if (full_time !== undefined) queryParams.full_time = full_time ? 1 : 0;
 
-    console.log('[ExternalJobsService] Fetching jobs from Adzuna:', { url, params: queryParams, userCountry, isMixedResults });
+    console.log('[ExternalJobsService] Fetching jobs from Adzuna:', { url, params: queryParams, userCountry, isMixedResults, lang });
 
-    // إرسال الطلب
     const response = await axios.get(url, {
       params: queryParams,
       timeout: 15000
     });
 
-    // تحويل البيانات إلى تنسيق موحد مع الترجمة والصور
+    // تحويل البيانات مع الترجمة الحقيقية
     const jobs = await Promise.all(
-      (response.data.results || []).map(job => formatJobWithTranslationAndImage(job, countryCode))
+      (response.data.results || []).map(job => formatJobWithRealTranslation(job, countryCode, lang))
     );
 
-    // إذا كانت النتائج مختلطة، نضيف معلومات إضافية
     const countryInfo = SUPPORTED_COUNTRIES[countryCode] || { en: 'Unknown', ar: 'غير معروف' };
 
     return {
@@ -719,6 +399,7 @@ exports.fetchJobs = async (params = {}) => {
       },
       userCountry: userCountry || null,
       isMixedResults,
+      targetLanguage: lang,
       jobs
     };
 
@@ -742,7 +423,6 @@ exports.fetchJobs = async (params = {}) => {
 
 /**
  * جلب التصنيفات المتاحة
- * @returns {Object} - قائمة التصنيفات
  */
 exports.getCategories = () => {
   return {
@@ -757,10 +437,8 @@ exports.getCategories = () => {
 
 /**
  * جلب الدول المدعومة
- * @returns {Object} - قائمة الدول
  */
 exports.getSupportedCountries = () => {
-  // ترتيب الدول حسب الأولوية (الخليج أولاً)
   const sortedCountries = Object.entries(SUPPORTED_COUNTRIES)
     .sort((a, b) => a[1].priority - b[1].priority)
     .map(([code, data]) => ({
@@ -777,46 +455,65 @@ exports.getSupportedCountries = () => {
 };
 
 /**
- * تنسيق بيانات الوظيفة مع الترجمة والصورة
- * @param {Object} job - بيانات الوظيفة من Adzuna
- * @param {string} countryCode - رمز الدولة
- * @returns {Promise<Object>} - بيانات الوظيفة المنسقة
+ * تنسيق بيانات الوظيفة مع الترجمة الحقيقية والصورة
  */
-const formatJobWithTranslationAndImage = async (job, countryCode) => {
-  // ترجمة العنوان
-  const translatedTitle = translateJobTitle(job.title);
-  
-  // ترجمة الوصف
-  const translatedDescription = translateDescription(job.description);
-  
+const formatJobWithRealTranslation = async (job, countryCode, targetLang = 'ar') => {
   // جلب صورة من Pixabay
   const pixabayImage = await fetchPixabayImage(job.title);
   
   // استخراج اسم الشركة
   const companyName = job.company?.display_name || 'شركة غير محددة';
   
-  // تنظيف اسم الشركة للاستخدام في رابط اللوجو
   const cleanCompanyName = companyName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .trim();
 
-  // بناء رابط اللوجو من Clearbit
   const logoUrl = cleanCompanyName ? `https://logo.clearbit.com/${cleanCompanyName}.com` : null;
 
   const countryInfo = SUPPORTED_COUNTRIES[countryCode] || { en: 'Unknown', ar: 'غير معروف' };
 
+  // تنظيف الوصف
+  let cleanDesc = (job.description || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (cleanDesc.length > 500) {
+    cleanDesc = cleanDesc.substring(0, 500) + '...';
+  }
+
+  // الترجمة الحقيقية باستخدام Google Translate
+  let translatedTitle = job.title;
+  let translatedDesc = cleanDesc;
+
+  if (targetLang !== 'en') {
+    try {
+      // ترجمة العنوان والوصف بالتوازي
+      const [titleResult, descResult] = await Promise.all([
+        translateText(job.title, targetLang, 'en'),
+        translateText(cleanDesc.substring(0, 300), targetLang, 'en') // تقليص للسرعة
+      ]);
+      
+      translatedTitle = titleResult;
+      translatedDesc = descResult;
+    } catch (error) {
+      console.error('[Translation] Error:', error.message);
+      // استخدام النص الأصلي عند فشل الترجمة
+    }
+  }
+
   return {
     id: job.id,
     title: {
-      ar: translatedTitle.ar,
-      en: translatedTitle.en,
-      display: translatedTitle.ar // العنوان المعروض بالعربية
+      ar: targetLang === 'ar' ? translatedTitle : job.title,
+      en: job.title,
+      display: translatedTitle // العنوان المترجم للغة المستهدفة
     },
     description: {
-      ar: translatedDescription.ar,
-      en: translatedDescription.en,
-      display: translatedDescription.ar
+      ar: targetLang === 'ar' ? translatedDesc : cleanDesc,
+      en: cleanDesc,
+      display: translatedDesc
     },
     company: {
       name: companyName,
@@ -1023,4 +720,11 @@ const formatDateArabic = (dateString) => {
     month: 'long', 
     day: 'numeric' 
   });
+};
+
+/**
+ * ترجمة نص واحد - للاستخدام من الـ API
+ */
+exports.translateJobText = async (text, targetLang = 'ar', sourceLang = 'auto') => {
+  return await translateText(text, targetLang, sourceLang);
 };
