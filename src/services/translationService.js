@@ -7,7 +7,7 @@
  * مجانية 100% بدون API Key
  */
 
-const translate = require('@vitalets/google-translate-api').default;
+const { translate } = require('@vitalets/google-translate-api');
 
 // كاش للترجمات لتجنب تكرار الطلبات
 const translationCache = new Map();
