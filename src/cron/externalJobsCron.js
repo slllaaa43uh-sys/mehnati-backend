@@ -31,7 +31,9 @@ const fetchExternalJobs = async () => {
       'وظائف في السعودية',
       'jobs in Saudi Arabia',
       'وظائف في الرياض',
-      'وظائف في جدة'
+      'وظائف في جدة',
+      'jobs in Dubai',
+      'jobs in UAE'
     ];
 
     let totalNew = 0;
@@ -85,11 +87,11 @@ const startExternalJobsCron = () => {
 
   console.log('[ExternalJobsCron] Scheduled to run every 6 hours (Riyadh timezone)');
 
-  // تشغيل فوري عند بدء الخادم (بعد 30 ثانية)
+  // تشغيل فوري عند بدء الخادم (بعد 10 ثوانٍ فقط)
   setTimeout(() => {
     console.log('[ExternalJobsCron] Running initial fetch...');
     fetchExternalJobs();
-  }, 30000);
+  }, 10000); // تم تقليل الوقت من 30 ثانية إلى 10 ثوانٍ
 };
 
 /**
