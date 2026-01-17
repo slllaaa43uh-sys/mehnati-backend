@@ -560,15 +560,19 @@ exports.getPosts = async (req, res, next) => {
     // المنشورات المعاد نشرها تظهر في الصفحة الرئيسية فقط
     // إذا كان الطلب للصفحة الرئيسية أو بدون فلتر، نضمن المنشورات المعاد نشرها
     if (!displayPage || displayPage === 'home') {
-      // للصفحة الرئيسية: نجلب المنشورات العادية + المعاد نشرها
+      // للصفحة الرئيسية: نجلب المنشورات العادية + المعاد نشرها (بدون المستعجلة)
       query.$or = [
-        { type: { $ne: 'repost' } },
+        { type: { $ne: 'repost' }, displayPage: { $ne: 'urgent' } },
         { type: 'repost', displayPage: 'home' }
       ];
-    } else {
-      // للصفحات الأخرى (الحراج/الوظائف): لا نعرض المنشورات المعاد نشرها
+    } else if (displayPage === 'urgent') {
+      // للصفحة المستعجلة: فقط المنشورات المستعجلة
       query.type = { $ne: 'repost' };
-      query.displayPage = { $in: [displayPage, 'all'] };
+      query.displayPage = 'urgent';
+    } else {
+      // للصفحات الأخرى (الحراج/الوظائف): لا نعرض المنشورات المعاد نشرها ولا المستعجلة
+      query.type = { $ne: 'repost' };
+      query.displayPage = { $in: [displayPage, 'all'], $ne: 'urgent' };
     }
     
     if (type && type !== 'repost') query.type = type;
