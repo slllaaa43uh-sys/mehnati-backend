@@ -572,7 +572,10 @@ exports.getPosts = async (req, res, next) => {
     } else {
       // للصفحات الأخرى (الحراج/الوظائف): لا نعرض المنشورات المعاد نشرها ولا المستعجلة
       query.type = { $ne: 'repost' };
-      query.displayPage = { $in: [displayPage, 'all'], $ne: 'urgent' };
+      query.$and = [
+        { displayPage: { $in: [displayPage, 'all'] } },
+        { displayPage: { $ne: 'urgent' } }
+      ];
     }
     
     if (type && type !== 'repost') query.type = type;
