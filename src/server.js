@@ -16,6 +16,7 @@ const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
 const { setupFeaturedCron } = require('./cron/featuredCron');
+const { startExternalJobsCron } = require('./cron/externalJobsCron');
 const { initializeB2 } = require('./services/storageService');
 const { initializeFirebase } = require('./config/firebase');
 const { initializeSocket } = require('./config/socket');
@@ -52,6 +53,7 @@ initializeFirebase();
 // Setup cron jobs
 setupCronJob(120);
 setupFeaturedCron();
+startExternalJobsCron(); // External Jobs Cron - every 6 hours
 
 // مراقبة استخدام الذاكرة
 const logMemoryUsage = () => {
@@ -192,7 +194,7 @@ const server = app.listen(PORT, () => {
 ║     📦 Environment: ${process.env.NODE_ENV || 'development'}                   ║
 ║     💾 Storage: Backblaze B2                       ║
 ║     🔓 CORS: Open for all origins                  ║
-║     🌍 External Jobs: Adzuna API                   ║
+║     🌍 External Jobs: JSearch API (RapidAPI)       ║
 ║     ✅ Server is running...                        ║
 ╚════════════════════════════════════════════════════╝
   `);

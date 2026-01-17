@@ -1,22 +1,21 @@
 /**
  * ============================================
- * خدمة الوظائف الخارجية - Adzuna API + Pixabay + Translation
+ * خدمة الوظائف الخارجية - JSearch API + Pixabay
  * ============================================
  * 
- * هذه الخدمة تقوم بجلب الوظائف من Adzuna API
- * مع دعم الأولوية حسب دولة المستخدم
- * والترجمة التلقائية الحقيقية باستخدام Google Translate
- * وصور عالية الجودة من Pixabay
+ * هذه الخدمة تقوم بجلب الوظائف من JSearch API (RapidAPI)
+ * مع صور/فيديوهات من Pixabay
+ * بدون ترجمة - تعرض البيانات كما هي من API
  */
 
 const axios = require('axios');
-const { translateText, translateBatch } = require('./translationService');
+const ExternalJob = require('../models/ExternalJob');
 
-// إعدادات Adzuna API
-const ADZUNA_CONFIG = {
-  APP_ID: '4cba22c2',
-  APP_KEY: '55a99895e575dec59446a506164c6d7f',
-  BASE_URL: 'https://api.adzuna.com/v1/api/jobs'
+// إعدادات JSearch API (RapidAPI)
+const JSEARCH_CONFIG = {
+  API_KEY: '6cf9c963f3mshd4aa12f20166a85p1bbe51jsn6acfedd8259a',
+  HOST: 'jsearch.p.rapidapi.com',
+  BASE_URL: 'https://jsearch.p.rapidapi.com/search'
 };
 
 // إعدادات Pixabay API
@@ -25,167 +24,69 @@ const PIXABAY_CONFIG = {
   BASE_URL: 'https://pixabay.com/api/'
 };
 
-// الدول المدعومة من Adzuna مع أسمائها بالعربية
-const SUPPORTED_COUNTRIES = {
-  // دول الخليج والعربية (الأولوية القصوى)
-  'sa': { en: 'Saudi Arabia', ar: 'السعودية', priority: 1 },
-  'ae': { en: 'United Arab Emirates', ar: 'الإمارات', priority: 1 },
-  'kw': { en: 'Kuwait', ar: 'الكويت', priority: 1 },
-  'qa': { en: 'Qatar', ar: 'قطر', priority: 1 },
-  'bh': { en: 'Bahrain', ar: 'البحرين', priority: 1 },
-  'om': { en: 'Oman', ar: 'عُمان', priority: 1 },
-  // دول أخرى
-  'gb': { en: 'United Kingdom', ar: 'المملكة المتحدة', priority: 2 },
-  'us': { en: 'United States', ar: 'الولايات المتحدة', priority: 2 },
-  'au': { en: 'Australia', ar: 'أستراليا', priority: 3 },
-  'at': { en: 'Austria', ar: 'النمسا', priority: 3 },
-  'be': { en: 'Belgium', ar: 'بلجيكا', priority: 3 },
-  'br': { en: 'Brazil', ar: 'البرازيل', priority: 3 },
-  'ca': { en: 'Canada', ar: 'كندا', priority: 2 },
-  'ch': { en: 'Switzerland', ar: 'سويسرا', priority: 3 },
-  'de': { en: 'Germany', ar: 'ألمانيا', priority: 2 },
-  'es': { en: 'Spain', ar: 'إسبانيا', priority: 3 },
-  'fr': { en: 'France', ar: 'فرنسا', priority: 2 },
-  'in': { en: 'India', ar: 'الهند', priority: 3 },
-  'it': { en: 'Italy', ar: 'إيطاليا', priority: 3 },
-  'mx': { en: 'Mexico', ar: 'المكسيك', priority: 3 },
-  'nl': { en: 'Netherlands', ar: 'هولندا', priority: 3 },
-  'nz': { en: 'New Zealand', ar: 'نيوزيلندا', priority: 3 },
-  'pl': { en: 'Poland', ar: 'بولندا', priority: 3 },
-  'ru': { en: 'Russia', ar: 'روسيا', priority: 3 },
-  'sg': { en: 'Singapore', ar: 'سنغافورة', priority: 3 },
-  'za': { en: 'South Africa', ar: 'جنوب أفريقيا', priority: 3 }
-};
+// نسبة الفيديو vs الصور (25% فيديو، 75% صور)
+const VIDEO_RATIO = 0.25;
 
-// خريطة تحويل أسماء الدول من العربية/الإنجليزية إلى رمز الدولة
-const COUNTRY_NAME_TO_CODE = {
-  // العربية
-  'السعودية': 'sa',
-  'المملكة العربية السعودية': 'sa',
-  'الإمارات': 'ae',
-  'الامارات': 'ae',
-  'الإمارات العربية المتحدة': 'ae',
-  'الكويت': 'kw',
-  'قطر': 'qa',
-  'البحرين': 'bh',
-  'عمان': 'om',
-  'عُمان': 'om',
-  'سلطنة عمان': 'om',
-  'مصر': 'eg',
-  'الأردن': 'jo',
-  'لبنان': 'lb',
-  // الإنجليزية
-  'saudi arabia': 'sa',
-  'saudi': 'sa',
-  'uae': 'ae',
-  'united arab emirates': 'ae',
-  'emirates': 'ae',
-  'kuwait': 'kw',
-  'qatar': 'qa',
-  'bahrain': 'bh',
-  'oman': 'om',
-  'united kingdom': 'gb',
-  'uk': 'gb',
-  'united states': 'us',
-  'usa': 'us',
-  'germany': 'de',
-  'france': 'fr',
-  'canada': 'ca'
-};
-
-// التصنيفات المتاحة مع الترجمة العربية
-const JOB_CATEGORIES = {
-  'accounting-finance-jobs': { en: 'Accounting & Finance', ar: 'المحاسبة والمالية' },
-  'it-jobs': { en: 'IT & Technology', ar: 'تقنية المعلومات' },
-  'sales-jobs': { en: 'Sales', ar: 'المبيعات' },
-  'customer-services-jobs': { en: 'Customer Service', ar: 'خدمة العملاء' },
-  'engineering-jobs': { en: 'Engineering', ar: 'الهندسة' },
-  'hr-jobs': { en: 'HR & Recruitment', ar: 'الموارد البشرية' },
-  'healthcare-nursing-jobs': { en: 'Healthcare & Nursing', ar: 'الرعاية الصحية والتمريض' },
-  'hospitality-catering-jobs': { en: 'Hospitality & Catering', ar: 'الضيافة والتموين' },
-  'pr-advertising-marketing-jobs': { en: 'Marketing & PR', ar: 'التسويق والعلاقات العامة' },
-  'logistics-warehouse-jobs': { en: 'Logistics & Warehouse', ar: 'اللوجستيات والمستودعات' },
-  'teaching-jobs': { en: 'Teaching & Education', ar: 'التعليم والتدريس' },
-  'trade-construction-jobs': { en: 'Trade & Construction', ar: 'البناء والتشييد' },
-  'admin-jobs': { en: 'Admin', ar: 'الإدارة' },
-  'legal-jobs': { en: 'Legal', ar: 'القانون' },
-  'creative-design-jobs': { en: 'Creative & Design', ar: 'التصميم والإبداع' },
-  'graduate-jobs': { en: 'Graduate', ar: 'حديثي التخرج' },
-  'retail-jobs': { en: 'Retail', ar: 'التجزئة' },
-  'consultancy-jobs': { en: 'Consultancy', ar: 'الاستشارات' },
-  'manufacturing-jobs': { en: 'Manufacturing', ar: 'التصنيع' },
-  'scientific-qa-jobs': { en: 'Scientific & QA', ar: 'العلوم وضمان الجودة' },
-  'social-work-jobs': { en: 'Social Work', ar: 'العمل الاجتماعي' },
-  'travel-jobs': { en: 'Travel & Tourism', ar: 'السفر والسياحة' },
-  'energy-oil-gas-jobs': { en: 'Energy & Oil/Gas', ar: 'الطاقة والنفط والغاز' },
-  'property-jobs': { en: 'Property', ar: 'العقارات' },
-  'charity-voluntary-jobs': { en: 'Charity & Voluntary', ar: 'العمل الخيري والتطوعي' },
-  'domestic-help-cleaning-jobs': { en: 'Domestic Help & Cleaning', ar: 'المساعدة المنزلية والتنظيف' },
-  'maintenance-jobs': { en: 'Maintenance', ar: 'الصيانة' },
-  'part-time-jobs': { en: 'Part Time', ar: 'دوام جزئي' },
-  'other-general-jobs': { en: 'Other / General', ar: 'أخرى / عام' }
-};
-
-// كاش للصور لتجنب التكرار
-const imageCache = new Map();
+// كاش للوسائط لتجنب التكرار
+const mediaCache = new Map();
 
 /**
- * تحويل اسم الدولة إلى رمز الدولة
+ * جلب الوظائف من JSearch API
  */
-const getCountryCode = (countryName) => {
-  if (!countryName) return null;
-  
-  const normalized = countryName.toLowerCase().trim();
-  
-  if (SUPPORTED_COUNTRIES[normalized]) {
-    return normalized;
-  }
-  
-  if (COUNTRY_NAME_TO_CODE[normalized]) {
-    return COUNTRY_NAME_TO_CODE[normalized];
-  }
-  
-  for (const [name, code] of Object.entries(COUNTRY_NAME_TO_CODE)) {
-    if (normalized.includes(name) || name.includes(normalized)) {
-      return code;
-    }
-  }
-  
-  return null;
-};
-
-/**
- * جلب صورة من Pixabay بناءً على عنوان الوظيفة
- */
-const fetchPixabayImage = async (jobTitle) => {
+const fetchFromJSearch = async (query = 'وظائف في السعودية', page = 1, numPages = 1) => {
   try {
-    const searchTerms = extractSearchTerms(jobTitle);
-    const cacheKey = searchTerms.join('-');
-    
-    if (imageCache.has(cacheKey)) {
-      const cachedImages = imageCache.get(cacheKey);
-      const randomIndex = Math.floor(Math.random() * cachedImages.length);
-      return cachedImages[randomIndex];
+    console.log('[JSearch] Fetching jobs with query:', query);
+
+    const response = await axios.get(JSEARCH_CONFIG.BASE_URL, {
+      headers: {
+        'X-RapidAPI-Key': JSEARCH_CONFIG.API_KEY,
+        'X-RapidAPI-Host': JSEARCH_CONFIG.HOST
+      },
+      params: {
+        query: query,
+        page: page.toString(),
+        num_pages: numPages.toString(),
+        date_posted: 'all'
+      },
+      timeout: 30000
+    });
+
+    const jobs = response.data?.data || [];
+    console.log(`[JSearch] Fetched ${jobs.length} jobs`);
+
+    return jobs;
+
+  } catch (error) {
+    console.error('[JSearch] Error fetching jobs:', error.message);
+    if (error.response) {
+      console.error('[JSearch] Response status:', error.response.status);
+      console.error('[JSearch] Response data:', error.response.data);
     }
+    throw error;
+  }
+};
+
+/**
+ * جلب وسائط من Pixabay (صورة أو فيديو)
+ */
+const fetchPixabayMedia = async (searchTerm, forceVideo = false) => {
+  try {
+    const cacheKey = `${searchTerm}-${forceVideo ? 'video' : 'image'}`;
     
-    const useVideo = Math.random() < 0.10;
-    
-    const params = {
-      key: PIXABAY_CONFIG.API_KEY,
-      q: searchTerms.join('+'),
-      lang: 'en',
-      image_type: 'photo',
-      orientation: 'horizontal',
-      safesearch: true,
-      per_page: 20,
-      min_width: 800,
-      min_height: 600
-    };
-    
+    if (mediaCache.has(cacheKey)) {
+      const cached = mediaCache.get(cacheKey);
+      const randomIndex = Math.floor(Math.random() * cached.length);
+      return cached[randomIndex];
+    }
+
+    const searchTerms = extractSearchTerms(searchTerm);
+    const isVideo = forceVideo || Math.random() < VIDEO_RATIO;
+
     let response;
     let mediaType = 'image';
-    
-    if (useVideo) {
+
+    if (isVideo) {
+      // جلب فيديو
       response = await axios.get('https://pixabay.com/api/videos/', {
         params: {
           key: PIXABAY_CONFIG.API_KEY,
@@ -198,71 +99,80 @@ const fetchPixabayImage = async (jobTitle) => {
       });
       mediaType = 'video';
     } else {
+      // جلب صورة
       response = await axios.get(PIXABAY_CONFIG.BASE_URL, {
-        params,
-        timeout: 10000
-      });
-    }
-    
-    const hits = response.data.hits || [];
-    
-    if (hits.length === 0) {
-      const fallbackResponse = await axios.get(PIXABAY_CONFIG.BASE_URL, {
         params: {
-          ...params,
-          q: 'business+office+work'
+          key: PIXABAY_CONFIG.API_KEY,
+          q: searchTerms.join('+'),
+          lang: 'en',
+          image_type: 'photo',
+          orientation: 'horizontal',
+          safesearch: true,
+          per_page: 20,
+          min_width: 800,
+          min_height: 600
         },
         timeout: 10000
       });
-      
-      const fallbackHits = fallbackResponse.data.hits || [];
+    }
+
+    const hits = response.data?.hits || [];
+
+    if (hits.length === 0) {
+      // Fallback إلى صور عامة
+      const fallbackResponse = await axios.get(PIXABAY_CONFIG.BASE_URL, {
+        params: {
+          key: PIXABAY_CONFIG.API_KEY,
+          q: 'business+office+work',
+          lang: 'en',
+          image_type: 'photo',
+          orientation: 'horizontal',
+          safesearch: true,
+          per_page: 20
+        },
+        timeout: 10000
+      });
+
+      const fallbackHits = fallbackResponse.data?.hits || [];
       if (fallbackHits.length > 0) {
-        const randomIndex = Math.floor(Math.random() * Math.min(fallbackHits.length, 20));
+        const randomIndex = Math.floor(Math.random() * fallbackHits.length);
         const selected = fallbackHits[randomIndex];
         return {
           type: 'image',
           url: selected.largeImageURL || selected.webformatURL,
           thumbnail: selected.previewURL,
-          width: selected.imageWidth,
-          height: selected.imageHeight,
-          source: 'pixabay',
-          photographer: selected.user
+          source: 'pixabay'
         };
       }
-      
       return null;
     }
-    
-    const formattedImages = hits.map(hit => {
+
+    // تنسيق النتائج
+    const formattedMedia = hits.map(hit => {
       if (mediaType === 'video') {
         return {
           type: 'video',
-          url: hit.videos?.large?.url || hit.videos?.medium?.url,
-          thumbnail: hit.videos?.tiny?.thumbnail || hit.picture_id,
-          width: hit.videos?.large?.width || 1920,
-          height: hit.videos?.large?.height || 1080,
-          source: 'pixabay',
-          photographer: hit.user
+          url: hit.videos?.large?.url || hit.videos?.medium?.url || hit.videos?.small?.url,
+          thumbnail: `https://i.vimeocdn.com/video/${hit.picture_id}_640x360.jpg`,
+          source: 'pixabay'
         };
       }
       return {
         type: 'image',
         url: hit.largeImageURL || hit.webformatURL,
         thumbnail: hit.previewURL,
-        width: hit.imageWidth,
-        height: hit.imageHeight,
-        source: 'pixabay',
-        photographer: hit.user
+        source: 'pixabay'
       };
     });
-    
-    imageCache.set(cacheKey, formattedImages);
-    
-    const randomIndex = Math.floor(Math.random() * Math.min(formattedImages.length, 20));
-    return formattedImages[randomIndex];
-    
+
+    // حفظ في الكاش
+    mediaCache.set(cacheKey, formattedMedia);
+
+    const randomIndex = Math.floor(Math.random() * formattedMedia.length);
+    return formattedMedia[randomIndex];
+
   } catch (error) {
-    console.error('[Pixabay] Error fetching image:', error.message);
+    console.error('[Pixabay] Error fetching media:', error.message);
     return null;
   }
 };
@@ -272,9 +182,9 @@ const fetchPixabayImage = async (jobTitle) => {
  */
 const extractSearchTerms = (title) => {
   if (!title) return ['business', 'work'];
-  
+
   const lowerTitle = title.toLowerCase();
-  
+
   const searchMappings = {
     'software': ['software', 'coding', 'programming'],
     'developer': ['developer', 'coding', 'computer'],
@@ -295,436 +205,318 @@ const extractSearchTerms = (title) => {
     'construction': ['construction', 'building', 'worker'],
     'security': ['security', 'guard', 'protection'],
     'warehouse': ['warehouse', 'logistics', 'storage'],
-    'delivery': ['delivery', 'shipping', 'package'],
-    'customer service': ['customer service', 'support', 'helpdesk'],
+    'retail': ['retail', 'shopping', 'store'],
     'receptionist': ['receptionist', 'office', 'front desk'],
     'cleaner': ['cleaning', 'housekeeping', 'janitorial'],
     'data': ['data', 'analytics', 'computer'],
     'analyst': ['analyst', 'business', 'charts']
   };
-  
+
   for (const [keyword, terms] of Object.entries(searchMappings)) {
     if (lowerTitle.includes(keyword)) {
       return terms;
     }
   }
-  
+
   const words = title.split(/\s+/).filter(w => w.length > 3);
   if (words.length > 0) {
     return [words[0], 'professional', 'work'];
   }
-  
+
   return ['business', 'professional', 'work'];
 };
 
 /**
- * جلب الوظائف من Adzuna API مع دعم أولوية دولة المستخدم والترجمة
+ * تحويل بيانات JSearch إلى صيغة ExternalJob
  */
-exports.fetchJobs = async (params = {}) => {
+const formatJSearchJob = async (job, index) => {
+  // تحديد ما إذا كانت هذه الوظيفة ستحصل على فيديو (25%)
+  const shouldBeVideo = index % 4 === 0; // كل رابع وظيفة تحصل على فيديو
+
+  // جلب الوسائط من Pixabay
+  const media = await fetchPixabayMedia(job.job_title, shouldBeVideo);
+
+  return {
+    jobId: job.job_id,
+    title: job.job_title || 'وظيفة غير معنونة',
+    description: job.job_description || '',
+    employer: {
+      name: job.employer_name || 'غير محدد',
+      logo: job.employer_logo || null,
+      website: job.employer_website || null
+    },
+    location: {
+      city: job.job_city || '',
+      state: job.job_state || '',
+      country: job.job_country || 'Saudi Arabia',
+      isRemote: job.job_is_remote || false
+    },
+    employmentType: mapEmploymentType(job.job_employment_type),
+    salary: {
+      min: job.job_min_salary || null,
+      max: job.job_max_salary || null,
+      currency: job.job_salary_currency || 'SAR',
+      period: job.job_salary_period || 'YEAR'
+    },
+    applyLink: job.job_apply_link || job.job_google_link || '#',
+    media: media || {
+      type: 'image',
+      url: null,
+      thumbnail: null,
+      source: 'none'
+    },
+    postedAt: job.job_posted_at_datetime_utc ? new Date(job.job_posted_at_datetime_utc) : new Date(),
+    expiresAt: job.job_offer_expiration_datetime_utc ? new Date(job.job_offer_expiration_datetime_utc) : null,
+    isActive: true,
+    tags: extractTags(job),
+    lastFetchedAt: new Date()
+  };
+};
+
+/**
+ * تحويل نوع التوظيف
+ */
+const mapEmploymentType = (type) => {
+  if (!type) return 'FULLTIME';
+  
+  const typeMap = {
+    'FULLTIME': 'FULLTIME',
+    'FULL_TIME': 'FULLTIME',
+    'PARTTIME': 'PARTTIME',
+    'PART_TIME': 'PARTTIME',
+    'CONTRACTOR': 'CONTRACTOR',
+    'CONTRACT': 'CONTRACTOR',
+    'INTERN': 'INTERN',
+    'INTERNSHIP': 'INTERN'
+  };
+
+  return typeMap[type.toUpperCase()] || 'OTHER';
+};
+
+/**
+ * استخراج التصنيفات من الوظيفة
+ */
+const extractTags = (job) => {
+  const tags = [];
+  
+  if (job.job_employment_type) tags.push(job.job_employment_type);
+  if (job.job_is_remote) tags.push('remote');
+  if (job.job_city) tags.push(job.job_city);
+  if (job.job_country) tags.push(job.job_country);
+  
+  // استخراج كلمات مفتاحية من العنوان
+  const titleWords = (job.job_title || '').split(/\s+/).filter(w => w.length > 3);
+  tags.push(...titleWords.slice(0, 3));
+
+  return [...new Set(tags)];
+};
+
+/**
+ * جلب الوظائف وحفظها في MongoDB
+ * يُستدعى من Cron Job كل 6 ساعات
+ */
+exports.fetchAndSaveJobs = async (query = 'وظائف في السعودية') => {
   try {
-    const {
-      country,
-      userCountry,
-      category = '',
-      what = '',
-      where = '',
-      page = 1,
-      results_per_page = 20,
-      sort_by = 'date',
-      salary_min,
-      salary_max,
-      contract_type,
-      full_time,
-      lang = 'ar' // اللغة المستهدفة للترجمة
-    } = params;
+    console.log('[ExternalJobsService] Starting job fetch...');
+    
+    // جلب الوظائف من JSearch
+    const jobs = await fetchFromJSearch(query, 1, 3); // 3 صفحات
 
-    let targetCountry = country;
-    
-    if (!targetCountry && userCountry) {
-      targetCountry = getCountryCode(userCountry);
-    }
-    
-    const adzunaSupportedCountries = ['gb', 'us', 'au', 'at', 'be', 'br', 'ca', 'ch', 'de', 'es', 'fr', 'in', 'it', 'mx', 'nl', 'nz', 'pl', 'ru', 'sg', 'za'];
-    
-    let countryCode = targetCountry?.toLowerCase();
-    let isMixedResults = false;
-    
-    if (!countryCode || !adzunaSupportedCountries.includes(countryCode)) {
-      isMixedResults = true;
-      countryCode = 'gb';
+    if (!jobs || jobs.length === 0) {
+      console.log('[ExternalJobsService] No jobs found');
+      return { success: true, count: 0, message: 'لم يتم العثور على وظائف' };
     }
 
-    let url = `${ADZUNA_CONFIG.BASE_URL}/${countryCode}/search/${page}`;
+    let savedCount = 0;
+    let updatedCount = 0;
 
-    const queryParams = {
-      app_id: ADZUNA_CONFIG.APP_ID,
-      app_key: ADZUNA_CONFIG.APP_KEY,
-      results_per_page: Math.min(results_per_page, 50),
-      sort_by
-    };
+    // معالجة كل وظيفة
+    for (let i = 0; i < jobs.length; i++) {
+      try {
+        const formattedJob = await formatJSearchJob(jobs[i], i);
 
-    if (what) queryParams.what = what;
-    if (where) queryParams.where = where;
-    if (category && JOB_CATEGORIES[category]) queryParams.category = category;
-    if (salary_min) queryParams.salary_min = salary_min;
-    if (salary_max) queryParams.salary_max = salary_max;
-    if (contract_type) queryParams.contract_type = contract_type;
-    if (full_time !== undefined) queryParams.full_time = full_time ? 1 : 0;
+        // التحقق من وجود الوظيفة
+        const existingJob = await ExternalJob.findOne({ jobId: formattedJob.jobId });
 
-    console.log('[ExternalJobsService] Fetching jobs from Adzuna:', { url, params: queryParams, userCountry, isMixedResults, lang });
+        if (existingJob) {
+          // تحديث الوظيفة الموجودة
+          await ExternalJob.updateOne(
+            { jobId: formattedJob.jobId },
+            { 
+              $set: { 
+                ...formattedJob,
+                lastFetchedAt: new Date()
+              }
+            }
+          );
+          updatedCount++;
+        } else {
+          // إنشاء وظيفة جديدة
+          await ExternalJob.create(formattedJob);
+          savedCount++;
+        }
 
-    const response = await axios.get(url, {
-      params: queryParams,
-      timeout: 15000
-    });
+        // تأخير بسيط لتجنب حد الطلبات
+        if (i % 5 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
-    // تحويل البيانات مع الترجمة الحقيقية
-    const jobs = await Promise.all(
-      (response.data.results || []).map(job => formatJobWithRealTranslation(job, countryCode, lang))
-    );
+      } catch (jobError) {
+        console.error(`[ExternalJobsService] Error processing job ${i}:`, jobError.message);
+      }
+    }
 
-    const countryInfo = SUPPORTED_COUNTRIES[countryCode] || { en: 'Unknown', ar: 'غير معروف' };
+    console.log(`[ExternalJobsService] Completed: ${savedCount} new, ${updatedCount} updated`);
 
     return {
       success: true,
-      count: jobs.length,
-      total: response.data.count || 0,
-      page: parseInt(page),
-      results_per_page: parseInt(results_per_page),
-      totalPages: Math.ceil((response.data.count || 0) / results_per_page),
-      country: {
-        code: countryCode,
-        name: countryInfo.en,
-        nameAr: countryInfo.ar
-      },
-      userCountry: userCountry || null,
-      isMixedResults,
-      targetLanguage: lang,
-      jobs
+      count: savedCount + updatedCount,
+      newJobs: savedCount,
+      updatedJobs: updatedCount,
+      message: `تم جلب ${savedCount} وظيفة جديدة وتحديث ${updatedCount} وظيفة`
     };
 
   } catch (error) {
-    console.error('[ExternalJobsService] Error fetching jobs:', error.message);
-    
-    if (error.response) {
-      const status = error.response.status;
-      if (status === 401) {
-        throw new Error('خطأ في مصادقة API - تحقق من APP_ID و APP_KEY');
-      } else if (status === 429) {
-        throw new Error('تم تجاوز حد الطلبات - حاول مرة أخرى لاحقاً');
-      } else if (status === 404) {
-        throw new Error('لم يتم العثور على وظائف');
-      }
-    }
-    
+    console.error('[ExternalJobsService] Error in fetchAndSaveJobs:', error.message);
     throw error;
   }
 };
 
 /**
- * جلب التصنيفات المتاحة
+ * جلب الوظائف من قاعدة البيانات (للواجهة الأمامية)
  */
-exports.getCategories = () => {
-  return {
-    success: true,
-    categories: Object.entries(JOB_CATEGORIES).map(([key, value]) => ({
-      id: key,
-      name: value.en,
-      nameAr: value.ar
-    }))
-  };
-};
+exports.getJobs = async (params = {}) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      country,
+      city,
+      employmentType,
+      isRemote,
+      search
+    } = params;
 
-/**
- * جلب الدول المدعومة
- */
-exports.getSupportedCountries = () => {
-  const sortedCountries = Object.entries(SUPPORTED_COUNTRIES)
-    .sort((a, b) => a[1].priority - b[1].priority)
-    .map(([code, data]) => ({
-      code,
-      name: data.en,
-      nameAr: data.ar,
-      priority: data.priority
-    }));
+    const query = { isActive: true };
 
-  return {
-    success: true,
-    countries: sortedCountries
-  };
-};
-
-/**
- * تنسيق بيانات الوظيفة مع الترجمة الحقيقية والصورة
- */
-const formatJobWithRealTranslation = async (job, countryCode, targetLang = 'ar') => {
-  // جلب صورة من Pixabay
-  const pixabayImage = await fetchPixabayImage(job.title);
-  
-  // استخراج اسم الشركة
-  const companyName = job.company?.display_name || 'شركة غير محددة';
-  
-  const cleanCompanyName = companyName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .trim();
-
-  const logoUrl = cleanCompanyName ? `https://logo.clearbit.com/${cleanCompanyName}.com` : null;
-
-  const countryInfo = SUPPORTED_COUNTRIES[countryCode] || { en: 'Unknown', ar: 'غير معروف' };
-
-  // تنظيف الوصف
-  let cleanDesc = (job.description || '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  if (cleanDesc.length > 500) {
-    cleanDesc = cleanDesc.substring(0, 500) + '...';
-  }
-
-  // الترجمة الحقيقية باستخدام Google Translate
-  let translatedTitle = job.title;
-  let translatedDesc = cleanDesc;
-
-  if (targetLang !== 'en') {
-    try {
-      // ترجمة العنوان والوصف بالتوازي
-      const [titleResult, descResult] = await Promise.all([
-        translateText(job.title, targetLang, 'en'),
-        translateText(cleanDesc.substring(0, 300), targetLang, 'en') // تقليص للسرعة
-      ]);
-      
-      translatedTitle = titleResult;
-      translatedDesc = descResult;
-    } catch (error) {
-      console.error('[Translation] Error:', error.message);
-      // استخدام النص الأصلي عند فشل الترجمة
+    // فلاتر
+    if (country) query['location.country'] = new RegExp(country, 'i');
+    if (city) query['location.city'] = new RegExp(city, 'i');
+    if (employmentType) query.employmentType = employmentType;
+    if (isRemote !== undefined) query['location.isRemote'] = isRemote === 'true';
+    if (search) {
+      query.$text = { $search: search };
     }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [jobs, total] = await Promise.all([
+      ExternalJob.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      ExternalJob.countDocuments(query)
+    ]);
+
+    return {
+      success: true,
+      jobs,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    };
+
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in getJobs:', error.message);
+    throw error;
   }
-
-  return {
-    id: job.id,
-    title: {
-      ar: targetLang === 'ar' ? translatedTitle : job.title,
-      en: job.title,
-      display: translatedTitle // العنوان المترجم للغة المستهدفة
-    },
-    description: {
-      ar: targetLang === 'ar' ? translatedDesc : cleanDesc,
-      en: cleanDesc,
-      display: translatedDesc
-    },
-    company: {
-      name: companyName,
-      logo: logoUrl,
-      logoFallback: `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=random&color=fff&size=128`
-    },
-    location: {
-      display: job.location?.display_name || '',
-      area: job.location?.area || [],
-      country: countryInfo.en,
-      countryAr: countryInfo.ar
-    },
-    salary: {
-      min: job.salary_min || null,
-      max: job.salary_max || null,
-      currency: getCurrencyByCountry(countryCode),
-      display: formatSalary(job.salary_min, job.salary_max, countryCode),
-      displayAr: formatSalaryArabic(job.salary_min, job.salary_max, countryCode)
-    },
-    category: {
-      tag: job.category?.tag || '',
-      label: job.category?.label || '',
-      labelAr: JOB_CATEGORIES[job.category?.tag]?.ar || 'أخرى'
-    },
-    contract: {
-      type: job.contract_type || null,
-      time: job.contract_time || null,
-      typeAr: translateContractType(job.contract_type),
-      timeAr: translateContractTime(job.contract_time)
-    },
-    dates: {
-      created: job.created,
-      posted: formatDate(job.created),
-      postedAr: formatDateArabic(job.created)
-    },
-    media: pixabayImage || {
-      type: 'image',
-      url: `https://ui-avatars.com/api/?name=${encodeURIComponent(job.title)}&background=667eea&color=fff&size=800&font-size=0.3`,
-      thumbnail: null,
-      source: 'generated'
-    },
-    url: job.redirect_url,
-    source: 'adzuna'
-  };
 };
 
 /**
- * ترجمة نوع العقد
+ * جلب وظيفة واحدة بالمعرف
  */
-const translateContractType = (type) => {
-  const translations = {
-    'permanent': 'دائم',
-    'contract': 'عقد',
-    'temporary': 'مؤقت',
-    'part_time': 'دوام جزئي',
-    'full_time': 'دوام كامل'
-  };
-  return translations[type?.toLowerCase()] || type || 'غير محدد';
-};
+exports.getJobById = async (jobId) => {
+  try {
+    const job = await ExternalJob.findOne({ jobId }).lean();
+    
+    if (!job) {
+      return { success: false, message: 'الوظيفة غير موجودة' };
+    }
 
-/**
- * ترجمة وقت العقد
- */
-const translateContractTime = (time) => {
-  const translations = {
-    'full_time': 'دوام كامل',
-    'part_time': 'دوام جزئي'
-  };
-  return translations[time?.toLowerCase()] || time || 'غير محدد';
-};
+    // زيادة عدد المشاهدات
+    await ExternalJob.updateOne({ jobId }, { $inc: { views: 1 } });
 
-/**
- * الحصول على العملة حسب الدولة
- */
-const getCurrencyByCountry = (countryCode) => {
-  const currencies = {
-    'sa': 'SAR',
-    'ae': 'AED',
-    'kw': 'KWD',
-    'qa': 'QAR',
-    'bh': 'BHD',
-    'om': 'OMR',
-    'gb': 'GBP',
-    'us': 'USD',
-    'au': 'AUD',
-    'ca': 'CAD',
-    'de': 'EUR',
-    'fr': 'EUR',
-    'es': 'EUR',
-    'it': 'EUR',
-    'nl': 'EUR',
-    'at': 'EUR',
-    'be': 'EUR',
-    'ch': 'CHF',
-    'in': 'INR',
-    'br': 'BRL',
-    'mx': 'MXN',
-    'nz': 'NZD',
-    'pl': 'PLN',
-    'ru': 'RUB',
-    'sg': 'SGD',
-    'za': 'ZAR'
-  };
-  return currencies[countryCode] || 'USD';
-};
+    return { success: true, job };
 
-/**
- * تنسيق الراتب للعرض
- */
-const formatSalary = (min, max, countryCode) => {
-  const currency = getCurrencyByCountry(countryCode);
-  const formatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0
-  });
-
-  if (min && max) {
-    return `${formatter.format(min)} - ${formatter.format(max)}`;
-  } else if (min) {
-    return `From ${formatter.format(min)}`;
-  } else if (max) {
-    return `Up to ${formatter.format(max)}`;
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in getJobById:', error.message);
+    throw error;
   }
-  return 'Salary not specified';
 };
 
 /**
- * تنسيق الراتب بالعربية
+ * تسجيل نقرة على رابط التقديم
  */
-const formatSalaryArabic = (min, max, countryCode) => {
-  const currency = getCurrencyByCountry(countryCode);
-  const currencyNames = {
-    'SAR': 'ريال',
-    'AED': 'درهم',
-    'KWD': 'دينار',
-    'QAR': 'ريال',
-    'BHD': 'دينار',
-    'OMR': 'ريال',
-    'GBP': 'جنيه',
-    'USD': 'دولار',
-    'EUR': 'يورو'
-  };
-  
-  const currencyName = currencyNames[currency] || currency;
-  
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat('ar-SA').format(num);
-  };
-
-  if (min && max) {
-    return `${formatNumber(min)} - ${formatNumber(max)} ${currencyName}`;
-  } else if (min) {
-    return `من ${formatNumber(min)} ${currencyName}`;
-  } else if (max) {
-    return `حتى ${formatNumber(max)} ${currencyName}`;
+exports.recordClick = async (jobId) => {
+  try {
+    await ExternalJob.updateOne({ jobId }, { $inc: { clicks: 1 } });
+    return { success: true };
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in recordClick:', error.message);
+    throw error;
   }
-  return 'الراتب غير محدد';
 };
 
 /**
- * تنسيق التاريخ
+ * حذف الوظائف القديمة (أكثر من 30 يوم)
  */
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffTime = Math.abs(now - date);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
+exports.cleanupOldJobs = async () => {
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const result = await ExternalJob.deleteMany({
+      createdAt: { $lt: thirtyDaysAgo }
+    });
+
+    console.log(`[ExternalJobsService] Cleaned up ${result.deletedCount} old jobs`);
+    return { success: true, deletedCount: result.deletedCount };
+
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in cleanupOldJobs:', error.message);
+    throw error;
+  }
 };
 
 /**
- * تنسيق التاريخ بالعربية
+ * إحصائيات الوظائف
  */
-const formatDateArabic = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffTime = Math.abs(now - date);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) return 'اليوم';
-  if (diffDays === 1) return 'أمس';
-  if (diffDays < 7) return `منذ ${diffDays} أيام`;
-  if (diffDays < 30) return `منذ ${Math.floor(diffDays / 7)} أسابيع`;
-  if (diffDays < 365) return `منذ ${Math.floor(diffDays / 30)} أشهر`;
-  
-  return date.toLocaleDateString('ar-SA', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-};
+exports.getStats = async () => {
+  try {
+    const [total, active, withVideo, withImage] = await Promise.all([
+      ExternalJob.countDocuments(),
+      ExternalJob.countDocuments({ isActive: true }),
+      ExternalJob.countDocuments({ 'media.type': 'video' }),
+      ExternalJob.countDocuments({ 'media.type': 'image' })
+    ]);
 
-/**
- * ترجمة نص واحد - للاستخدام من الـ API
- */
-exports.translateJobText = async (text, targetLang = 'ar', sourceLang = 'auto') => {
-  return await translateText(text, targetLang, sourceLang);
+    return {
+      success: true,
+      stats: {
+        total,
+        active,
+        withVideo,
+        withImage,
+        videoRatio: total > 0 ? ((withVideo / total) * 100).toFixed(1) + '%' : '0%'
+      }
+    };
+
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in getStats:', error.message);
+    throw error;
+  }
 };
