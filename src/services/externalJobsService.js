@@ -1,23 +1,28 @@
 /**
  * ============================================
- * خدمة الوظائف الخارجية - JSearch API + Pixabay
+ * خدمة الوظائف الخارجية - RemoteOK API (مجاني)
  * ============================================
  * 
- * هذه الخدمة تقوم بجلب الوظائف من JSearch API (RapidAPI)
- * مع صور/فيديوهات من Pixabay
+ * تم التحديث لاستخدام RemoteOK API المجاني
+ * بدلاً من JSearch API (الذي انتهت صلاحيته)
  * 
- * التحديث الجديد: جلب الوظائف مباشرة عند كل طلب من الواجهة الأمامية
- * وتخزينها في قاعدة البيانات تلقائياً
+ * RemoteOK API: https://remoteok.com/api
+ * - مجاني بالكامل
+ * - لا يحتاج مفتاح API
+ * - يحتوي على وظائف عن بعد من جميع أنحاء العالم
  */
 
 const axios = require('axios');
 const ExternalJob = require('../models/ExternalJob');
 
-// إعدادات JSearch API (RapidAPI)
-const JSEARCH_CONFIG = {
-  API_KEY: '6cf9c963f3mshd4aa12f20166a85p1bbe51jsn6acfedd8259a',
-  HOST: 'jsearch.p.rapidapi.com',
-  BASE_URL: 'https://jsearch.p.rapidapi.com/search'
+// إعدادات RemoteOK API (مجاني - لا يحتاج مفتاح)
+const REMOTEOK_CONFIG = {
+  BASE_URL: 'https://remoteok.com/api'
+};
+
+// إعدادات Arbeitnow API (مجاني - لا يحتاج مفتاح)
+const ARBEITNOW_CONFIG = {
+  BASE_URL: 'https://www.arbeitnow.com/api/job-board-api'
 };
 
 // إعدادات Pixabay API
@@ -26,61 +31,70 @@ const PIXABAY_CONFIG = {
   BASE_URL: 'https://pixabay.com/api/'
 };
 
-// نسبة الفيديو vs الصور (25% فيديو، 75% صور)
-const VIDEO_RATIO = 0.25;
-
 // كاش للوسائط لتجنب التكرار
 const mediaCache = new Map();
 
-// كاش للوظائف لتجنب الطلبات المتكررة (صالح لمدة 5 دقائق)
+// كاش للوظائف (صالح لمدة 10 دقائق)
 let jobsCache = {
   data: [],
-  timestamp: 0,
-  query: ''
+  timestamp: 0
 };
-const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
+const CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق
 
 /**
- * جلب الوظائف من JSearch API
+ * جلب الوظائف من RemoteOK API (مجاني)
  */
-const fetchFromJSearch = async (query = 'وظائف في السعودية', page = 1, numPages = 1) => {
+const fetchFromRemoteOK = async () => {
   try {
-    console.log('[JSearch] Fetching jobs with query:', query, 'page:', page);
+    console.log('[RemoteOK] Fetching jobs...');
 
-    const response = await axios.get(JSEARCH_CONFIG.BASE_URL, {
+    const response = await axios.get(REMOTEOK_CONFIG.BASE_URL, {
       headers: {
-        'X-RapidAPI-Key': JSEARCH_CONFIG.API_KEY,
-        'X-RapidAPI-Host': JSEARCH_CONFIG.HOST
+        'User-Agent': 'Mehnati-App/1.0'
       },
-      params: {
-        query: query,
-        page: page.toString(),
-        num_pages: numPages.toString(),
-        date_posted: 'all'
-      },
-      timeout: 30000
+      timeout: 15000
     });
 
-    const jobs = response.data?.data || [];
-    console.log(`[JSearch] Fetched ${jobs.length} jobs from API`);
+    // RemoteOK يرجع مصفوفة، العنصر الأول هو معلومات قانونية
+    const jobs = response.data.slice(1); // تخطي العنصر الأول
+    console.log(`[RemoteOK] Fetched ${jobs.length} jobs`);
 
     return jobs;
 
   } catch (error) {
-    console.error('[JSearch] Error fetching jobs:', error.message);
-    if (error.response) {
-      console.error('[JSearch] Response status:', error.response.status);
-    }
+    console.error('[RemoteOK] Error fetching jobs:', error.message);
     return [];
   }
 };
 
 /**
- * جلب وسائط من Pixabay (صورة أو فيديو) - نسخة سريعة بدون انتظار
+ * جلب الوظائف من Arbeitnow API (مجاني - احتياطي)
  */
-const fetchPixabayMediaFast = async (searchTerm, forceVideo = false) => {
+const fetchFromArbeitnow = async () => {
   try {
-    const cacheKey = `${searchTerm}-${forceVideo ? 'video' : 'image'}`;
+    console.log('[Arbeitnow] Fetching jobs...');
+
+    const response = await axios.get(ARBEITNOW_CONFIG.BASE_URL, {
+      timeout: 15000
+    });
+
+    const jobs = response.data.data || [];
+    console.log(`[Arbeitnow] Fetched ${jobs.length} jobs`);
+
+    return jobs;
+
+  } catch (error) {
+    console.error('[Arbeitnow] Error fetching jobs:', error.message);
+    return [];
+  }
+};
+
+/**
+ * جلب صورة من Pixabay
+ */
+const fetchPixabayImage = async (searchTerm) => {
+  try {
+    const cacheKey = searchTerm;
     
     if (mediaCache.has(cacheKey)) {
       const cached = mediaCache.get(cacheKey);
@@ -89,65 +103,32 @@ const fetchPixabayMediaFast = async (searchTerm, forceVideo = false) => {
     }
 
     const searchTerms = extractSearchTerms(searchTerm);
-    const isVideo = forceVideo || Math.random() < VIDEO_RATIO;
 
-    let response;
-    let mediaType = 'image';
-
-    if (isVideo) {
-      response = await axios.get('https://pixabay.com/api/videos/', {
-        params: {
-          key: PIXABAY_CONFIG.API_KEY,
-          q: searchTerms.join('+'),
-          lang: 'en',
-          safesearch: true,
-          per_page: 10
-        },
-        timeout: 5000
-      });
-      mediaType = 'video';
-    } else {
-      response = await axios.get(PIXABAY_CONFIG.BASE_URL, {
-        params: {
-          key: PIXABAY_CONFIG.API_KEY,
-          q: searchTerms.join('+'),
-          lang: 'en',
-          image_type: 'photo',
-          orientation: 'horizontal',
-          safesearch: true,
-          per_page: 10
-        },
-        timeout: 5000
-      });
-    }
+    const response = await axios.get(PIXABAY_CONFIG.BASE_URL, {
+      params: {
+        key: PIXABAY_CONFIG.API_KEY,
+        q: searchTerms.join('+'),
+        lang: 'en',
+        image_type: 'photo',
+        orientation: 'horizontal',
+        safesearch: true,
+        per_page: 10
+      },
+      timeout: 5000
+    });
 
     const hits = response.data?.hits || [];
 
     if (hits.length === 0) {
-      return {
-        type: 'image',
-        url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
-        thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200',
-        source: 'fallback'
-      };
+      return getDefaultImage();
     }
 
-    const formattedMedia = hits.map(hit => {
-      if (mediaType === 'video') {
-        return {
-          type: 'video',
-          url: hit.videos?.large?.url || hit.videos?.medium?.url || hit.videos?.small?.url,
-          thumbnail: `https://i.vimeocdn.com/video/${hit.picture_id}_640x360.jpg`,
-          source: 'pixabay'
-        };
-      }
-      return {
-        type: 'image',
-        url: hit.largeImageURL || hit.webformatURL,
-        thumbnail: hit.previewURL,
-        source: 'pixabay'
-      };
-    });
+    const formattedMedia = hits.map(hit => ({
+      type: 'image',
+      url: hit.largeImageURL || hit.webformatURL,
+      thumbnail: hit.previewURL,
+      source: 'pixabay'
+    }));
 
     mediaCache.set(cacheKey, formattedMedia);
 
@@ -156,14 +137,19 @@ const fetchPixabayMediaFast = async (searchTerm, forceVideo = false) => {
 
   } catch (error) {
     console.error('[Pixabay] Error:', error.message);
-    return {
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
-      thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200',
-      source: 'fallback'
-    };
+    return getDefaultImage();
   }
 };
+
+/**
+ * صورة افتراضية
+ */
+const getDefaultImage = () => ({
+  type: 'image',
+  url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
+  thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200',
+  source: 'default'
+});
 
 /**
  * استخراج كلمات البحث من عنوان الوظيفة
@@ -177,26 +163,14 @@ const extractSearchTerms = (title) => {
     'software': ['software', 'coding', 'programming'],
     'developer': ['developer', 'coding', 'computer'],
     'engineer': ['engineer', 'engineering', 'technical'],
-    'driver': ['driver', 'driving', 'car'],
-    'nurse': ['nurse', 'healthcare', 'medical'],
-    'doctor': ['doctor', 'medical', 'healthcare'],
-    'teacher': ['teacher', 'education', 'classroom'],
-    'accountant': ['accountant', 'finance', 'office'],
-    'sales': ['sales', 'business', 'meeting'],
+    'designer': ['designer', 'creative', 'design'],
     'marketing': ['marketing', 'business', 'advertising'],
     'manager': ['manager', 'business', 'office'],
-    'chef': ['chef', 'cooking', 'kitchen'],
-    'designer': ['designer', 'creative', 'design'],
-    'lawyer': ['lawyer', 'legal', 'justice'],
-    'mechanic': ['mechanic', 'automotive', 'repair'],
-    'electrician': ['electrician', 'electrical', 'wiring'],
-    'construction': ['construction', 'building', 'worker'],
-    'security': ['security', 'guard', 'protection'],
-    'warehouse': ['warehouse', 'logistics', 'storage'],
-    'retail': ['retail', 'shopping', 'store'],
-    'receptionist': ['receptionist', 'office', 'front desk'],
-    'cleaner': ['cleaning', 'housekeeping', 'janitorial'],
     'data': ['data', 'analytics', 'computer'],
+    'product': ['product', 'business', 'meeting'],
+    'sales': ['sales', 'business', 'meeting'],
+    'support': ['support', 'customer', 'service'],
+    'writer': ['writer', 'content', 'creative'],
     'analyst': ['analyst', 'business', 'charts']
   };
 
@@ -206,117 +180,99 @@ const extractSearchTerms = (title) => {
     }
   }
 
-  const words = title.split(/\s+/).filter(w => w.length > 3);
-  if (words.length > 0) {
-    return [words[0], 'professional', 'work'];
-  }
-
   return ['business', 'professional', 'work'];
 };
 
 /**
- * تحويل نوع التوظيف
+ * تحويل بيانات RemoteOK إلى صيغة ExternalJob
  */
-const mapEmploymentType = (type) => {
-  if (!type) return 'FULLTIME';
-  
-  const typeMap = {
-    'FULLTIME': 'FULLTIME',
-    'FULL_TIME': 'FULLTIME',
-    'PARTTIME': 'PARTTIME',
-    'PART_TIME': 'PARTTIME',
-    'CONTRACTOR': 'CONTRACTOR',
-    'CONTRACT': 'CONTRACTOR',
-    'INTERN': 'INTERN',
-    'INTERNSHIP': 'INTERN'
-  };
-
-  return typeMap[type.toUpperCase()] || 'OTHER';
-};
-
-/**
- * استخراج التصنيفات من الوظيفة
- */
-const extractTags = (job) => {
-  const tags = [];
-  
-  if (job.job_employment_type) tags.push(job.job_employment_type);
-  if (job.job_is_remote) tags.push('remote');
-  if (job.job_city) tags.push(job.job_city);
-  if (job.job_country) tags.push(job.job_country);
-  
-  const titleWords = (job.job_title || '').split(/\s+/).filter(w => w.length > 3);
-  tags.push(...titleWords.slice(0, 3));
-
-  return [...new Set(tags)];
-};
-
-/**
- * تحويل بيانات JSearch إلى صيغة ExternalJob (نسخة سريعة)
- */
-const formatJSearchJobFast = (job, index, media = null) => {
+const formatRemoteOKJob = (job, media) => {
   return {
-    jobId: job.job_id,
-    title: job.job_title || 'وظيفة غير معنونة',
-    description: job.job_description || '',
+    jobId: job.id || job.slug || `remoteok-${Date.now()}-${Math.random()}`,
+    title: job.position || 'وظيفة عن بعد',
+    description: job.description || '',
     employer: {
-      name: job.employer_name || 'غير محدد',
-      logo: job.employer_logo || null,
-      website: job.employer_website || null
+      name: job.company || 'شركة عالمية',
+      logo: job.company_logo || null,
+      website: job.url || null
     },
     location: {
-      city: job.job_city || '',
-      state: job.job_state || '',
-      country: job.job_country || 'Saudi Arabia',
-      isRemote: job.job_is_remote || false
+      city: '',
+      state: '',
+      country: job.location || 'Remote',
+      isRemote: true
     },
-    employmentType: mapEmploymentType(job.job_employment_type),
+    employmentType: 'FULLTIME',
     salary: {
-      min: job.job_min_salary || null,
-      max: job.job_max_salary || null,
-      currency: job.job_salary_currency || 'SAR',
-      period: job.job_salary_period || 'YEAR'
+      min: job.salary_min || null,
+      max: job.salary_max || null,
+      currency: 'USD',
+      period: 'YEAR'
     },
-    applyLink: job.job_apply_link || job.job_google_link || '#',
-    media: media || {
-      type: 'image',
-      url: job.employer_logo || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
-      thumbnail: job.employer_logo || 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200',
-      source: 'employer'
-    },
-    postedAt: job.job_posted_at_datetime_utc ? new Date(job.job_posted_at_datetime_utc) : new Date(),
-    expiresAt: job.job_offer_expiration_datetime_utc ? new Date(job.job_offer_expiration_datetime_utc) : null,
+    applyLink: job.url || job.apply_url || `https://remoteok.com/remote-jobs/${job.slug}`,
+    media: media || getDefaultImage(),
+    postedAt: job.date ? new Date(job.date) : new Date(),
+    expiresAt: null,
     isActive: true,
-    tags: extractTags(job),
-    lastFetchedAt: new Date()
+    tags: job.tags || [],
+    lastFetchedAt: new Date(),
+    source: 'remoteok'
+  };
+};
+
+/**
+ * تحويل بيانات Arbeitnow إلى صيغة ExternalJob
+ */
+const formatArbeitnowJob = (job, media) => {
+  return {
+    jobId: job.slug || `arbeitnow-${Date.now()}-${Math.random()}`,
+    title: job.title || 'وظيفة',
+    description: job.description || '',
+    employer: {
+      name: job.company_name || 'شركة',
+      logo: null,
+      website: job.url || null
+    },
+    location: {
+      city: job.location || '',
+      state: '',
+      country: 'Germany',
+      isRemote: job.remote || false
+    },
+    employmentType: 'FULLTIME',
+    salary: {
+      min: null,
+      max: null,
+      currency: 'EUR',
+      period: 'YEAR'
+    },
+    applyLink: job.url || `https://www.arbeitnow.com/view/${job.slug}`,
+    media: media || getDefaultImage(),
+    postedAt: job.created_at ? new Date(job.created_at * 1000) : new Date(),
+    expiresAt: null,
+    isActive: true,
+    tags: job.tags || [],
+    lastFetchedAt: new Date(),
+    source: 'arbeitnow'
   };
 };
 
 /**
  * ============================================
- * 🚀 الدالة الرئيسية الجديدة - جلب مباشر وتخزين
+ * 🚀 الدالة الرئيسية - جلب مباشر وتخزين
  * ============================================
- * 
- * عند كل طلب من الواجهة الأمامية:
- * 1. جلب الوظائف من JSearch API مباشرة
- * 2. تخزينها في قاعدة البيانات
- * 3. إرجاعها للواجهة الأمامية
  */
 exports.getJobsLive = async (params = {}) => {
   try {
     const {
       page = 1,
-      limit = 10,
-      search = 'jobs in Saudi Arabia'
+      limit = 10
     } = params;
 
-    console.log(`[ExternalJobsService] Live fetch - page: ${page}, search: ${search}`);
+    console.log(`[ExternalJobsService] Live fetch - page: ${page}`);
 
-    // التحقق من الكاش أولاً (لتجنب الطلبات المتكررة)
     const now = Date.now();
-    const cacheValid = (now - jobsCache.timestamp) < CACHE_DURATION && 
-                       jobsCache.query === search &&
-                       jobsCache.data.length > 0;
+    const cacheValid = (now - jobsCache.timestamp) < CACHE_DURATION && jobsCache.data.length > 0;
 
     let allJobs = [];
 
@@ -324,47 +280,62 @@ exports.getJobsLive = async (params = {}) => {
       console.log('[ExternalJobsService] Using cached jobs');
       allJobs = jobsCache.data;
     } else {
-      // جلب الوظائف من JSearch API
-      const jsearchJobs = await fetchFromJSearch(search, page, 1);
-
-      if (jsearchJobs && jsearchJobs.length > 0) {
-        // تحويل وتخزين الوظائف بالتوازي
+      // جلب من RemoteOK أولاً
+      let remoteOKJobs = await fetchFromRemoteOK();
+      
+      // إذا فشل RemoteOK، جلب من Arbeitnow
+      if (remoteOKJobs.length === 0) {
+        console.log('[ExternalJobsService] RemoteOK failed, trying Arbeitnow...');
+        const arbeitnowJobs = await fetchFromArbeitnow();
+        
+        if (arbeitnowJobs.length > 0) {
+          // تحويل وظائف Arbeitnow
+          const formattedJobs = await Promise.all(
+            arbeitnowJobs.slice(0, 30).map(async (job) => {
+              const media = await fetchPixabayImage(job.title);
+              const formatted = formatArbeitnowJob(job, media);
+              
+              // حفظ في قاعدة البيانات
+              saveJobToDatabase(formatted).catch(() => {});
+              
+              return formatted;
+            })
+          );
+          allJobs = formattedJobs;
+        }
+      } else {
+        // تحويل وظائف RemoteOK
         const formattedJobs = await Promise.all(
-          jsearchJobs.map(async (job, index) => {
-            // جلب الوسائط بشكل سريع
-            const shouldBeVideo = index % 4 === 0;
-            const media = await fetchPixabayMediaFast(job.job_title, shouldBeVideo);
+          remoteOKJobs.slice(0, 30).map(async (job) => {
+            const media = await fetchPixabayImage(job.position);
+            const formatted = formatRemoteOKJob(job, media);
             
-            const formattedJob = formatJSearchJobFast(job, index, media);
-
-            // حفظ في قاعدة البيانات (بدون انتظار)
-            saveJobToDatabase(formattedJob).catch(err => 
-              console.error('[DB] Error saving job:', err.message)
-            );
-
-            return formattedJob;
+            // حفظ في قاعدة البيانات
+            saveJobToDatabase(formatted).catch(() => {});
+            
+            return formatted;
           })
         );
-
         allJobs = formattedJobs;
+      }
 
-        // تحديث الكاش
-        jobsCache = {
-          data: formattedJobs,
-          timestamp: now,
-          query: search
-        };
-
-        console.log(`[ExternalJobsService] Fetched and cached ${formattedJobs.length} jobs`);
-      } else {
-        // إذا فشل JSearch، جلب من قاعدة البيانات
-        console.log('[ExternalJobsService] JSearch failed, fetching from database');
+      // إذا فشل كل شيء، جلب من قاعدة البيانات
+      if (allJobs.length === 0) {
+        console.log('[ExternalJobsService] All APIs failed, fetching from database');
         const dbJobs = await ExternalJob.find({ isActive: true })
           .sort({ createdAt: -1 })
-          .limit(parseInt(limit) * 2)
+          .limit(50)
           .lean();
-        
         allJobs = dbJobs;
+      }
+
+      // تحديث الكاش
+      if (allJobs.length > 0) {
+        jobsCache = {
+          data: allJobs,
+          timestamp: now
+        };
+        console.log(`[ExternalJobsService] Cached ${allJobs.length} jobs`);
       }
     }
 
@@ -420,7 +391,7 @@ exports.getJobsLive = async (params = {}) => {
 };
 
 /**
- * حفظ وظيفة في قاعدة البيانات (بدون انتظار)
+ * حفظ وظيفة في قاعدة البيانات
  */
 const saveJobToDatabase = async (formattedJob) => {
   try {
@@ -435,15 +406,14 @@ const saveJobToDatabase = async (formattedJob) => {
       await ExternalJob.create(formattedJob);
     }
   } catch (error) {
-    // تجاهل أخطاء التكرار
     if (error.code !== 11000) {
-      throw error;
+      console.error('[DB] Error saving job:', error.message);
     }
   }
 };
 
 /**
- * جلب الوظائف من قاعدة البيانات فقط (الدالة القديمة)
+ * جلب الوظائف من قاعدة البيانات فقط
  */
 exports.getJobs = async (params = {}) => {
   try {
@@ -533,65 +503,43 @@ exports.recordClick = async (jobId) => {
 };
 
 /**
- * جلب الوظائف وحفظها في MongoDB (للـ Cron Job)
+ * جلب الوظائف وحفظها (للـ Cron Job)
  */
-exports.fetchAndSaveJobs = async (query = 'وظائف في السعودية') => {
+exports.fetchAndSaveJobs = async () => {
   try {
-    console.log('[ExternalJobsService] Starting job fetch...');
+    console.log('[ExternalJobsService] Cron: Starting job fetch...');
     
-    const jobs = await fetchFromJSearch(query, 1, 3);
+    const remoteOKJobs = await fetchFromRemoteOK();
 
-    if (!jobs || jobs.length === 0) {
+    if (!remoteOKJobs || remoteOKJobs.length === 0) {
       console.log('[ExternalJobsService] No jobs found');
-      return { success: true, count: 0, message: 'لم يتم العثور على وظائف' };
+      return { success: true, count: 0 };
     }
 
     let savedCount = 0;
-    let updatedCount = 0;
 
-    for (let i = 0; i < jobs.length; i++) {
+    for (let i = 0; i < Math.min(remoteOKJobs.length, 50); i++) {
       try {
-        const media = await fetchPixabayMediaFast(jobs[i].job_title, i % 4 === 0);
-        const formattedJob = formatJSearchJobFast(jobs[i], i, media);
-
-        const existingJob = await ExternalJob.findOne({ jobId: formattedJob.jobId });
-
-        if (existingJob) {
-          await ExternalJob.updateOne(
-            { jobId: formattedJob.jobId },
-            { $set: { ...formattedJob, lastFetchedAt: new Date() } }
-          );
-          updatedCount++;
-        } else {
-          await ExternalJob.create(formattedJob);
-          savedCount++;
-        }
-
-      } catch (jobError) {
-        if (jobError.code !== 11000) {
-          console.error(`[ExternalJobsService] Error processing job ${i}:`, jobError.message);
-        }
+        const media = await fetchPixabayImage(remoteOKJobs[i].position);
+        const formattedJob = formatRemoteOKJob(remoteOKJobs[i], media);
+        await saveJobToDatabase(formattedJob);
+        savedCount++;
+      } catch (err) {
+        // تجاهل الأخطاء الفردية
       }
     }
 
-    console.log(`[ExternalJobsService] Completed: ${savedCount} new, ${updatedCount} updated`);
-
-    return {
-      success: true,
-      count: savedCount + updatedCount,
-      newJobs: savedCount,
-      updatedJobs: updatedCount,
-      message: `تم جلب ${savedCount} وظيفة جديدة وتحديث ${updatedCount} وظيفة`
-    };
+    console.log(`[ExternalJobsService] Cron: Saved ${savedCount} jobs`);
+    return { success: true, count: savedCount, newJobs: savedCount, updatedJobs: 0 };
 
   } catch (error) {
-    console.error('[ExternalJobsService] Error in fetchAndSaveJobs:', error.message);
+    console.error('[ExternalJobsService] Cron Error:', error.message);
     throw error;
   }
 };
 
 /**
- * حذف الوظائف القديمة (أكثر من 30 يوم)
+ * حذف الوظائف القديمة
  */
 exports.cleanupOldJobs = async () => {
   try {
@@ -641,10 +589,10 @@ exports.getStats = async () => {
 };
 
 /**
- * مسح الكاش (للاختبار)
+ * مسح الكاش
  */
 exports.clearCache = () => {
-  jobsCache = { data: [], timestamp: 0, query: '' };
+  jobsCache = { data: [], timestamp: 0 };
   mediaCache.clear();
   console.log('[ExternalJobsService] Cache cleared');
 };
