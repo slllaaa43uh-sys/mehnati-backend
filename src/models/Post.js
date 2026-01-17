@@ -111,8 +111,15 @@ const postSchema = new mongoose.Schema({
   // صفحة الظهور
   displayPage: {
     type: String,
-    enum: ['home', 'jobs', 'haraj', 'all'],
+    enum: ['home', 'jobs', 'haraj', 'all', 'urgent'],
     default: 'home'
+  },
+  
+  // نوع الاستعجال (للفرص الفورية)
+  specialTag: {
+    type: String,
+    enum: ['مطلوب الآن', 'عقود مؤقتة', 'دفع يومي', null],
+    default: null
   },
   
   // هل هو فيديو قصير (Short)

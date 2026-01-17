@@ -53,6 +53,7 @@ exports.createPost = async (req, res, next) => {
       contactMethods,
       isFeatured,
       displayPage,
+      specialTag,
       isShort,
       price,
       currency,
@@ -138,6 +139,7 @@ exports.createPost = async (req, res, next) => {
       contactMethods: contactMethods ? (Array.isArray(contactMethods) ? contactMethods : [contactMethods]) : [],
       isFeatured: isFeatured || false,
       displayPage: displayPage || 'home',
+      specialTag: specialTag || null,
       isShort: isShort || false,
       price,
       currency,
@@ -544,6 +546,7 @@ exports.getPosts = async (req, res, next) => {
       isShort,
       isFeatured,
       userId,
+      specialTag,
       postType // فلتر حسب العنوان (ابحث عن وظيفة / ابحث عن موظفين)
     } = req.query;
 
@@ -576,6 +579,7 @@ exports.getPosts = async (req, res, next) => {
     if (isShort !== undefined) query.isShort = isShort === 'true';
     if (isFeatured !== undefined) query.isFeatured = isFeatured === 'true';
     if (userId) query.user = userId;
+    if (specialTag) query.specialTag = specialTag;
     
     // فلتر حسب نوع المنشور (ابحث عن وظيفة / ابحث عن موظفين)
     if (postType) {
@@ -695,7 +699,7 @@ exports.updatePost = async (req, res, next) => {
     const allowedUpdates = [
       'title', 'content', 'category', 'scope', 'country', 'city',
       'location', 'contactEmail', 'contactPhone', 'contactMethods',
-      'isFeatured', 'displayPage', 'price', 'currency', 'jobDetails'
+      'isFeatured', 'displayPage', 'specialTag', 'price', 'currency', 'jobDetails'
     ];
 
     allowedUpdates.forEach(field => {
