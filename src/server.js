@@ -35,6 +35,7 @@ const fcmRoutes = require('./routes/fcm');
 const paymentRoutes = require('./routes/payment');
 const locationRoutes = require('./routes/location');
 const externalJobsRoutes = require('./routes/externalJobs');
+const aiRoutes = require('./routes/ai');
 
 // Initialize express app
 const app = express();
@@ -127,6 +128,7 @@ app.use('/api/v1/fcm', fcmRoutes);
 app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/location', locationRoutes);
 app.use('/api/v1/external-jobs', externalJobsRoutes);
+app.use('/api/v1/ai', aiRoutes);
 
 // Share pages
 app.use('/share', shareRoutes);
@@ -155,7 +157,8 @@ app.get('/', (req, res) => {
       notifications: '/api/v1/notifications',
       fcm: '/api/v1/fcm',
       location: '/api/v1/location',
-      externalJobs: '/api/v1/external-jobs'
+      externalJobs: '/api/v1/external-jobs',
+      ai: '/api/v1/ai'
     }
   });
 });
