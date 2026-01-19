@@ -10,17 +10,20 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
 
 // ============================================
 // 🎭 System Prompt
-// ============================================
+// ملاحظة: المساعد افتراضياً يعطي نصائح مهنية (كارير أدفايس).
+// لا تعرض بطاقات/حاويات الوظائف إلا إذا طلب المستخدم ذلك صراحةً.
+// يمكنك التحكم بالسلوك بإرسال { allowJobCards: true } في جسم الطلب.
+ // ============================================
 const SYSTEM_PROMPT = 'أنت مساعد مهنتي لي، مساعد وظائف ودود. رد بالعربية فقط وبشكل مختصر.\n' +
 'المطور: صلاح مهدلي\n' +
-'إذا سألك أحد: من صنعك؟ من طورك؟ من برمجك؟ - قل: تم تطويري من قبل المطور صلاح مهدلي 💻';
+'افتراضياً: قدّم نصائح مهنية ومقترحات لتحسين فرص التوظيف، ولا تعرض بطاقات أو روابط للتقديم أو أي حاويات تمثل وظائف. إذا طلب المستخدم صراحةً "عرض الوظائف" أو أرسل { allowJobCards: true } فمسموح بعرض نتائج الوظائف.';
 
 // ============================================
 // 📡 Chat with Ollama
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
-    const { message, conversationHistory = [] } = req.body;
+    const { message, conversationHistory = [], allowJobCards = false } = req.body;
 
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
@@ -34,75 +37,96 @@ exports.chatWithAI = async (req, res) => {
 
     const userMessage = message.trim();
     const lowerMessage = userMessage.toLowerCase();
-    
+
     // ============================================
-    // التحقق من أسئلة المطور
+    // التحقق من أسئلة المطور (معلومة ثابتة)
     // ============================================
-    if (lowerMessage.includes('من صنعك') || lowerMessage.includes('من طورك') || 
+    if (lowerMessage.includes('من صنعك') || lowerMessage.includes('من طورك') ||
         lowerMessage.includes('من برمجك') || lowerMessage.includes('من أنشأك') ||
         lowerMessage.includes('من عملك') || lowerMessage.includes('من بناك')) {
       res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب ✍️' }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ type: 'chunk', content: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك في البحث عن الوظيفة المناسبة!' }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك في البحث عن الوظيفة المناسبة!' }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك بنصائح مهنية.' }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك بنصائح مهنية.' }) + '\n\n');
       res.end();
       return;
     }
-    
+
     // ============================================
-    // تحليل المحادثة للبحث عن وظائف
+    // بناء سياق المحادثة الكاملة
     // ============================================
     var fullContext = '';
     for (var i = 0; i < conversationHistory.length; i++) {
       fullContext += ' ' + conversationHistory[i].content;
     }
     fullContext += ' ' + userMessage;
-    
-    var jobInfo = extractJobInfo(fullContext.toLowerCase());
-    
+    fullContext = fullContext.toLowerCase();
+
+    // استخراج معلومات الوظيفة (نية المستخدم)
+    var jobInfo = extractJobInfo(fullContext);
+
+    // تحديد ما إذا كان المستخدم طلب صريح لعرض الوظائف (الذي يسمح بعرض الحاويات)
+    const explicitJobRequestPhrases = [
+      'عرض الوظائف', 'اعرض الوظائف', 'اعرض لي الوظائف', 'أعرض الوظائف', 
+      'أريد وظائف', 'أظهر وظائف', 'ابحث عن وظائف لي', 'ابحث لي عن وظائف'
+    ];
+    let explicitJobRequest = false;
+    for (let p of explicitJobRequestPhrases) {
+      if (lowerMessage.includes(p)) {
+        explicitJobRequest = true;
+        break;
+      }
+    }
+    // allowJobCards (boolean) يمكن إرساله من الواجهة لتفعيل عرض النتائج
+    const allowCards = explicitJobRequest || Boolean(allowJobCards);
+
+    // ============================================
+    // سلوك البحث:
+    // - إذا المستخدم طلب صراحة عرض الوظائف أو allowJobCards=true -> عرض بطاقات الوظائف كما في السابق
+    // - إذا توجد نية البحث عن وظيفة لكن بدون طلب صريح -> لا تعرض حاويات، بل أعطِ نصائح/ملخص
+    // ============================================
     var jobResults = [];
     var aiContext = '';
 
-    // ============================================
-    // البحث الحقيقي في قاعدة البيانات
-    // ============================================
     if (jobInfo.hasJobIntent && (jobInfo.jobType || jobInfo.city)) {
-      res.write('data: ' + JSON.stringify({ type: 'status', status: 'searching', message: 'جاري البحث في قاعدة البيانات 🔍' }) + '\n\n');
-      
-      // البحث الحقيقي
+      // نعلم المستخدم أننا سنبحث
+      res.write('data: ' + JSON.stringify({ type: 'status', status: 'searching', message: 'جاري معالجة طلبك 🔍' }) + '\n\n');
+
+      // اجلب النتائج داخليًا
       jobResults = await searchRealJobs(jobInfo.jobType, jobInfo.city);
-      
+
       if (jobResults.length > 0) {
-        // إرسال الوظائف الحقيقية
-        res.write('data: ' + JSON.stringify({ 
-          type: 'jobs', 
-          jobs: jobResults,
-          count: jobResults.length 
-        }) + '\n\n');
-        
-        // بناء سياق للذكاء الاصطناعي
-        var jobSummary = 'وجدت ' + jobResults.length + ' وظيفة:\n';
-        for (var j = 0; j < jobResults.length; j++) {
-          var job = jobResults[j];
-          jobSummary += (j + 1) + '. ' + job.title;
-          if (job.status === 'closed' || job.jobStatus === 'closed') {
-            jobSummary += ' (تم التوظيف ❌)';
-          } else {
-            jobSummary += ' (متاحة ✅)';
+        if (allowCards) {
+          // سلوك قديم: إرسال حاويات/وظائف بصيغة jobs
+          res.write('data: ' + JSON.stringify({
+            type: 'jobs',
+            jobs: jobResults,
+            count: jobResults.length
+          }) + '\n\n');
+
+          aiContext = '[لقد وجدت ' + jobResults.length + ' وظيفة. قدم للمستخدم نصائح سريعة حول التقديم وتوجيه للتواصل.]';
+        } else {
+          // جديد: لا نرسل بطاقات. نرسل ملخصًا + نصائح مهنية فقط.
+          const summaryLines = [];
+          for (let i = 0; i < Math.min(jobResults.length, 4); i++) {
+            const j = jobResults[i];
+            summaryLines.push(`${i+1}. ${j.title} - ${j.city || 'الموقع غير محدد'}${j.company ? ' - ' + j.company : ''} ${j.jobStatus && j.jobStatus === 'closed' ? '(مغلق)' : ''}`);
           }
-          if (job.contactPhone) {
-            jobSummary += ' - للتواصل: ' + job.contactPhone;
-          }
-          jobSummary += '\n';
+          const summary = 'وجدت بعض الفرص المتاحة:\n' + summaryLines.join('\n') + '\n\n';
+          const advice = 'نصيحتي: حسّن عنوان سيرتك، أضف ملخصًا قصيرًا عن خبراتك، تواصل عبر رقم الهاتف أو البريد إذا متاح. إذا تريد عرض تفاصيل التقديم أو روابط التقديم الفعلية اكتب "عرض الوظائف" أو أرسل allowJobCards=true.';
+          // لا نرسل حدث jobs؛ نرسل chunks نصية للمحادثة
+          res.write('data: ' + JSON.stringify({ type: 'chunk', content: summary + advice }) + '\n\n');
+          aiContext = '[ملخص للوظائف مع نصائح — لم تُعرض حاويات وفق سياسة النصائح الافتراضية.]';
         }
-        
-        aiContext = '[' + jobSummary + ']\nقل للمستخدم: لقيت لك هذه الوظائف. إذا الوظيفة متاحة يتواصل مع صاحبها، وإذا مكتوب تم التوظيف يجرب غيرها.';
       } else {
-        aiContext = '[لم أجد وظائف مطابقة في قاعدة البيانات. اعتذر وقل: للأسف ما لقيت وظائف حالياً، جرب تغير نوع الوظيفة أو المدينة.]';
+        // لا توجد نتائج
+        const apologyAndAdvice = 'لم أجد وظائف مطابقة الآن. نصيحتي: وسّع بحثك بالكلمات المفتاحية، فعّل الإشعارات للوظائف الجديدة، وحسّن سيرتك الذاتية. إذا تريد أن أجلب لك نتائج خارجية فعلًا اكتب "عرض الوظائف".';
+        res.write('data: ' + JSON.stringify({ type: 'chunk', content: apologyAndAdvice }) + '\n\n');
+        aiContext = '[لم يتم العثور على وظائف، قدم نصائح بديلة].';
       }
     }
 
     // ============================================
-    // إرسال الرد
+    // إعداد الرسائل لموديل LLM (Ollama)
     // ============================================
     res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب ✍️' }) + '\n\n');
 
@@ -112,7 +136,7 @@ exports.chatWithAI = async (req, res) => {
     }
 
     var messages = [{ role: 'system', content: systemMsg }];
-    
+
     var recent = conversationHistory.slice(-3);
     for (var k = 0; k < recent.length; k++) {
       messages.push({
@@ -120,7 +144,7 @@ exports.chatWithAI = async (req, res) => {
         content: recent[k].content
       });
     }
-    
+
     messages.push({ role: 'user', content: userMessage });
 
     try {
@@ -139,7 +163,7 @@ exports.chatWithAI = async (req, res) => {
 
       response.data.on('data', function(chunk) {
         var lines = chunk.toString().split('\n');
-        
+
         for (var m = 0; m < lines.length; m++) {
           if (!lines[m].trim()) continue;
           try {
@@ -177,6 +201,7 @@ exports.chatWithAI = async (req, res) => {
 
 // ============================================
 // استخراج معلومات الوظيفة
+// (نفس التعريف الأصلي، يمكن توسيعه لاحقاً)
 // ============================================
 function extractJobInfo(text) {
   var jobWords = ['وظيفة', 'وظائف', 'شغل', 'عمل', 'ابحث', 'دور', 'ابغى', 'أبي', 'محتاج', 'متعطل', 'عاطل', 'نعم ابحث', 'ابحث لي'];
@@ -187,7 +212,7 @@ function extractJobInfo(text) {
       break;
     }
   }
-  
+
   var jobType = null;
   var types = [
     ['سائق', 'سواق', 'driver'],
@@ -211,7 +236,7 @@ function extractJobInfo(text) {
     ['عامل نظافة'],
     ['موظف استقبال']
   ];
-  
+
   for (var j = 0; j < types.length; j++) {
     for (var k = 0; k < types[j].length; k++) {
       if (text.includes(types[j][k])) {
@@ -221,7 +246,7 @@ function extractJobInfo(text) {
     }
     if (jobType) break;
   }
-  
+
   var city = null;
   var cities = [
     ['الرياض', 'رياض'],
@@ -239,7 +264,7 @@ function extractJobInfo(text) {
     ['دبي'],
     ['أبوظبي']
   ];
-  
+
   for (var m = 0; m < cities.length; m++) {
     for (var n = 0; n < cities[m].length; n++) {
       if (text.includes(cities[m][n])) {
@@ -249,22 +274,23 @@ function extractJobInfo(text) {
     }
     if (city) break;
   }
-  
+
   return { hasJobIntent: hasJobIntent, jobType: jobType, city: city };
 }
 
 // ============================================
 // البحث الحقيقي في قاعدة البيانات
+// (نفس الدالة الأصلية، تُعيد مصفوفة نتائج)
 // ============================================
 async function searchRealJobs(jobType, city) {
   var results = [];
-  
+
   try {
     console.log('[AI Search] Searching for:', jobType, 'in', city);
-    
+
     // بناء الفلتر
     var filter = { type: 'job' };
-    
+
     // البحث بنوع الوظيفة
     if (jobType) {
       filter.$or = [
@@ -273,24 +299,24 @@ async function searchRealJobs(jobType, city) {
         { category: { $regex: jobType, $options: 'i' } }
       ];
     }
-    
+
     // البحث بالمدينة
     if (city) {
       filter.city = { $regex: city, $options: 'i' };
     }
-    
+
     // البحث في الوظائف الداخلية
     var jobs = await Post.find(filter)
       .populate('user', 'name profileImage phone')
       .sort({ createdAt: -1 })
       .limit(5)
       .lean();
-    
+
     console.log('[AI Search] Found', jobs.length, 'internal jobs');
-    
+
     for (var i = 0; i < jobs.length; i++) {
       var job = jobs[i];
-      
+
       results.push({
         id: job._id,
         title: job.title || 'وظيفة متاحة',
@@ -310,32 +336,32 @@ async function searchRealJobs(jobType, city) {
         createdAt: job.createdAt
       });
     }
-    
+
     // إذا لم نجد وظائف داخلية، نبحث في الخارجية
     if (results.length < 3) {
       var extFilter = {};
-      
+
       if (jobType) {
         extFilter.$or = [
           { title: { $regex: jobType, $options: 'i' } },
           { description: { $regex: jobType, $options: 'i' } }
         ];
       }
-      
+
       if (city) {
         extFilter.city = { $regex: city, $options: 'i' };
       }
-      
+
       var extJobs = await ExternalJob.find(extFilter)
         .sort({ postedAt: -1 })
         .limit(3)
         .lean();
-      
+
       console.log('[AI Search] Found', extJobs.length, 'external jobs');
-      
+
       for (var j = 0; j < extJobs.length; j++) {
         var ext = extJobs[j];
-        
+
         results.push({
           id: ext._id,
           title: translateText(ext.title) || 'وظيفة خارجية',
@@ -356,11 +382,11 @@ async function searchRealJobs(jobType, city) {
         });
       }
     }
-    
+
   } catch (err) {
     console.error('[AI Search] Error:', err);
   }
-  
+
   return results;
 }
 
@@ -370,7 +396,7 @@ function translateText(text) {
   var trans = {
     'driver': 'سائق', 'engineer': 'مهندس', 'accountant': 'محاسب',
     'manager': 'مدير', 'teacher': 'معلم', 'sales': 'مبيعات',
-    'developer': 'مطور', 'designer': 'مصمم', 'heavy': 'ثقيل',
+    'developer': 'مطور', 'designer': 'مصمم', 'heavy': 'ثقي��',
     'truck': 'شاحنة', 'security': 'حارس أمن', 'technician': 'فني',
     'full-time': 'دوام كامل', 'part-time': 'دوام جزئي'
   };
