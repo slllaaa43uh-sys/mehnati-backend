@@ -1,7 +1,7 @@
 const axios = require('axios');
 const Post = require('../models/Post');
 const ExternalJob = require('../models/ExternalJob');
-const KNOWLEDGE_BASE = require('../data/knowledgeBase');
+const { findAnswer } = require('../data/knowledgeBase');
 
 // ============================================
 // 🤖 Ollama Configuration
@@ -9,32 +9,23 @@ const KNOWLEDGE_BASE = require('../data/knowledgeBase');
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b-instruct';
 
-console.log('🔧 [INIT] Ollama Configuration:  ');
+console.log('🔧 [INIT] Ollama Configuration: ');
 console.log(`   Base URL: ${OLLAMA_BASE_URL}`);
 console.log(`   Model: ${OLLAMA_MODEL}`);
 
 // ============================================
-// 🎭 Enhanced System Prompt مع Knowledge Base
+// 🎭 System Prompt
 // ============================================
 const SYSTEM_PROMPT = `أنت مساعد ذكي متخصص في تطبيق "مهنتي لي". 
 
 ⚠️ قواعد الإجابة:
-1. اجب باللغة العر��ية فقط، بدون لغات أخرى مطلقاً
-2. ردودك يجب أن تكون سهلة وبسيطة مثل ChatGPT و Gemini
-3. إذا سأل المستخدم:  "من طورك؟" أو "من صنعك؟" أجب فقط:  "طورني صلاح مهدلي"
-4. لا تقول "تم تطويري من قبل صلاح مهدلي" - قل فقط "طورني صلاح مهدلي"
-5. إذا ذكر المستخدم اسم "صلاح" فقط، لا تضيف شيء - انتقل للموضوع التالي
-6. كن ودياً وسهل التعامل معك مثل ChatGPT تماماً
-
-📚 معلومات التطبيق:
-${Object.entries(KNOWLEDGE_BASE)
-  .map(([key, value]) => `• ${value.title}`)
-  .join('\n')}
-
-استخدم هذه المعلومات للرد على أسئلة المستخدم عن التطبيق بدقة وسهولة.`;
+1. اجب باللغة العربية فقط
+2. ردودك يجب أن تكون سهلة وبسيطة
+3. إذا سأل:  "من طورك؟" أجب فقط:  "طورني صلاح مهدلي"
+4. كن ودياً وسهل التعامل معك`;
 
 // ============================================
-// 📡 Chat with Ollama - IMPROVED
+// 📡 Chat with AI
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
@@ -51,7 +42,7 @@ exports.chatWithAI = async (req, res) => {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
     }
 
-    if (!conversationHistory) {
+    if (! conversationHistory) {
       conversationHistory = [];
     }
     
@@ -77,87 +68,30 @@ exports.chatWithAI = async (req, res) => {
     console.log('💬 [DEBUG] User message:', userMessage);
     
     // ============================================
-    // 🔍 معالجة أسئلة "من طورك"
+    // 🔍 البحث في Knowledge Base أولاً
     // ============================================
-    if (lowerMessage.includes('من طورك') || lowerMessage.includes('من صنعك') || 
-        lowerMessage.includes('من أنشأك') || lowerMessage.includes('من برمجك')) {
-      console.log('🎯 [DEBUG] Developer question detected');
+    console.log('🔎 [DEBUG] Searching in Knowledge Base...');
+    const answer = findAnswer(userMessage);
+    
+    if (answer) {
+      console.log('✅ [DEBUG] Found answer in Knowledge Base! ');
       res.write('data: ' + JSON.stringify({ 
         type: 'chunk', 
-        content: 'طورني صلاح مهدلي 💙' 
+        content: answer 
       }) + '\n\n');
       res.write('data: ' + JSON.stringify({ 
         type: 'done', 
-        fullResponse: 'طورني صلاح مهدلي 💙' 
+        fullResponse: answer 
       }) + '\n\n');
       res.end();
       return;
     }
-    
-    // ============================================
-    // 🔍 تحليل سؤال المستخدم عن التطبيق
-    // ============================================
-    let relevantKnowledge = '';
-    const questionKeywords = {
-      'تسجيل':  ['registration', 'signup'],
-      'دخول': ['login'],
-      'خروج': ['logout'],
-      'ملف': ['profile'],
-      'منشور': ['createPost'],
-      'وظيفة': ['searchJobs', 'urgent'],
-      'سيرة':  ['cv'],
-      'قصة': ['stories'],
-      'حراج': ['haraj'],
-      'إعدادات': ['settings'],
-      'إشعارات': ['notifications'],
-      'ترجمة': ['global'],
-      'عالمي': ['global'],
-      'مميز': ['premium'],
-      'طور': ['developer'],
-      'صلاح': ['developer']
-    };
 
-    for (const [keyword, keys] of Object.entries(questionKeywords)) {
-      if (lowerMessage.includes(keyword)) {
-        for (const key of keys) {
-          if (KNOWLEDGE_BASE[key]) {
-            relevantKnowledge += `\n${KNOWLEDGE_BASE[key].content}\n`;
-          }
-        }
-      }
-    }
+    console.log('⚠️ [DEBUG] No answer in Knowledge Base, using Ollama...');
     
     // ============================================
-    // 🔎 البحث عن الوظائف
+    // 🤖 استخدم Ollama للأسئلة الأخرى
     // ============================================
-    let jobResults = [];
-    const jobKeywords = ['وظيفة', 'وظائف', 'شغل', 'عمل', 'ابحث', 'ابغى'];
-    const hasJobIntent = jobKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    if (hasJobIntent) {
-      console.log('🔍 [DEBUG] Job search intent detected');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'status', 
-        status: 'searching', 
-        message: 'جاري البحث في قاعدة البيانات 🔍' 
-      }) + '\n\n');
-      
-      jobResults = await searchRealJobs(userMessage);
-      console.log('✅ [DEBUG] Found', jobResults.length, 'jobs');
-      
-      if (jobResults.length > 0) {
-        res.write('data: ' + JSON.stringify({ 
-          type: 'jobs', 
-          jobs: jobResults,
-          count: jobResults.length 
-        }) + '\n\n');
-      }
-    }
-
-    // ============================================
-    // 🤖 إرسال الرد من Ollama
-    // ============================================
-    console.log('🤖 [DEBUG] Sending request to Ollama.. .');
     res.write('data: ' + JSON.stringify({ 
       type: 'status', 
       status: 'responding', 
@@ -165,17 +99,13 @@ exports.chatWithAI = async (req, res) => {
     }) + '\n\n');
 
     var systemMsg = SYSTEM_PROMPT;
-    if (relevantKnowledge) {
-      systemMsg += `\n\nمعلومات ذات صلة:${relevantKnowledge}`;
-    }
-
-    var messages = [{ role: 'system', content: systemMsg }];
+    var messages = [{ role: 'system', content:  systemMsg }];
     
     var recent = conversationHistory.filter(msg => msg && msg.content && msg.role).slice(-3);
     
     for (var k = 0; k < recent. length; k++) {
       messages.push({
-        role: recent[k]. role === 'user' ? 'user' : 'assistant',
+        role: recent[k].role === 'user' ? 'user' : 'assistant',
         content: recent[k].content
       });
     }
@@ -188,7 +118,7 @@ exports.chatWithAI = async (req, res) => {
       var response = await axios.post(
         `${OLLAMA_BASE_URL}/api/chat`,
         {
-          model: OLLAMA_MODEL,
+          model:  OLLAMA_MODEL,
           messages: messages,
           stream: true
         },
@@ -222,7 +152,7 @@ exports.chatWithAI = async (req, res) => {
               }) + '\n\n');
             }
             
-            if (data.done) {
+            if (data. done) {
               console.log('✅ [DEBUG] Stream complete');
               res.write('data: ' + JSON.stringify({ 
                 type: 'done', 
@@ -231,7 +161,7 @@ exports.chatWithAI = async (req, res) => {
               res.end();
             }
           } catch (e) {
-            console.error('❌ [ERROR] Parsing error:', e. message);
+            console.error('❌ [ERROR] Parsing error:', e.message);
           }
         }
       });
@@ -256,7 +186,7 @@ exports.chatWithAI = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('❌ [ERROR] Chat error:', error.message);
+    console.error('❌ [ERROR] Chat error:', error. message);
     if (! res.headersSent) res.setHeader('Content-Type', 'text/event-stream');
     res.write('data: ' + JSON.stringify({ 
       type: 'error', 
@@ -266,45 +196,6 @@ exports.chatWithAI = async (req, res) => {
     res.end();
   }
 };
-
-// ============================================
-// البحث عن الوظائف
-// ============================================
-async function searchRealJobs(message) {
-  var results = [];
-  
-  try {
-    var filter = { type: 'job' };
-    
-    var jobs = await Post.find(filter)
-      .populate('user', 'name profileImage phone')
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .lean();
-    
-    console.log('[Search] Found', jobs.length, 'jobs');
-    
-    for (var i = 0; i < jobs.length; i++) {
-      var job = jobs[i];
-      
-      results.push({
-        id: job._id,
-        title: job.title || 'وظيفة متاحة',
-        description: job.content ?  job.content. substring(0, 120) + '...' : '',
-        city: job.city || 'غير محدد',
-        salary: (job.jobDetails && job.jobDetails.salary) ?  job.jobDetails.salary : 'قابل للتفاوض',
-        company: job.user ?  job.user.name : 'صاحب العمل',
-        contactPhone: job.contactPhone || (job.user ?  job.user.phone : null) || null,
-        status: job.status
-      });
-    }
-    
-  } catch (err) {
-    console.error('[Search] Error:', err);
-  }
-  
-  return results;
-}
 
 exports.checkOllamaHealth = async (req, res) => {
   try {
@@ -317,11 +208,11 @@ exports.checkOllamaHealth = async (req, res) => {
       status: '✅ جاهز'
     });
   } catch (error) {
-    console.error('❌ Health check failed:', error. message);
+    console.error('❌ Health check failed:', error.message);
     res.status(503).json({ 
       success: false, 
       message: 'Ollama not available',
-      error: error. message
+      error: error.message
     });
   }
 };
