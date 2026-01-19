@@ -1,7 +1,7 @@
 const axios = require('axios');
 const Post = require('../models/Post');
 const ExternalJob = require('../models/ExternalJob');
-const { findAnswer } = require('../data/knowledgeBase');
+const { KNOWLEDGE_BASE } = require('../data/knowledgeBase');
 
 // ============================================
 // 🤖 Ollama Configuration
@@ -9,40 +9,58 @@ const { findAnswer } = require('../data/knowledgeBase');
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b-instruct';
 
-console.log('🔧 [INIT] Ollama Configuration: ');
+console.log('🔧 [INIT] Ollama Configuration:  ');
 console.log(`   Base URL: ${OLLAMA_BASE_URL}`);
 console.log(`   Model: ${OLLAMA_MODEL}`);
 
 // ============================================
-// 🎭 System Prompt - منع اللغة الصينية بشدة
+// 🧠 بناء قاعدة البيانات المدمجة في System Prompt
 // ============================================
-const SYSTEM_PROMPT = `أنت مساعد ذكي متخصص في تطبيق "مهنتي لي". 
+
+function buildTrainingData() {
+  console.log('\n📚 [TRAINING] Building AI Knowledge Base...\n');
+  
+  let trainingText = `أنت مساعد ذكي متخصص في تطبيق "مهنتي لي".  
 
 ⚠️ **قواعد إلزامية:**
+1. اللغة العربية فقط (لا صينية، لا إنجليزية)
+2. كن ودياً وواضحاً ومختصراً
+3. تذكر المحادثات السابقة
+4. إذا سأل "من طورك؟" أجب:  "طورني صلاح مهدلي 💙"
 
-1. **اللغة:** 
-   ❌ لا تستخدم الصينية بتاتاً!   
-   ❌ لا تستخدم الإنجليزية! 
-   ✅ استخدم العربية فقط بـ 100%
+📖 **المعلومات التالية درسها جيداً واستخدمها:**
 
-2. **الأسلوب:**
-   ✅ كن ودياً ومرحباً
-   ✅ كن واضحاً ومختصراً
-   ✅ استخدم رموز تعبيرية 😊
+`;
 
-3. **التذكر:**
-   ✅ تذكر السؤال السابق
-   ✅ ابن على المحادثة السابقة
-   ✅ استخدم السياق
+  // ➕ أضف كل البيانات من Knowledge Base للـ System Prompt
+  for (const [topic, data] of Object.entries(KNOWLEDGE_BASE)) {
+    trainingText += `\n=== ${topic} ===\n`;
+    trainingText += `الكلمات المفتاحية: ${data.keywords.join(', ')}\n`;
+    trainingText += `الإجابة:\n${data.answer}\n\n`;
+    
+    console.log(`✅ [TRAINING] Added: ${topic}`);
+  }
 
-4. **خاص - من طورك:**
-   ❌ إذا سأل "من طورك؟" - أجب فقط:  "طورني صلاح مهدلي 💙"
-   ❌ لا تكرر الجملة، رد قصير فقط
+  trainingText += `\n⚡ تذكر: أنت تحتفظ بكل هذه المعلومات وتستخدمها في الإجابة على الأسئلة.\n`;
+  trainingText += `لا تقل "لا أعرف"، استخدم ما درسته! `;
 
-**تحذير:** إذا كتبت أي حرف صيني أو إنجليزي (إلا الضرورة)، فأنت فشلت!  🚫`;
+  console.log('\n✅ [TRAINING] Knowledge Base loaded into AI Memory\n');
+  console.log(`📊 Total Topics: ${Object.keys(KNOWLEDGE_BASE).length}`);
+  console.log(`📊 Total Size: ${trainingText.length} characters\n`);
+
+  return trainingText;
+}
+
+// ✅ بناء البيانات عند بدء الخادم
+const TRAINED_KNOWLEDGE = buildTrainingData();
 
 // ============================================
-// 📡 Chat with AI - مع حفظ الذاكرة
+// 🎭 System Prompt - يحتوي على كل المعلومات
+// ============================================
+const SYSTEM_PROMPT = TRAINED_KNOWLEDGE;
+
+// ============================================
+// 📡 Chat with AI - مع الذاكرة الكاملة
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
@@ -58,8 +76,8 @@ exports.chatWithAI = async (req, res) => {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
     }
 
-    // ✅ تحضير الذاكرة (conversation history)
-    if (! conversationHistory) {
+    // ✅ تحضير الذاكرة
+    if (!conversationHistory) {
       conversationHistory = [];
     }
     
@@ -67,16 +85,13 @@ exports.chatWithAI = async (req, res) => {
       conversationHistory = [];
     }
     
-    // تنظيف البيانات
     conversationHistory = conversationHistory.filter(msg => {
       return msg && msg.content && msg.role && msg.content.trim();
     });
 
     console.log(`📊 Conversation history length: ${conversationHistory.length}`);
     
-    // حفظ الرسالة الحالية للذاكرة لاحقاً
-    const userMessage = message. trim();
-    const lowerMessage = userMessage.toLowerCase();
+    const userMessage = message.trim();
 
     // SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -85,47 +100,24 @@ exports.chatWithAI = async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     // ============================================
-    // 🔍 البحث في Knowledge Base أولاً
-    // ============================================
-    console.log('🔎 Searching Knowledge Base...');
-    const answer = findAnswer(userMessage);
-    
-    if (answer) {
-      console.log('✅ Found in Knowledge Base');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'chunk', 
-        content: answer 
-      }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'done', 
-        fullResponse: answer 
-      }) + '\n\n');
-      res.end();
-      return;
-    }
-
-    console.log('⚠️ Not in KB, using Ollama with memory...');
-    
-    // ============================================
-    // 🤖 استخدم Ollama مع حفظ الذاكرة الكاملة
+    // 🤖 استخدم Ollama مع البيانات المدمجة
     // ============================================
     
-    res.setHeader('Content-Type', 'text/event-stream');
     res.write('data: ' + JSON.stringify({ 
       type: 'status', 
       status: 'responding', 
       message: 'يكتب ✍️' 
     }) + '\n\n');
 
-    // 🧠 **بناء المحادثة الكاملة مع التاريخ**
+    // 🧠 **بناء المحادثة مع الذاكرة الكاملة**
     var messages = [
       { 
         role: 'system', 
-        content: SYSTEM_PROMPT 
+        content: SYSTEM_PROMPT   // ✅ يحتوي على كل البيانات
       }
     ];
     
-    // ✅ أضف كل السجل السابق (حفظ الذاكرة)
+    // ✅ أضف السجل السابق (حفظ الذاكرة)
     console.log(`📚 Adding ${conversationHistory.length} previous messages to memory`);
     for (var i = 0; i < conversationHistory.length; i++) {
       if (conversationHistory[i]. content. trim()) {
@@ -133,7 +125,6 @@ exports.chatWithAI = async (req, res) => {
           role: conversationHistory[i].role === 'user' ? 'user' : 'assistant',
           content: conversationHistory[i].content
         });
-        console.log(`   ✅ Added message ${i + 1} (${conversationHistory[i]. role})`);
       }
     }
     
@@ -144,13 +135,10 @@ exports.chatWithAI = async (req, res) => {
     });
     
     console.log(`✅ Final messages count: ${messages.length}`);
-    console.log('🧠 Memory is ready with full conversation history');
+    console.log('🧠 AI has full Knowledge Base in memory');
 
     try {
-      // ============================================
-      // الاتصال بـ Ollama
-      // ============================================
-      console.log('🔗 Connecting to Ollama.. .');
+      console.log('🔗 Connecting to Ollama...');
       
       var response = await axios.post(
         `${OLLAMA_BASE_URL}/api/chat`,
@@ -159,8 +147,8 @@ exports.chatWithAI = async (req, res) => {
           messages: messages,
           stream: true,
           options: {
-            temperature: 0.3,  // تقليل الإبداع لمنع الصينية
-            num_predict: 500,
+            temperature: 0.3,
+            num_predict: 1000,
             top_p: 0.9,
             top_k: 40
           }
@@ -172,33 +160,26 @@ exports.chatWithAI = async (req, res) => {
         }
       );
 
-      console.log('✅ Connected to Ollama, receiving stream...');
+      console.log('✅ Connected, receiving stream...');
       
       var fullText = '';
-      var chunkCount = 0;
 
       response.data.on('data', function(chunk) {
-        chunkCount++;
         var lines = chunk.toString().split('\n');
         
         for (var m = 0; m < lines. length; m++) {
           if (! lines[m].trim()) continue;
           
           try {
-            var data = JSON. parse(lines[m]);
+            var data = JSON.parse(lines[m]);
             
             if (data.message && data.message.content) {
               var content = data.message.content;
               
-              // 🚫 **منع اللغة الصينية والإنجليزية**
+              // 🚫 منع اللغة الصينية
               if (isChinese(content)) {
-                console.log('❌ [BLOCKED] Chinese detected, skipping');
-                continue; // تخطي الرد الصيني
-              }
-              
-              if (hasEnglish(content)) {
-                console.log('⚠️ [WARN] English detected, removing');
-                content = removeEnglish(content);
+                console.log('❌ [BLOCKED] Chinese detected');
+                continue;
               }
               
               fullText += content;
@@ -211,7 +192,7 @@ exports.chatWithAI = async (req, res) => {
             if (data.done) {
               console.log('✅ Stream complete');
               
-              // ✅ **حفظ الرد في الذاكرة**
+              // ✅ حفظ الرد في الذاكرة
               if (fullText.trim()) {
                 conversationHistory.push({
                   role: 'user',
@@ -221,18 +202,18 @@ exports.chatWithAI = async (req, res) => {
                   role: 'assistant',
                   content: fullText
                 });
-                console.log('💾 Saved to memory - new history length:', conversationHistory.length);
+                console.log('💾 Saved to memory - history length:', conversationHistory.length);
               }
               
               res.write('data: ' + JSON.stringify({ 
                 type: 'done', 
-                fullResponse:  fullText,
-                memorySize: conversationHistory.length  // أخبر الـ Frontend بحجم الذاكرة
+                fullResponse: fullText,
+                memorySize: conversationHistory.length
               }) + '\n\n');
               res.end();
             }
           } catch (e) {
-            console.error('❌ Parse error:', e. message);
+            console.error('❌ Parse error:', e.message);
           }
         }
       });
@@ -269,40 +250,12 @@ exports.chatWithAI = async (req, res) => {
 };
 
 // ============================================
-// 🚫 دوال منع اللغة الصينية والإنجليزية
+// 🚫 منع اللغة الصينية
 // ============================================
 
 function isChinese(text) {
-  // الحروف الصينية
   const chineseRegex = /[\u4E00-\u9FFF]/g;
   return chineseRegex.test(text);
-}
-
-function hasEnglish(text) {
-  // الأحرف الإنجليزية (إلا في الكلمات الضرورية)
-  const englishWords = text.match(/[A-Za-z]+/g);
-  if (!englishWords) return false;
-  
-  // الكلمات المسموحة
-  const allowedWords = ['ai', 'cv', 'otp', 'qr', 'url', 'api', 'http'];
-  
-  for (var word of englishWords) {
-    if (! allowedWords.includes(word. toLowerCase())) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function removeEnglish(text) {
-  // إزالة الأحرف الإنجليزية (إلا الكلمات المسموحة)
-  return text.replace(/[a-zA-Z]+/g, function(match) {
-    const allowedWords = ['ai', 'cv', 'otp', 'qr', 'url', 'api', 'http'];
-    if (allowedWords.includes(match. toLowerCase())) {
-      return match;
-    }
-    return '';  // حذف الكلمة
-  });
 }
 
 // ============================================
@@ -316,6 +269,8 @@ exports.checkOllamaHealth = async (req, res) => {
       success: true, 
       message: 'Ollama running',
       model: OLLAMA_MODEL,
+      knowledgeBaseLoaded: true,
+      topicsCount: Object.keys(KNOWLEDGE_BASE).length,
       status: '✅ جاهز'
     });
   } catch (error) {
