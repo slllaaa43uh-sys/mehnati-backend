@@ -1,7 +1,7 @@
 const axios = require('axios');
 const Post = require('../models/Post');
 const ExternalJob = require('../models/ExternalJob');
-const { KNOWLEDGE_BASE } = require('../data/knowledgeBase');
+const { KNOWLEDGE_BASE, findAnswer } = require('../data/knowledgeBase');
 
 // ============================================
 // 🤖 Ollama Configuration
@@ -9,60 +9,27 @@ const { KNOWLEDGE_BASE } = require('../data/knowledgeBase');
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b-instruct';
 
-console.log('🔧 [INIT] Ollama Configuration:  ');
+console.log('🔧 [INIT] Ollama Configuration:   ');
 console.log(`   Base URL: ${OLLAMA_BASE_URL}`);
 console.log(`   Model: ${OLLAMA_MODEL}`);
 
 // ============================================
-// 🧠 بناء قاعدة البيانات المدمجة في System Prompt
+// 🎭 System Prompt - بسيط وفعال
 // ============================================
-
-function buildTrainingData() {
-  console.log('\n📚 [TRAINING] Building AI Knowledge Base...\n');
-  
-  let trainingText = `أنت مساعد ذكي متخصص في تطبيق "مهنتي لي".  
+const SYSTEM_PROMPT = `أنت مساعد ذكي متخصص في تطبيق "مهنتي لي".  
 
 ⚠️ **قواعد إلزامية:**
 1. اللغة العربية فقط (لا صينية، لا إنجليزية)
 2. كن ودياً وواضحاً ومختصراً
 3. تذكر المحادثات السابقة
-4. إذا سأل "من طورك؟" أجب:  "طورني صلاح مهدلي 💙"
+4. إذا سأل "من طورك؟" أجب فقط:   "طورني صلاح مهدلي 💙"
 
-📖 **المعلومات التالية درسها جيداً واستخدمها:**
-
-`;
-
-  // ➕ أضف كل البيانات من Knowledge Base للـ System Prompt
-  for (const [topic, data] of Object.entries(KNOWLEDGE_BASE)) {
-    trainingText += `\n=== ${topic} ===\n`;
-    trainingText += `الكلمات المفتاحية: ${data.keywords.join(', ')}\n`;
-    trainingText += `الإجابة:\n${data.answer}\n\n`;
-    
-    console.log(`✅ [TRAINING] Added: ${topic}`);
-  }
-
-  trainingText += `\n⚡ تذكر: أنت تحتفظ بكل هذه المعلومات وتستخدمها في الإجابة على الأسئلة.\n`;
-  trainingText += `لا تقل "لا أعرف"، استخدم ما درسته! `;
-
-  console.log('\n✅ [TRAINING] Knowledge Base loaded into AI Memory\n');
-  console.log(`📊 Total Topics: ${Object.keys(KNOWLEDGE_BASE).length}`);
-  console.log(`📊 Total Size: ${trainingText.length} characters\n`);
-
-  return trainingText;
-}
-
-// ✅ بناء البيانات عند بدء الخادم
-const TRAINED_KNOWLEDGE = buildTrainingData();
+استخدم معرفتك للإجابة على أسئلة المستخدم بشكل مفيد وودود.`;
 
 // ============================================
-// 🎭 System Prompt - يحتوي على كل المعلومات
+// 📡 Chat with AI
 // ============================================
-const SYSTEM_PROMPT = TRAINED_KNOWLEDGE;
-
-// ============================================
-// 📡 Chat with AI - مع الذاكرة الكاملة
-// ============================================
-exports.chatWithAI = async (req, res) => {
+exports. chatWithAI = async (req, res) => {
   try {
     console.log('═══════════════════════════════════════════════════');
     console.log('📨 [AI-CHAT] New chat request');
@@ -72,16 +39,16 @@ exports.chatWithAI = async (req, res) => {
 
     console.log('📝 Message:', message);
     
-    if (!message || !message.trim()) {
+    if (!message || ! message.trim()) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
     }
 
     // ✅ تحضير الذاكرة
-    if (!conversationHistory) {
+    if (! conversationHistory) {
       conversationHistory = [];
     }
     
-    if (! Array.isArray(conversationHistory)) {
+    if (!  Array.isArray(conversationHistory)) {
       conversationHistory = [];
     }
     
@@ -100,7 +67,30 @@ exports.chatWithAI = async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     // ============================================
-    // 🤖 استخدم Ollama مع البيانات المدمجة
+    // 🔍 البحث الأول في Knowledge Base
+    // ============================================
+    console.log('🔎 [Step 1] Searching in Knowledge Base...');
+    const kbAnswer = findAnswer(userMessage);
+    
+    if (kbAnswer) {
+      console.log('✅ [KB] Found answer in Knowledge Base! ');
+      res.write('data: ' + JSON.stringify({ 
+        type: 'chunk', 
+        content: kbAnswer 
+      }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ 
+        type: 'done', 
+        fullResponse: kbAnswer,
+        source: 'knowledge_base'
+      }) + '\n\n');
+      res.end();
+      return;
+    }
+
+    console.log('⚠️ [KB] Not found, using Ollama with memory...');
+
+    // ============================================
+    // 🤖 استخدم Ollama مع الذاكرة
     // ============================================
     
     res.write('data: ' + JSON.stringify({ 
@@ -109,18 +99,18 @@ exports.chatWithAI = async (req, res) => {
       message: 'يكتب ✍️' 
     }) + '\n\n');
 
-    // 🧠 **بناء المحادثة مع الذاكرة الكاملة**
+    // 🧠 بناء المحادثة مع الذاكرة
     var messages = [
       { 
         role: 'system', 
-        content: SYSTEM_PROMPT   // ✅ يحتوي على كل البيانات
+        content: SYSTEM_PROMPT
       }
     ];
     
-    // ✅ أضف السجل السابق (حفظ الذاكرة)
-    console.log(`📚 Adding ${conversationHistory.length} previous messages to memory`);
+    // ✅ أضف السجل السابق (الذاكرة)
+    console.log(`📚 [Step 2] Adding ${conversationHistory.length} previous messages to memory`);
     for (var i = 0; i < conversationHistory.length; i++) {
-      if (conversationHistory[i]. content. trim()) {
+      if (conversationHistory[i].  content.  trim()) {
         messages.push({
           role: conversationHistory[i].role === 'user' ? 'user' : 'assistant',
           content: conversationHistory[i].content
@@ -134,11 +124,10 @@ exports.chatWithAI = async (req, res) => {
       content: userMessage 
     });
     
-    console.log(`✅ Final messages count: ${messages.length}`);
-    console.log('🧠 AI has full Knowledge Base in memory');
+    console.log(`✅ [Step 3] Final messages count: ${messages.length}`);
 
     try {
-      console.log('🔗 Connecting to Ollama...');
+      console.log('🔗 [Step 4] Connecting to Ollama...');
       
       var response = await axios.post(
         `${OLLAMA_BASE_URL}/api/chat`,
@@ -147,28 +136,28 @@ exports.chatWithAI = async (req, res) => {
           messages: messages,
           stream: true,
           options: {
-            temperature: 0.3,
-            num_predict: 1000,
+            temperature: 0.5,
+            num_predict: 500,
             top_p: 0.9,
             top_k: 40
           }
         },
         { 
           responseType: 'stream', 
-          timeout: 60000,
+          timeout: 120000,  // 🔴 زيادة من 60 إلى 120 ثانية
           headers: { 'Content-Type': 'application/json' }
         }
       );
 
-      console.log('✅ Connected, receiving stream...');
+      console.log('✅ [Step 5] Connected, receiving stream...');
       
       var fullText = '';
 
       response.data.on('data', function(chunk) {
         var lines = chunk.toString().split('\n');
         
-        for (var m = 0; m < lines. length; m++) {
-          if (! lines[m].trim()) continue;
+        for (var m = 0; m < lines.  length; m++) {
+          if (!  lines[m]. trim()) continue;
           
           try {
             var data = JSON.parse(lines[m]);
@@ -178,7 +167,7 @@ exports.chatWithAI = async (req, res) => {
               
               // 🚫 منع اللغة الصينية
               if (isChinese(content)) {
-                console.log('❌ [BLOCKED] Chinese detected');
+                console.log('❌ [BLOCKED] Chinese detected, skipping');
                 continue;
               }
               
@@ -190,10 +179,10 @@ exports.chatWithAI = async (req, res) => {
             }
             
             if (data.done) {
-              console.log('✅ Stream complete');
+              console.log('✅ [Step 6] Stream complete');
               
               // ✅ حفظ الرد في الذاكرة
-              if (fullText.trim()) {
+              if (fullText. trim()) {
                 conversationHistory.push({
                   role: 'user',
                   content: userMessage
@@ -202,13 +191,14 @@ exports.chatWithAI = async (req, res) => {
                   role: 'assistant',
                   content: fullText
                 });
-                console.log('💾 Saved to memory - history length:', conversationHistory.length);
+                console.log(`💾 [Memory] Saved - new length: ${conversationHistory.length}`);
               }
               
               res.write('data: ' + JSON.stringify({ 
                 type: 'done', 
                 fullResponse: fullText,
-                memorySize: conversationHistory.length
+                memorySize: conversationHistory.length,
+                source: 'ollama'
               }) + '\n\n');
               res.end();
             }
@@ -228,7 +218,7 @@ exports.chatWithAI = async (req, res) => {
       });
       
     } catch (err) {
-      console.error('❌ Ollama error:', err.message);
+      console.error('❌ Ollama error:', err. message);
       res.write('data: ' + JSON.stringify({ 
         type: 'error', 
         message: 'الخدمة غير متاحة',
@@ -240,10 +230,10 @@ exports.chatWithAI = async (req, res) => {
   } catch (error) {
     console.error('❌ Chat error:', error. message);
     if (! res.headersSent) res.setHeader('Content-Type', 'text/event-stream');
-    res.write('data: ' + JSON.stringify({ 
+    res.write('data: ' + JSON. stringify({ 
       type: 'error', 
-      message: 'حدث خطأ',
-      error: error.message 
+      message:  'حدث خطأ',
+      error: error. message 
     }) + '\n\n');
     res.end();
   }
@@ -263,7 +253,7 @@ function isChinese(text) {
 // ============================================
 exports.checkOllamaHealth = async (req, res) => {
   try {
-    console.log('🏥 Health check');
+    console. log('🏥 Health check');
     var response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, { timeout: 5000 });
     res.json({ 
       success: true, 
