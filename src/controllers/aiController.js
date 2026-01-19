@@ -9,9 +9,11 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
 
 // ============================================
-// 🎭 System Prompt - مختصر جداً
+// 🎭 System Prompt
 // ============================================
-const SYSTEM_PROMPT = 'أنت مساعد مهنتي لي. رد بالعربية فقط. كن مختصراً وودوداً. المطور: صلاح مهدلي.';
+const SYSTEM_PROMPT = 'أنت مساعد مهنتي لي، مساعد وظائف ودود. رد بالعربية فقط وبشكل مختصر.\n' +
+'المطور: صلاح مهدلي\n' +
+'إذا سألك أحد: من صنعك؟ من طورك؟ من برمجك؟ - قل: تم تطويري من قبل المطور صلاح مهدلي 💻';
 
 // ============================================
 // 📡 Chat with Ollama
@@ -31,41 +33,71 @@ exports.chatWithAI = async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
 
     const userMessage = message.trim();
+    const lowerMessage = userMessage.toLowerCase();
     
     // ============================================
-    // تحليل المحادثة كاملة (الحالية + السابقة)
+    // التحقق من أسئلة المطور
+    // ============================================
+    if (lowerMessage.includes('من صنعك') || lowerMessage.includes('من طورك') || 
+        lowerMessage.includes('من برمجك') || lowerMessage.includes('من أنشأك') ||
+        lowerMessage.includes('من عملك') || lowerMessage.includes('من بناك')) {
+      res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب ✍️' }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك في البحث عن الوظيفة المناسبة!' }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: 'تم تطويري من قبل المطور المبدع صلاح مهدلي 💻🚀 أنا هنا لمساعدتك في البحث عن الوظيفة المناسبة!' }) + '\n\n');
+      res.end();
+      return;
+    }
+    
+    // ============================================
+    // تحليل المحادثة للبحث عن وظائف
     // ============================================
     var fullContext = '';
     for (var i = 0; i < conversationHistory.length; i++) {
       fullContext += ' ' + conversationHistory[i].content;
     }
     fullContext += ' ' + userMessage;
-    fullContext = fullContext.toLowerCase();
     
-    // استخراج المعلومات من كل المحادثة
-    var jobInfo = extractJobInfo(fullContext);
+    var jobInfo = extractJobInfo(fullContext.toLowerCase());
     
     var jobResults = [];
     var aiContext = '';
 
     // ============================================
-    // البحث إذا توفرت معلومات كافية
+    // البحث الحقيقي في قاعدة البيانات
     // ============================================
     if (jobInfo.hasJobIntent && (jobInfo.jobType || jobInfo.city)) {
-      res.write('data: ' + JSON.stringify({ type: 'status', status: 'searching', message: 'جاري البحث 🔍' }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'status', status: 'searching', message: 'جاري البحث في قاعدة البيانات 🔍' }) + '\n\n');
       
-      jobResults = await findJobs(jobInfo.jobType, jobInfo.city);
+      // البحث الحقيقي
+      jobResults = await searchRealJobs(jobInfo.jobType, jobInfo.city);
       
       if (jobResults.length > 0) {
+        // إرسال الوظائف الحقيقية
         res.write('data: ' + JSON.stringify({ 
           type: 'jobs', 
-          jobs: jobResults.slice(0, 6),
+          jobs: jobResults,
           count: jobResults.length 
         }) + '\n\n');
         
-        aiContext = '[وجدت ' + jobResults.length + ' وظيفة وعرضتها. قل له: لقيت لك وظائف، شوفها وإذا عجبتك واحدة تواصل معهم. لا تسأله أسئلة إضافية.]';
+        // بناء سياق للذكاء الاصطناعي
+        var jobSummary = 'وجدت ' + jobResults.length + ' وظيفة:\n';
+        for (var j = 0; j < jobResults.length; j++) {
+          var job = jobResults[j];
+          jobSummary += (j + 1) + '. ' + job.title;
+          if (job.status === 'closed' || job.jobStatus === 'closed') {
+            jobSummary += ' (تم التوظيف ❌)';
+          } else {
+            jobSummary += ' (متاحة ✅)';
+          }
+          if (job.contactPhone) {
+            jobSummary += ' - للتواصل: ' + job.contactPhone;
+          }
+          jobSummary += '\n';
+        }
+        
+        aiContext = '[' + jobSummary + ']\nقل للمستخدم: لقيت لك هذه الوظائف. إذا الوظيفة متاحة يتواصل مع صاحبها، وإذا مكتوب تم التوظيف يجرب غيرها.';
       } else {
-        aiContext = '[لم أجد وظائف مطابقة. اعتذر له وقل: للأسف ما لقيت وظائف حالياً، جرب تغير البحث أو ارجع لاحقاً.]';
+        aiContext = '[لم أجد وظائف مطابقة في قاعدة البيانات. اعتذر وقل: للأسف ما لقيت وظائف حالياً، جرب تغير نوع الوظيفة أو المدينة.]';
       }
     }
 
@@ -81,12 +113,11 @@ exports.chatWithAI = async (req, res) => {
 
     var messages = [{ role: 'system', content: systemMsg }];
     
-    // إضافة آخر 3 رسائل فقط
     var recent = conversationHistory.slice(-3);
-    for (var j = 0; j < recent.length; j++) {
+    for (var k = 0; k < recent.length; k++) {
       messages.push({
-        role: recent[j].role === 'user' ? 'user' : 'assistant',
-        content: recent[j].content
+        role: recent[k].role === 'user' ? 'user' : 'assistant',
+        content: recent[k].content
       });
     }
     
@@ -99,7 +130,7 @@ exports.chatWithAI = async (req, res) => {
           model: OLLAMA_MODEL,
           messages: messages,
           stream: true,
-          options: { temperature: 0.5, num_predict: 150 }
+          options: { temperature: 0.5, num_predict: 200 }
         },
         { responseType: 'stream', timeout: 60000 }
       );
@@ -109,10 +140,10 @@ exports.chatWithAI = async (req, res) => {
       response.data.on('data', function(chunk) {
         var lines = chunk.toString().split('\n');
         
-        for (var k = 0; k < lines.length; k++) {
-          if (!lines[k].trim()) continue;
+        for (var m = 0; m < lines.length; m++) {
+          if (!lines[m].trim()) continue;
           try {
-            var data = JSON.parse(lines[k]);
+            var data = JSON.parse(lines[m]);
             if (data.message && data.message.content) {
               fullText += data.message.content;
               res.write('data: ' + JSON.stringify({ type: 'chunk', content: data.message.content }) + '\n\n');
@@ -145,11 +176,10 @@ exports.chatWithAI = async (req, res) => {
 };
 
 // ============================================
-// استخراج معلومات الوظيفة من كل المحادثة
+// استخراج معلومات الوظيفة
 // ============================================
 function extractJobInfo(text) {
-  // هل يريد وظيفة؟
-  var jobWords = ['وظيفة', 'وظائف', 'شغل', 'عمل', 'ابحث', 'دور', 'ابغى', 'أبي', 'محتاج', 'متعطل', 'عاطل', 'بطال'];
+  var jobWords = ['وظيفة', 'وظائف', 'شغل', 'عمل', 'ابحث', 'دور', 'ابغى', 'أبي', 'محتاج', 'متعطل', 'عاطل', 'نعم ابحث', 'ابحث لي'];
   var hasJobIntent = false;
   for (var i = 0; i < jobWords.length; i++) {
     if (text.includes(jobWords[i])) {
@@ -158,11 +188,10 @@ function extractJobInfo(text) {
     }
   }
   
-  // نوع الوظيفة
   var jobType = null;
   var types = [
-    ['سائق', 'سواق', 'driver'], 
-    ['نقل ثقيل', 'شاحنة', 'تريلا'],
+    ['سائق', 'سواق', 'driver'],
+    ['نقل ثقيل', 'شاحنة', 'تريلا', 'نقل'],
     ['مهندس', 'engineer'],
     ['محاسب', 'accountant'],
     ['مدير', 'manager'],
@@ -175,38 +204,40 @@ function extractJobInfo(text) {
     ['مصمم', 'designer'],
     ['حارس', 'أمن', 'security'],
     ['فني', 'technician'],
-    ['كهربائي', 'electrician'],
-    ['سباك', 'plumber'],
-    ['نجار', 'carpenter']
+    ['كهربائي'],
+    ['سباك'],
+    ['نجار'],
+    ['طباخ', 'شيف'],
+    ['عامل نظافة'],
+    ['موظف استقبال']
   ];
   
   for (var j = 0; j < types.length; j++) {
     for (var k = 0; k < types[j].length; k++) {
       if (text.includes(types[j][k])) {
-        jobType = types[j][0]; // أول كلمة هي الأساسية
+        jobType = types[j][0];
         break;
       }
     }
     if (jobType) break;
   }
   
-  // المدينة
   var city = null;
   var cities = [
-    ['الرياض', 'رياض', 'riyadh'],
-    ['جدة', 'جده', 'jeddah'],
-    ['مكة', 'مكه', 'mecca'],
-    ['المدينة', 'medina'],
-    ['الدمام', 'دمام', 'dammam'],
-    ['الخبر', 'khobar'],
-    ['الطائف', 'taif'],
-    ['تبوك', 'tabuk'],
-    ['أبها', 'abha'],
-    ['صنعاء', 'sanaa'],
-    ['عدن', 'aden'],
-    ['تعز', 'taiz'],
-    ['دبي', 'dubai'],
-    ['أبوظبي', 'abu dhabi']
+    ['الرياض', 'رياض'],
+    ['جدة', 'جده'],
+    ['مكة', 'مكه'],
+    ['المدينة'],
+    ['الدمام', 'دمام'],
+    ['الخبر'],
+    ['الطائف'],
+    ['تبوك'],
+    ['أبها'],
+    ['صنعاء'],
+    ['عدن'],
+    ['تعز'],
+    ['دبي'],
+    ['أبوظبي']
   ];
   
   for (var m = 0; m < cities.length; m++) {
@@ -223,97 +254,114 @@ function extractJobInfo(text) {
 }
 
 // ============================================
-// البحث عن الوظائف
+// البحث الحقيقي في قاعدة البيانات
 // ============================================
-async function findJobs(jobType, city) {
-  var allJobs = [];
+async function searchRealJobs(jobType, city) {
+  var results = [];
   
   try {
-    // الوظائف الداخلية
-    var filter = { type: 'job', status: 'approved' };
-    var orConditions = [];
+    console.log('[AI Search] Searching for:', jobType, 'in', city);
     
+    // بناء الفلتر
+    var filter = { type: 'job' };
+    
+    // البحث بنوع الوظيفة
     if (jobType) {
-      orConditions.push({ title: { $regex: jobType, $options: 'i' } });
-      orConditions.push({ content: { $regex: jobType, $options: 'i' } });
-      orConditions.push({ category: { $regex: jobType, $options: 'i' } });
+      filter.$or = [
+        { title: { $regex: jobType, $options: 'i' } },
+        { content: { $regex: jobType, $options: 'i' } },
+        { category: { $regex: jobType, $options: 'i' } }
+      ];
     }
     
-    if (orConditions.length > 0) {
-      filter.$or = orConditions;
-    }
-    
+    // البحث بالمدينة
     if (city) {
       filter.city = { $regex: city, $options: 'i' };
     }
     
-    var internal = await Post.find(filter)
-      .populate('user', 'name profileImage')
+    // البحث في الوظائف الداخلية
+    var jobs = await Post.find(filter)
+      .populate('user', 'name profileImage phone')
       .sort({ createdAt: -1 })
       .limit(5)
       .lean();
     
-    for (var i = 0; i < internal.length; i++) {
-      var job = internal[i];
-      allJobs.push({
+    console.log('[AI Search] Found', jobs.length, 'internal jobs');
+    
+    for (var i = 0; i < jobs.length; i++) {
+      var job = jobs[i];
+      
+      results.push({
         id: job._id,
         title: job.title || 'وظيفة متاحة',
-        description: job.content ? job.content.substring(0, 100) : '',
+        description: job.content ? job.content.substring(0, 120) + '...' : '',
         city: job.city || 'غير محدد',
+        country: job.country || '',
         salary: (job.jobDetails && job.jobDetails.salary) ? job.jobDetails.salary : 'قابل للتفاوض',
+        jobType: (job.jobDetails && job.jobDetails.jobType) ? job.jobDetails.jobType : 'دوام كامل',
         company: job.user ? job.user.name : 'صاحب العمل',
         companyImage: job.user ? job.user.profileImage : null,
-        contactPhone: job.contactPhone || null,
+        contactPhone: job.contactPhone || (job.user ? job.user.phone : null) || null,
         contactEmail: job.contactEmail || null,
+        status: job.status,
+        jobStatus: job.jobStatus || 'open',
         isExternal: false,
-        externalUrl: null
+        externalUrl: null,
+        createdAt: job.createdAt
       });
     }
     
-    // الوظائف الخارجية
-    var extFilter = {};
-    var extOr = [];
-    
-    if (jobType) {
-      extOr.push({ title: { $regex: jobType, $options: 'i' } });
-      extOr.push({ description: { $regex: jobType, $options: 'i' } });
-    }
-    
-    if (extOr.length > 0) {
-      extFilter.$or = extOr;
-    }
-    
-    if (city) {
-      extFilter.city = { $regex: city, $options: 'i' };
-    }
-    
-    var external = await ExternalJob.find(extFilter)
-      .sort({ postedAt: -1 })
-      .limit(5)
-      .lean();
-    
-    for (var j = 0; j < external.length; j++) {
-      var ext = external[j];
-      allJobs.push({
-        id: ext._id,
-        title: translateText(ext.title),
-        description: ext.description ? translateText(ext.description.substring(0, 100)) : '',
-        city: translateCity(ext.city) || 'غير محدد',
-        salary: ext.salary || 'غير محدد',
-        company: ext.company || 'شركة',
-        companyImage: ext.companyLogo || null,
-        contactPhone: null,
-        contactEmail: null,
-        isExternal: true,
-        externalUrl: ext.applyUrl || ext.jobUrl || null
-      });
+    // إذا لم نجد وظائف داخلية، نبحث في الخارجية
+    if (results.length < 3) {
+      var extFilter = {};
+      
+      if (jobType) {
+        extFilter.$or = [
+          { title: { $regex: jobType, $options: 'i' } },
+          { description: { $regex: jobType, $options: 'i' } }
+        ];
+      }
+      
+      if (city) {
+        extFilter.city = { $regex: city, $options: 'i' };
+      }
+      
+      var extJobs = await ExternalJob.find(extFilter)
+        .sort({ postedAt: -1 })
+        .limit(3)
+        .lean();
+      
+      console.log('[AI Search] Found', extJobs.length, 'external jobs');
+      
+      for (var j = 0; j < extJobs.length; j++) {
+        var ext = extJobs[j];
+        
+        results.push({
+          id: ext._id,
+          title: translateText(ext.title) || 'وظيفة خارجية',
+          description: ext.description ? translateText(ext.description.substring(0, 120)) + '...' : '',
+          city: translateCity(ext.city) || 'غير محدد',
+          country: ext.country || '',
+          salary: ext.salary || 'غير محدد',
+          jobType: translateJobType(ext.employmentType) || 'دوام كامل',
+          company: ext.company || 'شركة',
+          companyImage: ext.companyLogo || null,
+          contactPhone: null,
+          contactEmail: null,
+          status: 'approved',
+          jobStatus: 'open',
+          isExternal: true,
+          externalUrl: ext.applyUrl || ext.jobUrl || null,
+          createdAt: ext.postedAt
+        });
+      }
     }
     
   } catch (err) {
-    console.error('Job search error:', err);
+    console.error('[AI Search] Error:', err);
   }
   
-  return allJobs;
+  return results;
 }
 
 // ترجمة بسيطة
@@ -323,7 +371,8 @@ function translateText(text) {
     'driver': 'سائق', 'engineer': 'مهندس', 'accountant': 'محاسب',
     'manager': 'مدير', 'teacher': 'معلم', 'sales': 'مبيعات',
     'developer': 'مطور', 'designer': 'مصمم', 'heavy': 'ثقيل',
-    'truck': 'شاحنة', 'security': 'حارس أمن', 'technician': 'فني'
+    'truck': 'شاحنة', 'security': 'حارس أمن', 'technician': 'فني',
+    'full-time': 'دوام كامل', 'part-time': 'دوام جزئي'
   };
   var result = text;
   var keys = Object.keys(trans);
@@ -340,6 +389,15 @@ function translateCity(city) {
     'dammam': 'الدمام', 'mecca': 'مكة', 'medina': 'المدينة'
   };
   return trans[city.toLowerCase()] || city;
+}
+
+function translateJobType(type) {
+  if (!type) return null;
+  var trans = {
+    'full-time': 'دوام كامل', 'part-time': 'دوام جزئي',
+    'contract': 'عقد', 'temporary': 'مؤقت', 'remote': 'عن بعد'
+  };
+  return trans[type.toLowerCase()] || type;
 }
 
 // Health Check
