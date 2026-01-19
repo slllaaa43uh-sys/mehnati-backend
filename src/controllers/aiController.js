@@ -3,10 +3,14 @@ const Post = require('../models/Post');
 const ExternalJob = require('../models/ExternalJob');
 
 // ============================================
-// 🤖 Ollama Configuration
+// 🤖 Ollama Configuration - FIXED
 // ============================================
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env. OLLAMA_MODEL || 'llama3';
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b-instruct';
+
+console.log('🔧 [INIT] Ollama Configuration: ');
+console.log(`   Base URL: ${OLLAMA_BASE_URL}`);
+console.log(`   Model: ${OLLAMA_MODEL}`);
 
 // ============================================
 // 🎭 System Prompt
@@ -16,10 +20,14 @@ const SYSTEM_PROMPT = 'أنت مساعد مهنتي لي، مساعد وظائف
 'إذا سألك أحد:  من صنعك؟ من طورك؟ من برمجك؟ - قل: تم تطويري من قبل المطور صلاح مهدلي 💻';
 
 // ============================================
-// 📡 Chat with Ollama
+// 📡 Chat with Ollama - FIXED
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
+    console.log('═══════════════════════════════════════════════════');
+    console.log('📨 [AI-CHAT] New chat request received');
+    console.log('═══════════════════════════════════════════════════');
+    
     // ✅ التحقق من البيانات المدخلة
     console.log('📨 [DEBUG] Received request body:', JSON.stringify(req.body, null, 2));
     
@@ -44,7 +52,7 @@ exports.chatWithAI = async (req, res) => {
       conversationHistory = [];
     }
     
-    if (!Array.isArray(conversationHistory)) {
+    if (! Array.isArray(conversationHistory)) {
       console.error('❌ [ERROR] conversationHistory is not an array:', conversationHistory);
       conversationHistory = [];
     }
@@ -57,11 +65,11 @@ exports.chatWithAI = async (req, res) => {
         console.warn('   ⚠️ Empty message found and filtered');
         return false;
       }
-      if (! msg.content) {
+      if (!msg.content) {
         console.warn('   ⚠️ Message without content found:', msg);
         return false;
       }
-      if (! msg.role) {
+      if (!msg.role) {
         console.warn('   ⚠️ Message without role found:', msg);
         return false;
       }
@@ -110,7 +118,7 @@ exports.chatWithAI = async (req, res) => {
     }
     fullContext += ' ' + userMessage;
     
-    console. log('📋 [DEBUG] Full context:', fullContext);
+    console.log('📋 [DEBUG] Full context:', fullContext);
     
     var jobInfo = extractJobInfo(fullContext. toLowerCase());
     console.log('💼 [DEBUG] Job info extracted:', jobInfo);
@@ -132,7 +140,7 @@ exports.chatWithAI = async (req, res) => {
       if (jobResults.length > 0) {
         // إرسال الوظائف الحقيقية
         console.log('📤 [DEBUG] Sending job results to client');
-        res.write('data: ' + JSON.stringify({ 
+        res.write('data: ' + JSON. stringify({ 
           type: 'jobs', 
           jobs: jobResults,
           count: jobResults.length 
@@ -149,7 +157,7 @@ exports.chatWithAI = async (req, res) => {
             jobSummary += ' (متاحة ✅)';
           }
           if (job.contactPhone) {
-            jobSummary += ' - للتواصل: ' + job. contactPhone;
+            jobSummary += ' - للتواصل:  ' + job.contactPhone;
           }
           jobSummary += '\n';
         }
@@ -163,7 +171,7 @@ exports.chatWithAI = async (req, res) => {
     // ============================================
     // إرسال الرد
     // ============================================
-    console.log('🤖 [DEBUG] Sending AI response...');
+    console.log('🤖 [DEBUG] Sending AI response.. .');
     res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب ✍️' }) + '\n\n');
 
     var systemMsg = SYSTEM_PROMPT;
@@ -186,66 +194,108 @@ exports.chatWithAI = async (req, res) => {
       });
     }
     
-    messages.push({ role: 'user', content: userMessage });
+    messages.push({ role: 'user', content:  userMessage });
     
     console.log('✅ [DEBUG] Final messages array:', JSON.stringify(messages, null, 2));
 
     try {
       console.log('🔗 [DEBUG] Connecting to Ollama at:', OLLAMA_BASE_URL);
-      var response = await axios.post(
-        OLLAMA_BASE_URL + '/api/chat',
+      console.log('🤖 [DEBUG] Using model:', OLLAMA_MODEL);
+      console.log('📤 [DEBUG] Sending messages to Ollama.. .');
+      
+      var response = await axios. post(
+        `${OLLAMA_BASE_URL}/api/chat`,
         {
-          model:  OLLAMA_MODEL,
+          model: OLLAMA_MODEL,
           messages: messages,
-          stream: true,
-          options: { temperature: 0.5, num_predict: 200 }
+          stream: true
         },
-        { responseType: 'stream', timeout: 60000 }
+        { 
+          responseType: 'stream', 
+          timeout: 60000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       console.log('✅ [DEBUG] Ollama connection established');
+      console.log('📥 [DEBUG] Starting to receive stream...');
+      
       var fullText = '';
+      var chunkCount = 0;
 
       response.data.on('data', function(chunk) {
-        console.log('📥 [DEBUG] Received chunk from Ollama');
+        chunkCount++;
+        console.log(`📥 [DEBUG] Received chunk #${chunkCount} (${chunk.length} bytes)`);
+        
         var lines = chunk.toString().split('\n');
+        console.log(`   📊 Lines in chunk: ${lines.length}`);
         
         for (var m = 0; m < lines. length; m++) {
-          if (! lines[m].trim()) continue;
+          if (! lines[m]. trim()) continue;
+          
           try {
+            console.log(`   📍 Parsing line ${m}:`, lines[m].substring(0, 100));
             var data = JSON.parse(lines[m]);
-            if (data.message && data.message.content) {
-              fullText += data.message. content;
+            
+            if (data. message && data.message.content) {
+              fullText += data.message.content;
+              console.log(`   ✅ Content added:  "${data.message.content}"`);
               res.write('data: ' + JSON.stringify({ type: 'chunk', content: data.message.content }) + '\n\n');
             }
+            
             if (data.done) {
-              console.log('✅ [DEBUG] Response complete from Ollama');
+              console.log('✅ [DEBUG] Stream complete from Ollama');
+              console.log('📝 [DEBUG] Full response:', fullText);
               res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: fullText }) + '\n\n');
               res.end();
             }
           } catch (e) {
-            console.error('❌ [ERROR] JSON parsing error:', e.message);
+            console.error('❌ [ERROR] JSON parsing error on line:', lines[m]);
+            console.error('   Error details:', e.message);
           }
         }
       });
 
       response.data.on('error', function(err) {
         console.error('❌ [ERROR] Stream error:', err. message);
-        res.write('data: ' + JSON.stringify({ type: 'error', message:  'حدث خطأ في البث' }) + '\n\n');
+        console.error('   Full error:', err);
+        res.write('data: ' + JSON.stringify({ type: 'error', message: 'حدث خطأ في البث' }) + '\n\n');
         res.end();
       });
+
+      response.data.on('end', function() {
+        console.log('✅ [DEBUG] Stream ended');
+      });
+      
     } catch (err) {
-      console.error('❌ [ERROR] Ollama error:', err.message);
-      console.error('❌ [ERROR] Full error:', err);
-      res.write('data: ' + JSON. stringify({ type: 'error', message: 'الخدمة غير متاحة حالياً', error: err.message }) + '\n\n');
+      console.error('❌ [ERROR] Ollama connection error');
+      console.error('   Error message:', err.message);
+      console.error('   Error code:', err.code);
+      console.error('   Error status:', err.response?.status);
+      console.error('   Error data:', err.response?.data);
+      console.error('   Full error:', err);
+      
+      res.write('data: ' + JSON.stringify({ 
+        type: 'error', 
+        message: 'الخدمة غير متاحة حالياً',
+        error: err.message,
+        details: `Failed to connect to Ollama at ${OLLAMA_BASE_URL}`
+      }) + '\n\n');
       res.end();
     }
 
   } catch (error) {
     console.error('❌ [ERROR] Chat error:', error);
-    console.error('❌ [ERROR] Full error:', error.stack);
+    console.error('   Full error stack:', error.stack);
+    
     if (! res.headersSent) res.setHeader('Content-Type', 'text/event-stream');
-    res.write('data: ' + JSON.stringify({ type: 'error', message: 'حدث خطأ', error: error.message }) + '\n\n');
+    res.write('data: ' + JSON.stringify({ 
+      type: 'error', 
+      message: 'حدث خطأ',
+      error: error.message 
+    }) + '\n\n');
     res.end();
   }
 };
@@ -335,7 +385,7 @@ function extractJobInfo(text) {
 }
 
 // ============================================
-// البحث الحقيقي في قاعدة البيانات
+// البحث الحقيقي ف�� قاعدة البيانات
 // ============================================
 async function searchRealJobs(jobType, city) {
   var results = [];
@@ -378,11 +428,11 @@ async function searchRealJobs(jobType, city) {
         description: job.content ?  job.content.substring(0, 120) + '...' : '',
         city: job.city || 'غير محدد',
         country: job.country || '',
-        salary: (job.jobDetails && job.jobDetails.salary) ?  job.jobDetails.salary : 'قابل للتفاوض',
+        salary: (job.jobDetails && job.jobDetails.salary) ? job.jobDetails.salary :  'قابل للتفاوض',
         jobType: (job.jobDetails && job.jobDetails.jobType) ? job.jobDetails.jobType : 'دوام كامل',
-        company: job.user ? job.user.name : 'صاحب العمل',
+        company: job.user ?  job.user.name : 'صاحب العمل',
         companyImage: job.user ? job.user.profileImage : null,
-        contactPhone: job. contactPhone || (job.user ?  job.user.phone : null) || null,
+        contactPhone: job.contactPhone || (job.user ?  job.user.phone : null) || null,
         contactEmail: job.contactEmail || null,
         status: job.status,
         jobStatus: job.jobStatus || 'open',
@@ -420,7 +470,7 @@ async function searchRealJobs(jobType, city) {
         results.push({
           id: ext._id,
           title: translateText(ext.title) || 'وظيفة خارجية',
-          description:  ext.description ? translateText(ext.description. substring(0, 120)) + '...' : '',
+          description:  ext.description ?  translateText(ext.description. substring(0, 120)) + '...' : '',
           city: translateCity(ext.city) || 'غير محدد',
           country: ext.country || '',
           salary: ext.salary || 'غير محدد',
@@ -451,7 +501,7 @@ function translateText(text) {
   var trans = {
     'driver': 'سائق', 'engineer': 'مهندس', 'accountant': 'محاسب',
     'manager': 'مدير', 'teacher': 'معلم', 'sales': 'مبيعات',
-    'developer': 'مطور', 'designer': 'مصمم', 'heavy': 'ثقيل',
+    'developer': 'مطور', 'designer': 'مصمم', 'heavy':  'ثقيل',
     'truck': 'شاحنة', 'security': 'حارس أمن', 'technician': 'فني',
     'full-time': 'دوام كامل', 'part-time': 'دوام جزئي'
   };
@@ -485,11 +535,25 @@ function translateJobType(type) {
 exports.checkOllamaHealth = async (req, res) => {
   try {
     console.log('🏥 [DEBUG] Health check started');
-    var response = await axios.get(OLLAMA_BASE_URL + '/api/tags', { timeout: 5000 });
+    console.log(`   🔗 Checking:  ${OLLAMA_BASE_URL}/api/tags`);
+    
+    var response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, { timeout: 5000 });
     console.log('✅ [DEBUG] Health check passed');
-    res.json({ success: true, message: 'Ollama is running', models: response.data. models || [] });
+    res.json({ 
+      success: true, 
+      message: 'Ollama is running',
+      baseUrl: OLLAMA_BASE_URL,
+      model:  OLLAMA_MODEL,
+      models: response.data.models || [] 
+    });
   } catch (error) {
     console.error('❌ [DEBUG] Health check failed:', error. message);
-    res.status(503).json({ success: false, message: 'Ollama not available' });
+    res.status(503).json({ 
+      success: false, 
+      message: 'Ollama not available',
+      baseUrl:  OLLAMA_BASE_URL,
+      model: OLLAMA_MODEL,
+      error: error.message
+    });
   }
 };
