@@ -9,163 +9,124 @@ const { KNOWLEDGE_BASE, findAnswer } = require('../data/knowledgeBase');
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b-instruct';
 
-console.log('🔧 [INIT] Ollama Configuration:    ');
+console.log('🔧 [INIT] Ollama Configuration:');
 console.log(`   Base URL: ${OLLAMA_BASE_URL}`);
 console.log(`   Model: ${OLLAMA_MODEL}`);
 
 // ============================================
-// 🎭 System Prompt - السياسات الصارمة
+// 🎭 System Prompt - السياسات العامة
 // ============================================
-const SYSTEM_PROMPT = `أنت مساعد ذكي مهني متخصص في تطبيق "مهنتي لي". 
-
-⚠️ **السياسات الإلزامية:**
-
-**1️⃣ المحظورات الصارمة:**
-❌ لا تبحث عن وظائف حقيقية
-❌ لا تبحث عن موظفين
-❌ لا تقترح فرص عمل من السوق
-❌ لا تكتب أكوادًا برمجية
-❌ لا تنشئ صورًا
-❌ لا تنشئ فيديوهات
-
-إذا طُلب أي من الأعلى، رد حرفياً:
-"هذه الميزة غير متوفرة حاليًا، وسيتم إضافتها قريبًا في تحديث قادم."
-
-**2️⃣ المسموح به:**
-
-أولاً - المجال المهني: 
-✅ إنشاء السيرة الذاتية
-✅ تحسين السيرة الذاتية
-✅ نصائح التوظيف
-✅ إرشادات المقابلات
-✅ تطوير المهارات
-✅ شرح استخدام تطبيق مهنتي لي
-
-ثانياً - القصص:
-إذا طلب قصة، تكون عن: 
-✅ العمل والوظائف
-✅ الحياة المهنية
-✅ التعب والاجتهاد
-✅ النجاح بعد الصبر
-❌ لا قصص أخرى خارج هذا الإطار
-
-ثالثاً - الأسئلة العامة:
-✅ نصائح حياتية مرتبطة بالعمل والمسؤولية
-
-**3️⃣ وظيفة "مزاجية":**
-إذا طلب وظيفة على مزاجه: 
-- لا تقدم وظيفة حقيقية
-- أعط مثال تدريبي افتراضي فقط
-- أضفها نصيحة مهنية
-
-**4️⃣ الهوية:**
-إذا سأل "من صنعك؟" أو "من طورك؟"
-رد حرفياً فقط:
-"تم تطويري بواسطة فريق الأمل – فريق تطبيق مهنتي لي."
-
-**5️⃣ القواعد العامة:**
-✅ اللغة العربية فقط
-✅ ردود واضحة وقصيرة ومهنية
-✅ حافظ على السياق
-✅ لا إجابات متناقضة
-✅ تذكر المحادثات السابقة`;
+const SYSTEM_PROMPT = `أنت مساعد ذكي مهني لتطبيق "مهنتي لي".
+- اللغة: العربية فقط.
+- التزم بالسياسات الممنوعة والمحظورات (لا بحث عن وظائف حقيقية، لا اقتراح موظفين، لا كتابة أكواد، لا إنشاء صور/فيديو).
+- ردودك تكون واضحة ومختصرة ومهنية.
+- إذا سئلت "من طورك؟" رد: "تم تطويري ب��اسطة فريق الأمل – فريق تطبيق مهنتي لي."`;
 
 // ============================================
-// 🚫 قائمة الكلمات المحظورة والمطلوبات
+// ⚠️ سياسات - كلمات ومطابقات
 // ============================================
-const FORBIDDEN_KEYWORDS = [
-  'بحث عن وظيفة', 'ابحث عن وظيفة', 'أبحث عن وظيفة',
-  'وظيفة حقيقية', 'وظائف من السوق',
-  'موظفين', 'بحث عن موظفين',
-  'أكوادًا برمجية', 'أكواد', 'code', 'برمجة',
-  'صورة', 'صور', 'image', 'create image',
-  'فيديو', 'فيديوهات', 'video', 'create video',
-  'ابحث في قاعدة البيانات', 'وظائف متاحة الآن'
+const POLICY_BLOCK_REPLY = 'هذه الميزة غير متوفرة حاليًا، وسيتم إضافتها قريبًا في تحديث قادم.';
+const CREATOR_REPLY = 'تم تطويري بواسطة فريق الأمل – فريق تطبيق مهنتي لي.';
+
+// كلمات/عبارات محظورة أو تشير لطلب وظيفة/توظيف
+const JOB_REQUEST_PATTERNS = [
+  /\b(اب?حث|ابغى|اريد|أريد|عايز|أحتاج|أبغى|دورلي|دور لي|دلني)\b.*\b(وظيف(ة|ات)?|عمل|شغل|وظا?ئف)\b/i,
+  /\b(وظيف(ة|ات)?|توظيف|ابحث عن موظف|أبحث عن موظفين|توظيف موظفين)\b/i,
+  /\b(وظيفة\s+سائق|سائق\s+في|سائق\s+بال?|سواق)\b/i
 ];
 
-const PROFESSIONAL_KEYWORDS = [
-  'سيرة ذاتية', 'cv', 'resume',
-  'تحسين السيرة', 'نصائح توظيف',
-  'مقابلة', 'interview', 'تطوير مهارات',
-  'كيفية استخدام التطبيق', 'شرح التطبيق'
+const CREATOR_PATTERNS = [
+  /\bمن\s+طورك\b/i,
+  /\bمن\s+صنعك\b/i,
+  /\bمن\s+طورني\b/i,
+  /\bمن\s+انشأك\b/i
 ];
 
-const STORY_KEYWORDS = ['قصة', 'story', 'حكاية', 'قصتي'];
+const JOB_MOOD_PATTERNS = [
+  /\bوظيفة\s+على\s+مزاجي\b/i,
+  /\bوظيفة\s+عشوائية\b/i,
+  /\brandom\s+job\b/i
+];
 
-const JOB_MOOD_KEYWORDS = ['وظيفة على مزاجي', 'وظيفة عشوائية', 'random job'];
-
-const CREATOR_KEYWORDS = ['من صنعك', 'من طورك', 'من أنشأك', 'من الفريق'];
-
-// ============================================
-// 🔍 دوال التحقق
-// ============================================
+function normalizeText(t) {
+  if (!t) return '';
+  return t.normalize('NFKC').toLowerCase();
+}
 
 function isForbiddenRequest(question) {
-  const lower = question.toLowerCase();
-  return FORBIDDEN_KEYWORDS.some(keyword => lower.includes(keyword));
-}
-
-function isProfessionalRequest(question) {
-  const lower = question.toLowerCase();
-  return PROFESSIONAL_KEYWORDS.some(keyword => lower.includes(keyword));
-}
-
-function isStoryRequest(question) {
-  const lower = question.toLowerCase();
-  return STORY_KEYWORDS.some(keyword => lower.includes(keyword));
-}
-
-function isJobMoodRequest(question) {
-  const lower = question.toLowerCase();
-  return JOB_MOOD_KEYWORDS.some(keyword => lower.includes(keyword));
+  if (!question) return false;
+  const q = normalizeText(question);
+  for (const re of JOB_REQUEST_PATTERNS) {
+    if (re.test(q)) return true;
+  }
+  return false;
 }
 
 function isCreatorQuestion(question) {
-  const lower = question.toLowerCase();
-  return CREATOR_KEYWORDS.some(keyword => lower.includes(keyword));
+  if (!question) return false;
+  const q = normalizeText(question);
+  for (const re of CREATOR_PATTERNS) {
+    if (re.test(q)) return true;
+  }
+  return false;
 }
 
-function blockForbiddenRequest() {
-  return "هذه الميزة غير متوفرة حاليًا، وسيتم إضافتها قريبًا في تحديث قادم.";
-}
-
-function creatorResponse() {
-  return "تم تطويري بواسطة فريق الأمل – فريق تطبيق مهنتي لي. ";
+function isJobMoodRequest(question) {
+  if (!question) return false;
+  const q = normalizeText(question);
+  for (const re of JOB_MOOD_PATTERNS) {
+    if (re.test(q)) return true;
+  }
+  return false;
 }
 
 // ============================================
-// 📡 Chat with AI
+// ✂️ اختصار الردود - نجعلها تعليمات قصيرة
+// ============================================
+function conciseReply(fullText, maxLines = 6) {
+  if (!fullText) return '';
+  // انفصل على الأسطر، خذ أول N أسطر غير فارغة
+  const lines = fullText.split('\n').map(s => s.trim()).filter(Boolean);
+  if (lines.length === 0) return fullText.slice(0, 400);
+  const selected = lines.slice(0, maxLines);
+  let result = selected.join('\n');
+  // إذا كان هناك المزيد، ضف نقطتين
+  if (lines.length > maxLines) result += '\n...';
+  // ضمان عدم طول مفرط
+  if (result.length > 600) return result.slice(0, 600) + '...';
+  return result;
+}
+
+// ============================================
+// 🚫 منع اللغة الصينية (سريع)
+function isChinese(text) {
+  if (!text) return false;
+  const chineseRegex = /[\u4E00-\u9FFF]/g;
+  return chineseRegex.test(text);
+}
+
+// ============================================
+// 📡 Chat with AI - المنطق الرئيسي
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
-    console.log('═══════════════════════════════════════════════════');
-    console.log('📨 [AI-CHAT] New chat request');
-    console.log('═══════════════════════════════════════════════════');
-    
-    let { message, conversationHistory } = req.body;
+    console.log('════════════════ AI-CHAT ═══════════════');
+    console.log('📨 New chat request');
+    console.log('════════════════════════════════════════');
 
+    let { message, conversationHistory } = req.body;
     console.log('📝 Message:', message);
-    
-    if (! message || !message.trim()) {
+
+    if (!message || !message.trim()) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
     }
 
-    // ✅ تحضير الذاكرة
-    if (! conversationHistory) {
-      conversationHistory = [];
-    }
-    
-    if (! Array.isArray(conversationHistory)) {
-      conversationHistory = [];
-    }
-    
-    conversationHistory = conversationHistory.filter(msg => {
-      return msg && msg.content && msg.role && msg.content.trim();
-    });
+    // تحضير الذاكرة
+    if (!conversationHistory) conversationHistory = [];
+    if (!Array.isArray(conversationHistory)) conversationHistory = [];
+    conversationHistory = conversationHistory.filter(m => m && m.role && m.content && String(m.content).trim());
 
-    console.log(`📊 Conversation history length: ${conversationHistory.length}`);
-    
-    const userMessage = message.trim();
+    const userMessage = String(message).trim();
 
     // SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -173,250 +134,158 @@ exports.chatWithAI = async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    // ============================================
-    // 🚫 التحقق من المحظورات أولاً
-    // ============================================
-    console.log('🔍 [Step 0] Checking for forbidden requests...');
-    
+    // 1) تحقق السياسات المحظورة أولاً
     if (isForbiddenRequest(userMessage)) {
-      console.log('❌ [BLOCKED] Forbidden request detected');
-      const blockedResponse = blockForbiddenRequest();
-      res.write('data: ' + JSON.stringify({ 
-        type: 'chunk', 
-        content: blockedResponse 
-      }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'done', 
-        fullResponse: blockedResponse,
-        source: 'policy_block'
-      }) + '\n\n');
+      console.log('❌ Policy block detected - job request');
+      const blocked = POLICY_BLOCK_REPLY;
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: blocked }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: blocked, source: 'policy_block' }) + '\n\n');
       res.end();
       return;
     }
 
-    // ============================================
-    // 👤 التحقق من سؤال الهوية
-    // ============================================
-    console.log('🔍 [Step 1] Checking for creator question...');
-    
+    // 1.b) إذا كان طلب "وظيفة على مزاجه" - لا تعطي وظيفة حقيقية بل مثال تدريبي
+    if (isJobMoodRequest(userMessage)) {
+      console.log('ℹ️ Job-mood request - return virtual example');
+      const example = `مثال تدريبي لوظيفة (غير حقيقية):
+• المسمى: سائق توصيل - نموذج تدريبي
+• المدينة: الرياض
+• المهام: توصيل طرود داخل المدينة، الالتزام بالمواعيد
+نصيحة: جهّز سيرة بسيطة (الهاتف، الخبرة، رخصة قيادة).`;
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: example }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: example, source: 'job_mood' }) + '\n\n');
+      res.end();
+      return;
+    }
+
+    // 2) سؤال عن الصانع / المطور؟
     if (isCreatorQuestion(userMessage)) {
-      console.log('✅ [CREATOR] Creator question detected');
-      const creatorReply = creatorResponse();
-      res.write('data: ' + JSON.stringify({ 
-        type: 'chunk', 
-        content: creatorReply 
-      }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'done', 
-        fullResponse: creatorReply,
-        source: 'creator'
-      }) + '\n\n');
+      console.log('✅ Creator question');
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: CREATOR_REPLY }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: CREATOR_REPLY, source: 'creator' }) + '\n\n');
       res.end();
       return;
     }
 
-    // ============================================
-    // 🔍 البحث في Knowledge Base
-    // ============================================
-    console.log('🔎 [Step 2] Searching in Knowledge Base...');
+    // 3) البحث السريع في Knowledge Base (الأولوية)
+    console.log('🔎 Searching KB for matches...');
     const kbAnswer = findAnswer(userMessage);
-    
     if (kbAnswer) {
-      console.log('✅ [KB] Found answer in Knowledge Base!  ');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'chunk', 
-        content: kbAnswer 
-      }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ 
-        type: 'done', 
-        fullResponse: kbAnswer,
-        source: 'knowledge_base'
-      }) + '\n\n');
+      console.log('✅ KB matched. Returning concise instruction.');
+      const short = conciseReply(kbAnswer, 6);
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: short }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: short, source: 'knowledge_base' }) + '\n\n');
       res.end();
       return;
     }
 
-    console.log('⚠️ [KB] Not found, using Ollama with memory...');
+    // 4) لم يتم العثور في KB -> استخدم Ollama مع ذاكرة السياق
+    console.log('⚠️ KB not found -> falling back to Ollama');
 
-    // ============================================
-    // 🤖 استخدم Ollama مع الذاكرة والسياسات
-    // ============================================
-    
-    res.write('data: ' + JSON.stringify({ 
-      type: 'status', 
-      status: 'responding', 
-      message: 'يكتب ✍️' 
-    }) + '\n\n');
+    // أرسل حالة كتابة
+    res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب ✍️' }) + '\n\n');
 
-    // 🧠 بناء المحادثة
-    var messages = [
-      { 
-        role: 'system', 
-        content: SYSTEM_PROMPT
-      }
-    ];
-    
-    // ✅ أضف السجل السابق (الذاكرة)
-    console.log(`📚 [Step 3] Adding ${conversationHistory.length} previous messages to memory`);
-    for (var i = 0; i < conversationHistory.length; i++) {
-      if (conversationHistory[i].content. trim()) {
-        messages.push({
-          role: conversationHistory[i].role === 'user' ? 'user' : 'assistant',
-          content: conversationHistory[i].content
-        });
-      }
+    // بناء الرسائل المرسلة إلى Ollama
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+    for (let i = Math.max(0, conversationHistory.length - 8); i < conversationHistory.length; i++) {
+      const m = conversationHistory[i];
+      if (m && m.content && m.role) messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content });
     }
-    
-    // ✅ أضف السؤال الحالي
-    messages.push({ 
-      role: 'user', 
-      content: userMessage 
-    });
-    
-    console.log(`✅ [Step 4] Final messages count: ${messages.length}`);
+    messages.push({ role: 'user', content: userMessage });
+
+    console.log('🔗 Connecting to Ollama (stream)... messages count:', messages.length);
 
     try {
-      console.log('🔗 [Step 5] Connecting to Ollama.. .');
-      
-      var response = await axios.post(
+      const response = await axios.post(
         `${OLLAMA_BASE_URL}/api/chat`,
         {
           model: OLLAMA_MODEL,
-          messages: messages,
+          messages,
           stream: true,
           options: {
-            temperature: 0.5,
-            num_predict: 500,
+            temperature: 0.4,
+            num_predict: 400,
             top_p: 0.9,
             top_k: 40
           }
         },
-        { 
-          responseType: 'stream', 
+        {
+          responseType: 'stream',
           timeout: 120000,
           headers: { 'Content-Type': 'application/json' }
         }
       );
 
-      console.log('✅ [Step 6] Connected, receiving stream...');
-      
-      var fullText = '';
+      let fullText = '';
 
-      response.data.on('data', function(chunk) {
-        var lines = chunk.toString().split('\n');
-        
-        for (var m = 0; m < lines. length; m++) {
-          if (! lines[m].trim()) continue;
-          
+      response.data.on('data', chunk => {
+        const lines = String(chunk).split('\n').map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
           try {
-            var data = JSON.parse(lines[m]);
-            
+            const data = JSON.parse(line);
             if (data.message && data.message.content) {
-              var content = data.message.content;
-              
-              // 🚫 منع اللغة الصينية
+              let content = data.message.content;
               if (isChinese(content)) {
-                console.log('❌ [BLOCKED] Chinese detected, skipping');
+                console.log('❌ Chinese output blocked');
                 continue;
               }
-              
               fullText += content;
-              res.write('data: ' + JSON.stringify({ 
-                type: 'chunk', 
-                content: content 
-              }) + '\n\n');
+              res.write('data: ' + JSON.stringify({ type: 'chunk', content }) + '\n\n');
             }
-            
             if (data.done) {
-              console.log('✅ [Step 7] Stream complete');
-              
-              // ✅ حفظ الرد في الذاكرة
-              if (fullText. trim()) {
-                conversationHistory.push({
-                  role: 'user',
-                  content: userMessage
-                });
-                conversationHistory.push({
-                  role: 'assistant',
-                  content: fullText
-                });
-                console.log(`💾 [Memory] Saved - new length: ${conversationHistory.length}`);
-              }
-              
-              res.write('data: ' + JSON.stringify({ 
-                type: 'done', 
-                fullResponse: fullText,
-                memorySize: conversationHistory.length,
-                source: 'ollama'
-              }) + '\n\n');
+              // قبل ال��نهاء: اختصر الرد ليكون تعليمات قصيرة
+              const short = conciseReply(fullText, 6) || POLICY_BLOCK_REPLY;
+              // حفظ في الذاكرة (العميل مسؤول عن إرسال المحادثة لاحقاً)
+              res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: short, source: 'ollama' }) + '\n\n');
               res.end();
             }
           } catch (e) {
-            console.error('❌ Parse error:', e.message);
+            // تجاهل السطور المكسورة
+            console.error('Parse stream chunk error:', e.message);
           }
         }
       });
 
-      response.data.on('error', function(err) {
-        console.error('❌ Stream error:', err. message);
-        res.write('data: ' + JSON.stringify({ 
-          type: 'error', 
-          message: 'حدث خطأ في البث' 
-        }) + '\n\n');
+      response.data.on('error', err => {
+        console.error('Stream error:', err.message);
+        const errMsg = 'حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي';
+        res.write('data: ' + JSON.stringify({ type: 'error', message: errMsg }) + '\n\n');
         res.end();
       });
-      
     } catch (err) {
-      console.error('❌ Ollama error:', err.message);
-      res.write('data: ' + JSON.stringify({ 
-        type: 'error', 
-        message: 'الخدمة غير متاحة',
-        error: err.message
-      }) + '\n\n');
+      console.error('Ollama error:', err.message);
+      const errMsg = 'الخدمة غير متاحة حالياً. جرّب لاحقاً.';
+      res.write('data: ' + JSON.stringify({ type: 'error', message: errMsg, error: err.message }) + '\n\n');
       res.end();
     }
-
   } catch (error) {
-    console.error('❌ Chat error:', error.message);
-    if (! res.headersSent) res.setHeader('Content-Type', 'text/event-stream');
-    res.write('data: ' + JSON.stringify({ 
-      type: 'error', 
-      message: 'حدث خطأ',
-      error: error.message 
-    }) + '\n\n');
+    console.error('Chat handler error:', error.message);
+    if (!res.headersSent) res.setHeader('Content-Type', 'text/event-stream');
+    const errMsg = 'حدث خطأ غير متوقع';
+    res.write('data: ' + JSON.stringify({ type: 'error', message: errMsg, error: error.message }) + '\n\n');
     res.end();
   }
 };
 
 // ============================================
-// 🚫 منع اللغة الصينية
-// ============================================
-
-function isChinese(text) {
-  const chineseRegex = /[\u4E00-\u9FFF]/g;
-  return chineseRegex.test(text);
-}
-
-// ============================================
-// Health Check
+// Health check
 // ============================================
 exports.checkOllamaHealth = async (req, res) => {
   try {
-    console.log('🏥 Health check');
-    var response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, { timeout: 5000 });
-    res.json({ 
-      success: true, 
+    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, { timeout: 5000 });
+    res.json({
+      success: true,
       message: 'Ollama running',
       model: OLLAMA_MODEL,
       knowledgeBaseLoaded: true,
-      topicsCount: Object.keys(KNOWLEDGE_BASE).length,
+      topicsCount: Object.keys(KNOWLEDGE_BASE || {}).length,
       policiesActive: true,
       status: '✅ جاهز'
     });
   } catch (error) {
-    console.error('❌ Health check failed:', error.message);
-    res.status(503).json({ 
-      success: false, 
+    console.error('Health check failed:', error.message);
+    res.status(503).json({
+      success: false,
       message: 'غير متاح',
       error: error.message
     });
