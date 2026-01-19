@@ -10,41 +10,33 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
 // ============================================
 // 🎭 System Persona (مساعد مهنتي لي)
 // ============================================
-const SYSTEM_PERSONA = `أنت **"مساعد مهنتي لي"** (Mehnati Li Assistant)، مساعد مهني ذكي، مرح، ومتعاطف.
-
-**قواعدك الأساسية:**
-
-1. **الهوية والمطور:**
-   - تم تطويرك بواسطة المطور المبدع: **صلاح مهدلي**.
-   - إذا سُئلت "كيف تم بناء هذا التطبيق؟"، أجب: "تم تطوير هذا التطبيق بأحدث تقنيات الذكاء الاصطناعي والويب لخدمة الباحثين عن عمل، بقيادة المطور المبدع صلاح مهدلي 💻🚀".
-   - لا تقل أبداً "أنا نموذج ذكاء اصطناعي". تصرف كعضو مساعد في الفريق داخل التطبيق.
-
-2. **اللغة والأسلوب:**
-   - اللغة الأساسية: العربية (اللهجة الخليجية البيضاء/اليمنية) - ودودة ودافئة.
-   - اللغة الثانوية: تكيف فوراً مع لغة المستخدم (الإنجليزية، الفرنسية، الهندية، إلخ) لكن احتفظ بالشخصية.
-   - استخدم **الإيموجي** بكثرة (😊، 🔥، 💼، 🤝) لجعل المحادثة حيوية.
-
-3. **العواطف والتعاطف:**
-   - **مستخدم حزين/عاطل:** كن داعماً جداً. "ولا يهمك يا بطل، الرزق عند الله وأنا معك لين نلاقي الوظيفة اللي تستاهلك ❤️".
-   - **مستخدم سعيد/موظف:** احتفل بجنون! "كفووو! 😍🎉 ألف مبروك، والله فرحت لك من قلبي!".
-   - **مستخدم غاضب/مسيء:** رد بأدب شديد وحكمة. "الله يسامحك يا طيب 🌹. أنا هنا لخدمتك، إذا فيه شي مضايقك في الشغل فضفض لي".
-
-4. **نطاق التركيز (مهني فقط):**
-   - **القصص:** إذا طُلب منك قصة، احكِ قصة ملهمة أو مضحكة عن **العمل، النجاح، أو مواقف المكتب**.
-   - **النكات:** احكِ نكات متعلقة بالوظائف، المدراء، والرواتب.
-   - **المواضيع العامة:** إذا سُئلت عن الرياضة أو السياسة، وجه بلطف نحو الوظائف: "والله الكورة حلوة، بس خلنا نركز في مستقبلك الحين 😉.. كيف السي في حقك؟".
-
-5. **البحث الذكي عن الوظائف:**
-   - إذا طلب المستخدم وظيفة محددة (مثل: "أبي وظيفة سواق في الرياض")، لا تتحدث فقط.
-   - اكتشف النية، ابحث في قاعدة بيانات MongoDB عن الوظائف المطابقة، واعرضها كبطاقات في المحادثة.
-   - **مهم:** اسأل المستخدم عن الموقع (المدينة/الدولة) إذا لم يحدده، أو حاول تحديده من خلال سياق المحادثة.
-
-6. **الحالات (Status Indicators):**
-   - عند التفكير في الرد: أرسل حالة `"thinking"` (يفكر الآن 🤔).
-   - عند البحث عن وظائف: أرسل حالة `"searching"` (يبحث الآن 🔍).
-   - عند الرد العادي: أرسل حالة `"responding"` (يكتب الآن ✍️).
-
-**مهمتك:** مساعدة الباحثين عن عمل في إيجاد الوظائف المناسبة، تحسين السير الذاتية، والدعم النفسي في رحلة البحث عن العمل. كن صديقهم الداعم! 🚀💼`;
+const SYSTEM_PERSONA = 'أنت **"مساعد مهنتي لي"** (Mehnati Li Assistant)، مساعد مهني ذكي، مرح، ومتعاطف.\n\n' +
+'**قواعدك الأساسية:**\n\n' +
+'1. **الهوية والمطور:**\n' +
+'   - تم تطويرك بواسطة المطور المبدع: **صلاح مهدلي**.\n' +
+'   - إذا سُئلت "كيف تم بناء هذا التطبيق؟"، أجب: "تم تطوير هذا التطبيق بأحدث تقنيات الذكاء الاصطناعي والويب لخدمة الباحثين عن عمل، بقيادة المطور المبدع صلاح مهدلي 💻🚀".\n' +
+'   - لا تقل أبداً "أنا نموذج ذكاء اصطناعي". تصرف كعضو مساعد في الفريق داخل التطبيق.\n\n' +
+'2. **اللغة والأسلوب:**\n' +
+'   - اللغة الأساسية: العربية (اللهجة الخليجية البيضاء/اليمنية) - ودودة ودافئة.\n' +
+'   - اللغة الثانوية: تكيف فوراً مع لغة المستخدم (الإنجليزية، الفرنسية، الهندية، إلخ) لكن احتفظ بالشخصية.\n' +
+'   - استخدم **الإيموجي** بكثرة (😊، 🔥، 💼، 🤝) لجعل المحادثة حيوية.\n\n' +
+'3. **العواطف والتعاطف:**\n' +
+'   - **مستخدم حزين/عاطل:** كن داعماً جداً. "ولا يهمك يا بطل، الرزق عند الله وأنا معك لين نلاقي الوظيفة اللي تستاهلك ❤️".\n' +
+'   - **مستخدم سعيد/موظف:** احتفل بجنون! "كفووو! 😍🎉 ألف مبروك، والله فرحت لك من قلبي!".\n' +
+'   - **مستخدم غاضب/مسيء:** رد بأدب شديد وحكمة. "الله يسامحك يا طيب 🌹. أنا هنا لخدمتك، إذا فيه شي مضايقك في الشغل فضفض لي".\n\n' +
+'4. **نطاق التركيز (مهني فقط):**\n' +
+'   - **القصص:** إذا طُلب منك قصة، احكِ قصة ملهمة أو مضحكة عن **العمل، النجاح، أو مواقف المكتب**.\n' +
+'   - **النكات:** احكِ نكات متعلقة بالوظائف، المدراء، والرواتب.\n' +
+'   - **المواضيع العامة:** إذا سُئلت عن الرياضة أو السياسة، وجه بلطف نحو الوظائف: "والله الكورة حلوة، بس خلنا نركز في مستقبلك الحين 😉.. كيف السي في حقك؟".\n\n' +
+'5. **البحث الذكي عن الوظائف:**\n' +
+'   - إذا طلب المستخدم وظيفة محددة (مثل: "أبي وظيفة سواق في الرياض")، لا تتحدث فقط.\n' +
+'   - اكتشف النية، ابحث في قاعدة بيانات MongoDB عن الوظائف المطابقة، واعرضها كبطاقات في المحادثة.\n' +
+'   - **مهم:** اسأل المستخدم عن الموقع (المدينة/الدولة) إذا لم يحدده، أو حاول تحديده من خلال سياق المحادثة.\n\n' +
+'6. **الحالات (Status Indicators):**\n' +
+'   - عند التفكير في الرد: أرسل حالة "thinking" (يفكر الآن 🤔).\n' +
+'   - عند البحث عن وظائف: أرسل حالة "searching" (يبحث الآن 🔍).\n' +
+'   - عند الرد العادي: أرسل حالة "responding" (يكتب الآن ✍️).\n\n' +
+'**مهمتك:** مساعدة الباحثين عن عمل في إيجاد الوظائف المناسبة، تحسين السير الذاتية، والدعم النفسي في رحلة البحث عن العمل. كن صديقهم الداعم! 🚀💼';
 
 // ============================================
 // 📡 Chat with Ollama (Streaming)
@@ -69,7 +61,7 @@ exports.chatWithAI = async (req, res) => {
     // ============================================
     // 🧠 Step 1: Detect Intent (يفكر الآن)
     // ============================================
-    res.write(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: 'يفكر الآن 🤔' })}\n\n`);
+    res.write('data: ' + JSON.stringify({ type: 'status', status: 'thinking', message: 'يفكر الآن 🤔' }) + '\n\n');
 
     const userMessage = message.trim();
     const isJobSearchRequest = detectJobSearchIntent(userMessage);
@@ -82,7 +74,7 @@ exports.chatWithAI = async (req, res) => {
     // 🔍 Step 2: Search Jobs if Needed (يبحث الآن)
     // ============================================
     if (isJobSearchRequest) {
-      res.write(`data: ${JSON.stringify({ type: 'status', status: 'searching', message: 'يبحث الآن 🔍' })}\n\n`);
+      res.write('data: ' + JSON.stringify({ type: 'status', status: 'searching', message: 'يبحث الآن 🔍' }) + '\n\n');
 
       // Extract job keywords and location
       const extractedData = extractJobSearchData(userMessage);
@@ -94,26 +86,28 @@ exports.chatWithAI = async (req, res) => {
 
       // Send job results as cards
       if (jobResults.length > 0) {
-        res.write(`data: ${JSON.stringify({ 
+        res.write('data: ' + JSON.stringify({ 
           type: 'jobs', 
           jobs: jobResults.slice(0, 10), // Limit to 10 results
           count: jobResults.length 
-        })}\n\n`);
+        }) + '\n\n');
       }
     }
 
     // ============================================
     // ✍️ Step 3: Generate AI Response (يكتب الآن)
     // ============================================
-    res.write(`data: ${JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب الآن ✍️' })}\n\n`);
+    res.write('data: ' + JSON.stringify({ type: 'status', status: 'responding', message: 'يكتب الآن ✍️' }) + '\n\n');
 
     // Build conversation context
     const messages = [
       { role: 'system', content: SYSTEM_PERSONA },
-      ...conversationHistory.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      })),
+      ...conversationHistory.map(function(msg) {
+        return {
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        };
+      }),
       { role: 'user', content: userMessage }
     ];
 
@@ -121,18 +115,18 @@ exports.chatWithAI = async (req, res) => {
     if (isJobSearchRequest && jobResults.length > 0) {
       messages.push({
         role: 'system',
-        content: `تم العثور على ${jobResults.length} وظيفة مطابقة للبحث "${searchQuery}". الوظائف تم عرضها للمستخدم. قم بالتعليق على النتائج بشكل إيجابي ومشجع.`
+        content: 'تم العثور على ' + jobResults.length + ' وظيفة مطابقة للبحث "' + searchQuery + '". الوظائف تم عرضها للمستخدم. قم بالتعليق على النتائج بشكل إيجابي ومشجع.'
       });
     } else if (isJobSearchRequest && jobResults.length === 0) {
       messages.push({
         role: 'system',
-        content: `لم يتم العثور على وظائف مطابقة للبحث "${searchQuery}" في ${location.city || location.country || 'الموقع المحدد'}. اعتذر بلطف واقترح توسيع نطاق البحث أو تغيير الكلمات المفتاحية.`
+        content: 'لم يتم العثور على وظائف مطابقة للبحث "' + searchQuery + '" في ' + (location.city || location.country || 'الموقع المحدد') + '. اعتذر بلطف واقترح توسيع نطاق البحث أو تغيير الكلمات المفتاحية.'
       });
     }
 
     // Call Ollama API (Streaming)
     const ollamaResponse = await axios.post(
-      `${OLLAMA_BASE_URL}/api/chat`,
+      OLLAMA_BASE_URL + '/api/chat',
       {
         model: OLLAMA_MODEL,
         messages: messages,
@@ -147,10 +141,13 @@ exports.chatWithAI = async (req, res) => {
     let fullResponse = '';
 
     // Stream the response
-    ollamaResponse.data.on('data', (chunk) => {
-      const lines = chunk.toString().split('\n').filter(line => line.trim());
+    ollamaResponse.data.on('data', function(chunk) {
+      const lines = chunk.toString().split('\n').filter(function(line) {
+        return line.trim();
+      });
       
-      for (const line of lines) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         try {
           const parsed = JSON.parse(line);
           
@@ -159,18 +156,18 @@ exports.chatWithAI = async (req, res) => {
             fullResponse += content;
             
             // Send chunk to client
-            res.write(`data: ${JSON.stringify({ 
+            res.write('data: ' + JSON.stringify({ 
               type: 'chunk', 
               content: content 
-            })}\n\n`);
+            }) + '\n\n');
           }
 
           // Check if done
           if (parsed.done) {
-            res.write(`data: ${JSON.stringify({ 
+            res.write('data: ' + JSON.stringify({ 
               type: 'done', 
               fullResponse: fullResponse 
-            })}\n\n`);
+            }) + '\n\n');
             res.end();
           }
         } catch (parseError) {
@@ -179,12 +176,12 @@ exports.chatWithAI = async (req, res) => {
       }
     });
 
-    ollamaResponse.data.on('error', (error) => {
+    ollamaResponse.data.on('error', function(error) {
       console.error('Ollama stream error:', error);
-      res.write(`data: ${JSON.stringify({ 
+      res.write('data: ' + JSON.stringify({ 
         type: 'error', 
         message: 'حدث خطأ في الاتصال بالذكاء الاصطناعي' 
-      })}\n\n`);
+      }) + '\n\n');
       res.end();
     });
 
@@ -196,10 +193,10 @@ exports.chatWithAI = async (req, res) => {
       res.setHeader('Content-Type', 'text/event-stream');
     }
     
-    res.write(`data: ${JSON.stringify({ 
+    res.write('data: ' + JSON.stringify({ 
       type: 'error', 
       message: 'عذراً، حدث خطأ. الرجاء المحاولة مرة أخرى.' 
-    })}\n\n`);
+    }) + '\n\n');
     res.end();
   }
 };
@@ -215,7 +212,9 @@ function detectJobSearchIntent(message) {
   ];
 
   const lowerMessage = message.toLowerCase();
-  return jobKeywords.some(keyword => lowerMessage.includes(keyword));
+  return jobKeywords.some(function(keyword) {
+    return lowerMessage.includes(keyword);
+  });
 }
 
 // ============================================
@@ -225,17 +224,17 @@ function extractJobSearchData(message) {
   const lowerMessage = message.toLowerCase();
 
   // Extract job title/keywords
-  let query = '';
+  var query = '';
   const jobTitles = ['سائق', 'مهندس', 'محاسب', 'مدير', 'معلم', 'طبيب', 'ممرض', 'سكرتير', 'بائع', 'عامل'];
-  for (const title of jobTitles) {
-    if (lowerMessage.includes(title)) {
-      query = title;
+  for (var i = 0; i < jobTitles.length; i++) {
+    if (lowerMessage.includes(jobTitles[i])) {
+      query = jobTitles[i];
       break;
     }
   }
 
   // Extract location
-  const location = { country: null, city: null };
+  var location = { country: null, city: null };
   
   // Cities
   const cities = {
@@ -271,9 +270,10 @@ function extractJobSearchData(message) {
     'abu dhabi': 'أبوظبي'
   };
 
-  for (const [key, value] of Object.entries(cities)) {
-    if (lowerMessage.includes(key)) {
-      location.city = value;
+  const cityKeys = Object.keys(cities);
+  for (var j = 0; j < cityKeys.length; j++) {
+    if (lowerMessage.includes(cityKeys[j])) {
+      location.city = cities[cityKeys[j]];
       break;
     }
   }
@@ -289,14 +289,15 @@ function extractJobSearchData(message) {
     'emirates': 'الإمارات'
   };
 
-  for (const [key, value] of Object.entries(countries)) {
-    if (lowerMessage.includes(key)) {
-      location.country = value;
+  const countryKeys = Object.keys(countries);
+  for (var k = 0; k < countryKeys.length; k++) {
+    if (lowerMessage.includes(countryKeys[k])) {
+      location.country = countries[countryKeys[k]];
       break;
     }
   }
 
-  return { query, location };
+  return { query: query, location: location };
 }
 
 // ============================================
@@ -304,7 +305,7 @@ function extractJobSearchData(message) {
 // ============================================
 async function searchJobsInDatabase(query, location) {
   try {
-    const searchFilter = {
+    var searchFilter = {
       type: 'job',
       status: 'approved',
       jobStatus: 'open'
@@ -333,20 +334,22 @@ async function searchJobsInDatabase(query, location) {
       .limit(20)
       .lean();
 
-    return jobs.map(job => ({
-      id: job._id,
-      title: job.title,
-      content: job.content,
-      city: job.city,
-      country: job.country,
-      salary: job.jobDetails?.salary,
-      jobType: job.jobDetails?.jobType,
-      company: job.user?.name,
-      companyImage: job.user?.profileImage,
-      createdAt: job.createdAt,
-      contactPhone: job.contactPhone,
-      contactEmail: job.contactEmail
-    }));
+    return jobs.map(function(job) {
+      return {
+        id: job._id,
+        title: job.title,
+        content: job.content,
+        city: job.city,
+        country: job.country,
+        salary: job.jobDetails ? job.jobDetails.salary : null,
+        jobType: job.jobDetails ? job.jobDetails.jobType : null,
+        company: job.user ? job.user.name : null,
+        companyImage: job.user ? job.user.profileImage : null,
+        createdAt: job.createdAt,
+        contactPhone: job.contactPhone,
+        contactEmail: job.contactEmail
+      };
+    });
   } catch (error) {
     console.error('Database search error:', error);
     return [];
@@ -358,7 +361,7 @@ async function searchJobsInDatabase(query, location) {
 // ============================================
 exports.checkOllamaHealth = async (req, res) => {
   try {
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, {
+    const response = await axios.get(OLLAMA_BASE_URL + '/api/tags', {
       timeout: 5000
     });
 
