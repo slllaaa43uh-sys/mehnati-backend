@@ -77,6 +77,12 @@ const LOCAL_RESPONSES = [
     name: 'تطوير التطبيق',
     keywords: ['تطوير التطبيق', 'تحديث التطبيق', 'هل سيتم تطوير التطبيق'],
     answer: `نعم، ا��تطبيق في تطور مستمر وسيتم إضافة ميزات تدريجيًا في التحديثات القادمة.`
+  },
+  // جديد: تعليمات "كيفية إنشاء منشور" كما طلبت (فصحى مختصرة)
+  {
+    name: 'كيفية إنشاء منشور',
+    keywords: ['كيفية إنشاء منشور', 'كيف أنشئ منشور', 'انشاء منشور', 'كيفية إنشاء منشور؟', 'كيف انشر منشور'],
+    answer: `لإنشاء منشور، اضغط على الحاوية الموجودة في الأعلى والمكتوب فيها 'بماذا تفكر؟'. أدخل نصك، ثم اختر نوع التصنيف المناسب للمنشور، وأخيرًا اضغط على زر النشر لإرسال المنشور.`
   }
 ];
 
@@ -97,24 +103,23 @@ const CREATOR_PATTERNS = [
 
 const JOB_MOOD_PATTERNS = [
   /\bوظيفة\s+على\s+مزاجي\b/i,
-  /\bوظيفة\s+عشوائية\b/i,
+  /\bوظيفة\s+عش��ائية\b/i,
   /\brandom\s+job\b/i
 ];
 
 // ============================================
 // مواضيع واجهة التطبيق (تعليمات UI) — نريد أن نُجيب عليها ب LIMITED_REPLY
-// أي نص يحتوي عبارات واجهة شائعة سيعامل كـ تعليمات واجهة
+// لكن سيتم التحقق من LOCAL_RESPONSES أولاً لتفادي حجب التعليمات التي أضفناها.
 // ============================================
 const APP_INSTRUCTION_PATTERNS = [
   /زر\s*\(\+\)/i,
   /\bبم تفكر\b/i,
-  /\bكيفية إنشاء منشور\b/i,
   /\bانشئ منشور\b/i,
+  /\bانشر\b/i,
+  /\bإنشاء منشور\b/i,
   /\bكيفية تسجيل الدخول\b/i,
   /\bكيفية تسجيل الخروج\b/i,
-  /\bكيفية إضافة قصة\b/i,
-  /\bانشر\b/i,
-  /\bإنشاء منشور\b/i
+  /\bكيفية إضافة قصة\b/i
 ];
 
 function normalizeText(t) {
@@ -191,7 +196,7 @@ function conciseReply(fullText, maxLines = 6) {
 exports.chatWithAI = async (req, res) => {
   try {
     let { message, conversationHistory } = req.body;
-    console.log('📨 AI chat:', message);
+    console.log('�� AI chat:', message);
 
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
@@ -239,20 +244,20 @@ exports.chatWithAI = async (req, res) => {
       return;
     }
 
-    // 4) إذا السائل يسأل عن تعليمات الواجهة -> نرجع LIMITED_REPLY كما طلبت
-    if (isAppInstruction(userMessage)) {
-      res.write('data: ' + JSON.stringify({ type: 'chunk', content: LIMITED_REPLY }) + '\n\n');
-      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: LIMITED_REPLY, source: 'app_instruction' }) + '\n\n');
-      res.end();
-      return;
-    }
-
-    // 5) جرب البحث المحلي داخل الكود (LOCAL_RESPONSES)
+    // 4) جرب البحث المحلي داخل الكود (LOCAL_RESPONSES) أولاً
     const local = findLocalAnswer(userMessage);
     if (local) {
       const short = conciseReply(local, 6);
       res.write('data: ' + JSON.stringify({ type: 'chunk', content: short }) + '\n\n');
       res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: short, source: 'local_kb' }) + '\n\n');
+      res.end();
+      return;
+    }
+
+    // 5) إذا السائل يسأل عن تعليمات الواجهة -> نرجع LIMITED_REPLY كما طلبت
+    if (isAppInstruction(userMessage)) {
+      res.write('data: ' + JSON.stringify({ type: 'chunk', content: LIMITED_REPLY }) + '\n\n');
+      res.write('data: ' + JSON.stringify({ type: 'done', fullResponse: LIMITED_REPLY, source: 'app_instruction' }) + '\n\n');
       res.end();
       return;
     }
