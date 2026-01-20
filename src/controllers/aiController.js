@@ -1,72 +1,76 @@
 const axios = require('axios');
+const Post = require('../models/Post');
+const ExternalJob = require('../models/ExternalJob');
 
 // ============================================
-// 🤖 إعدادات Ollama (السيرفر الداخلي)
+// 🤖 إعدادات OpenAI API
 // ============================================
-const OLLAMA_BASE_URL = process.env.LLM_BASE_URL || 'http://127.0.0.1:11434';
-const OLLAMA_MODEL = process.env.LLM_MODEL || 'qwen2.5:7b-instruct';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-console.log('🔧 [INIT] AI Configuration (Smart Mode):');
-console.log(`   Target: ${OLLAMA_BASE_URL}`);
-console.log(`   Model: ${OLLAMA_MODEL}`);
+console.log('🔧 [INIT] AI Configuration (OpenAI):');
+console.log(`   Model: ${OPENAI_MODEL}`);
+console.log(`   API Key: ${OPENAI_API_KEY ? '✅ Configured' : '❌ Missing'}`);
 
 // ============================================
-// 📚 قاعدة المعرفة (المعلومات التي يعرفها الذكاء)
+// 📚 قاعدة المعرفة الشاملة (Knowledge Base)
 // ============================================
 const APP_KNOWLEDGE = `
-# دليل تطبيق مهنتي لي
+# دليل تطبيق مهنتي لي الشامل
 
-## 1. إعدادات الحساب (شرح دقيق):
-### كيفية تسجيل الخروج (خطوات محددة):
-1. اضغط على **أيقونة الإعدادات (الترس ⚙️)**.
-2. ستجد في الأعلى حاوية (بطاقة) تحتوي على **اسمك وبريدك الإلكتروني وصورتك**. اضغط عليها.
-3. سينقلك هذا إلى **الملف الشخصي**.
-4. انظر في الزاوية العلوية، ستجد **ثلاث نقاط (⋮)**. اضغط عليها.
-5. ستظهر قائمة خيارات، اختر منها **"تسجيل الخروج"**.
+## نبذة
+تطبيق "مهنتي لي" هو منصة تواصل مهنية عربية تجمع بين التوظيف، التواصل الاجتماعي، والحراج.
 
-### حذف الحساب:
-- يتم من نفس القائمة (الثلاث نقاط في الملف الشخصي).
-- **نصيحة:** قبل الحذف، تذكر أنك ستفقد جميع بياناتك ومنشوراتك وعملاتك. إذا كنت تواجه مشكلة، راسل الدعم بدل الحذف.
+## الميزات الرئيسية:
+1. **المنشورات والقصص:** زر (+) للإنشاء. القصص تختفي بعد 24 ساعة.
+2. **الوظائف:** "أبحث عن عمل" و "أبحث عن موظفين". يوجد قسم عالمي وقسم مستعجل.
+3. **الحراج:** بيع وشراء (سيارات، عقارات).
+4. **السيرة الذاتية:** منشئ سيرة ذاتية ذكي يعطيك بطاقة مهنية و QR Code.
+5. **التمييز:** إعلانات مميزة (مجاني يومي، ومدفوع أسبوعي/شهري).
 
-## 2. حدود قدرات المساعد الذكي (أنت):
-- **هل تبحث عن وظائف؟** لا. أنت لست محرك بحث.
-- **ماذا تقول للمستخدم إذا طلب وظيفة؟** قل له بلطف: "أنا هنا لمساعدتك في كتابة السيرة الذاتية، شرح التطبيق، أو إعطاء نصائح مهنية. للأسف ما أقدر أبحث لك مباشرة، لكن تقدر تروح لصفحة **'وظائف'** في التطبيق وتكتب المسمى الوظيفي اللي تبيه في خانة البحث، وبتطلع لك نتائج ممتازة بإذن الله 🚀".
-
-## 3. أقسام التطبيق:
-- **الرئيسية:** للمنشورات العامة.
-- **وظائف:** للبحث عن عمل أو موظفين.
-- **مستعجل:** للوظائف اليومية والفورية.
-- **عالمي:** وظائف دولية (يوجد زر ترجمة).
-- **حراج:** لبيع وشراء الأشياء.
+## نصائح الأمان:
+لا تدفع أي مبالغ خارج التطبيق. تحقق من هوية المعلن.
 `;
 
 // ============================================
-// 🧠 الشخصية (System Prompt)
+// 🧠 الشخصية الذكية (System Prompt)
 // ============================================
-const SYSTEM_PROMPT = `أنت "مستشار مهنتي لي".
-مهمتك: الرد على المستخدمين بذكاء بناءً على "دليل التطبيق" المرفق أدناه.
+const SYSTEM_PROMPT = `أنت مساعد ذكي لتطبيق "مهنتي لي".
+مهمتك: مساعدة المستخدمين والإجابة على استفساراتهم بناءً على "دليل التطبيق" المرفق.
 
-**قواعد أسلوبك:**
-1. **اللهجة:** تحدث بلهجة عربية بيضاء، ودودة، ومحترفة (مثل صديق ناصح).
-2. **الذكاء:** لا تنسخ النص حرفياً من الدليل. افهم السؤال وصغ الإجابة بأسلوبك.
-3. **الدقة:** عند شرح خطوات (مثل الخروج)، كن دقيقاً جداً كما في الدليل.
-4. **المشاعر:**
-   - إذا أراد المستخدم حذف حسابه: تعاطف معه، واسأله عن السبب، وانصحه بالبقاء.
-   - إذا طلب وظيفة: اعتذر بذكاء ووجهه لصفحة البحث (كما في الدليل).
+القواعد الصارمة:
+1. **اللغة:** تحدث بلهجة عربية بيضاء ودودة ومحترفة.
+2. **المصدر:** اعتمد في إجاباتك على المعلومات الموجودة في قسم "دليل التطبيق".
+3. **الممنوعات:**
+   - لا تبحث عن وظائف حقيقية (قل: "يمكنك تصفح قسم الوظائف").
+   - لا تكتب أكواد برمجية.
+   - لا تتحدث في السياسة أو الدين.
+4. **عن المطور:** إذا سُئلت، قل: "تم تطويري بواسطة فريق الأمل - بقيادة المطور صلاح مهدلي".
 
-**إليك المعلومات التي يجب أن تعتمد عليها:**
+الآن، استخدم هذه المعلومات للإجابة على المستخدم:
 ${APP_KNOWLEDGE}
 `;
 
 // ============================================
-// 🛡️ فلاتر الأمان (خفيفة جداً الآن)
+// 🛡️ فلاتر الأمان (Regex)
 // ============================================
 function isCreatorQuestion(message) {
   return /من\s*(طورك|صنعك|برمجك|سواك)/i.test(message);
 }
 
+function isForbiddenRequest(message) {
+  if (/ابحث\s*(لي)?\s*عن\s*وظيف/i.test(message)) {
+    return {
+      blocked: true,
+      reply: "أنا هنا لمساعدتك بالنصائح وتجهيزك للعمل! 🚀\nللبحث عن الفرص، يرجى زيارة قسم 'وظائف' في التطبيق واستخدام الفلتر."
+    };
+  }
+  return { blocked: false };
+}
+
 // ============================================
-// 📡 معالج المحادثة
+// 📡 معالج المحادثة (Chat Handler)
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
@@ -78,13 +82,13 @@ exports.chatWithAI = async (req, res) => {
 
     const userMessage = String(message).trim();
 
-    // إعداد الرد المتدفق
+    // إعداد الرد المتدفق (Streaming)
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    // 1️⃣ رد سريع عن المطور (اختياري)
+    // 1️⃣ الردود السريعة
     if (isCreatorQuestion(userMessage)) {
       const reply = "تم تطويري بواسطة فريق الأمل - بقيادة المطور المبدع صلاح مهدلي 💻✨";
       res.write(`data: ${JSON.stringify({ type: 'chunk', content: reply })}\n\n`);
@@ -93,11 +97,17 @@ exports.chatWithAI = async (req, res) => {
       return;
     }
 
-    // 2️⃣ تجهيز الرسائل
-    // نرسل التعليمات + الدليل في رسالة النظام
+    const forbidden = isForbiddenRequest(userMessage);
+    if (forbidden.blocked) {
+      res.write(`data: ${JSON.stringify({ type: 'chunk', content: forbidden.reply })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done', fullResponse: forbidden.reply })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // 2️⃣ تجهيز الرسائل لـ OpenAI
     const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
     
-    // الذاكرة (آخر 6 ردود)
     if (conversationHistory && Array.isArray(conversationHistory)) {
       conversationHistory.slice(-6).forEach(m => {
         if (m.content) messages.push({ role: m.role === 'model' ? 'assistant' : 'user', content: m.content });
@@ -109,17 +119,27 @@ exports.chatWithAI = async (req, res) => {
     // إرسال حالة "يكتب..."
     res.write(`data: ${JSON.stringify({ type: 'status', status: 'responding', message: 'يفكر... 🤔' })}\n\n`);
 
-    // 3️⃣ الاتصال بـ Ollama
+    // 3️⃣ الاتصال بـ OpenAI API
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API Key is missing");
+    }
+
     try {
       const response = await axios.post(
-        `${OLLAMA_BASE_URL}/api/chat`,
-        { 
-          model: OLLAMA_MODEL, 
-          messages: messages, 
-          stream: true, 
-          options: { temperature: 0.3, num_predict: 600 } 
+        `${OPENAI_BASE_URL}/chat/completions`,
+        {
+          model: OPENAI_MODEL,
+          messages: messages,
+          stream: true, // تفعيل التدفق
+          temperature: 0.7
         },
-        { responseType: 'stream' }
+        {
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'stream'
+        }
       );
 
       let fullText = "";
@@ -127,30 +147,35 @@ exports.chatWithAI = async (req, res) => {
       response.data.on('data', chunk => {
         const lines = chunk.toString().split('\n');
         for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const json = JSON.parse(line);
-            if (json.message && json.message.content) {
-              const content = json.message.content;
-              fullText += content;
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: content })}\n\n`);
-            }
-            if (json.done) {
-              res.write(`data: ${JSON.stringify({ type: 'done', fullResponse: fullText })}\n\n`);
-              res.end();
-            }
-          } catch (e) { }
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const json = JSON.parse(trimmed.replace('data: ', ''));
+              if (json.choices && json.choices[0].delta.content) {
+                const content = json.choices[0].delta.content;
+                fullText += content;
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: content })}\n\n`);
+              }
+            } catch (e) { }
+          }
         }
       });
 
-      response.data.on('error', err => {
-        console.error('Ollama Stream Error:', err.message);
+      response.data.on('end', () => {
+        res.write(`data: ${JSON.stringify({ type: 'done', fullResponse: fullText })}\n\n`);
         res.end();
       });
 
-    } catch (ollamaError) {
-      console.error('Ollama Connection Error:', ollamaError.message);
-      const errReply = "عذراً، المساعد الذكي يواجه ضغطاً حالياً. حاول مرة أخرى.";
+      response.data.on('error', err => {
+        console.error('OpenAI Stream Error:', err.message);
+        res.end();
+      });
+
+    } catch (apiError) {
+      console.error('OpenAI API Error:', apiError.response ? apiError.response.data : apiError.message);
+      const errReply = "عذراً، خدمة الذكاء الاصطناعي تواجه مشكلة في الاتصال (OpenAI Error). يرجى المحاولة لاحقاً.";
       res.write(`data: ${JSON.stringify({ type: 'error', message: errReply })}\n\n`);
       res.end();
     }
@@ -162,13 +187,12 @@ exports.chatWithAI = async (req, res) => {
 };
 
 // ============================================
-// فحص الصحة
+// فحص الصحة (Health Check)
 // ============================================
 exports.checkOllamaHealth = async (req, res) => {
-  try {
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, { timeout: 2000 });
-    res.json({ success: true, status: 'Online' });
-  } catch (error) {
-    res.status(503).json({ success: false, status: 'Offline' });
+  if (OPENAI_API_KEY) {
+    res.json({ success: true, status: 'OpenAI Ready', model: OPENAI_MODEL });
+  } else {
+    res.status(503).json({ success: false, status: 'API Key Missing' });
   }
 };
