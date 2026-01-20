@@ -20,7 +20,9 @@ const {
   hidePost,
   unhidePost,
   updateJobStatus,
-  incrementShortView
+  incrementShortView,
+  searchPosts,
+  getSearchSuggestions
 } = require('../controllers/postController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -36,6 +38,10 @@ const extendTimeout = (req, res, next) => {
 
 // Public routes
 router.get('/', optionalAuth, getPosts);
+
+// Search routes (must be before /:id to avoid conflicts)
+router.get('/search', optionalAuth, searchPosts);
+router.get('/search/suggestions', getSearchSuggestions);
 
 // Post counts for badges (must be before /:id)
 router.get('/counts', getPostCounts);

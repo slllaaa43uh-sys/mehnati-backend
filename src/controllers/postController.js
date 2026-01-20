@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { updateSingleVideoScore, updateUserInterestProfile } = require('../services/recommendationService');
 const { sendNotificationByCategory } = require('../services/fcmService');
+const { checkFeaturedExpiryBatch, updateExpiredFeaturedPosts } = require('../cron/featuredCron');
 
 /**
  * ============================================
@@ -601,6 +602,9 @@ exports.getPosts = async (req, res, next) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // تحديث المنشورات المنتهية الصلاحية في قاعدة البيانات قبل الجلب
+    await updateExpiredFeaturedPosts();
+
     const posts = await Post.find(query)
       .populate('user', 'name avatar isVerified')
       .populate('reactions.user', 'name avatar')
@@ -613,17 +617,21 @@ exports.getPosts = async (req, res, next) => {
       })
       .sort({ isFeatured: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean(); // استخدام lean للأداء الأفضل
+
+    // التحقق من صلاحية التمييز في الوقت الفعلي (احتياطي إضافي)
+    const processedPosts = checkFeaturedExpiryBatch(posts);
 
     const total = await Post.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: posts.length,
+      count: processedPosts.length,
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
-      posts
+      posts: processedPosts
     });
   } catch (error) {
     next(error);
@@ -1865,3 +1873,230 @@ exports.getComments = async (req, res, next) => {
   }
 };
 
+
+// ============================================
+// دالة البحث الشامل
+// ============================================
+
+// @desc    Search posts with comprehensive filters
+// @route   GET /api/v1/posts/search
+// @access  Public
+exports.searchPosts = async (req, res, next) => {
+  try {
+    const {
+      q, // نص البحث
+      page = 1,
+      limit = 20,
+      type, // all, job, haraj, general, service
+      category,
+      country,
+      city,
+      sortBy = 'relevance' // relevance, newest, oldest
+    } = req.query;
+
+    // التحقق من وجود نص البحث
+    if (!q || q.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'يرجى إدخال نص للبحث'
+      });
+    }
+
+    const searchText = q.trim();
+    
+    // تحديث المنشورات المنتهية الصلاحية قبل البحث
+    await updateExpiredFeaturedPosts();
+
+    // بناء استعلام البحث الأساسي
+    const query = { 
+      status: 'approved',
+      $or: [
+        // البحث في العنوان
+        { title: { $regex: searchText, $options: 'i' } },
+        // البحث في المحتوى/الوصف
+        { content: { $regex: searchText, $options: 'i' } },
+        // البحث في الكلمات المفتاحية (الهاشتاجات)
+        { hashtags: { $regex: searchText, $options: 'i' } },
+        // البحث في التصنيف
+        { category: { $regex: searchText, $options: 'i' } },
+        // البحث في الموقع
+        { location: { $regex: searchText, $options: 'i' } },
+        { city: { $regex: searchText, $options: 'i' } },
+        { country: { $regex: searchText, $options: 'i' } }
+      ]
+    };
+
+    // استبعاد المنشورات المخفية من قبل المستخدم الحالي
+    if (req.user) {
+      query.hiddenBy = { $ne: req.user.id };
+    }
+
+    // فلتر حسب نوع المنشور
+    if (type && type !== 'all') {
+      query.type = type;
+    }
+
+    // فلتر حسب التصنيف
+    if (category) {
+      query.category = category;
+    }
+
+    // فلتر حسب الدولة
+    if (country) {
+      query.country = country;
+    }
+
+    // فلتر حسب المدينة
+    if (city && city !== 'كل المدن') {
+      query.city = city;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // تحديد الترتيب
+    let sortOptions = {};
+    switch (sortBy) {
+      case 'newest':
+        sortOptions = { createdAt: -1 };
+        break;
+      case 'oldest':
+        sortOptions = { createdAt: 1 };
+        break;
+      case 'relevance':
+      default:
+        // الترتيب حسب الأهمية: المميزة أولاً، ثم الأحدث
+        sortOptions = { isFeatured: -1, createdAt: -1 };
+        break;
+    }
+
+    const posts = await Post.find(query)
+      .populate('user', 'name avatar isVerified')
+      .populate('reactions.user', 'name avatar')
+      .populate({
+        path: 'originalPost',
+        populate: {
+          path: 'user',
+          select: 'name avatar isVerified'
+        }
+      })
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // التحقق من صلاحية التمييز في الوقت الفعلي
+    const processedPosts = checkFeaturedExpiryBatch(posts);
+
+    const total = await Post.countDocuments(query);
+
+    // إحصائيات البحث حسب النوع
+    const typeStats = await Post.aggregate([
+      { $match: { ...query, type: { $exists: true } } },
+      { $group: { _id: '$type', count: { $sum: 1 } } }
+    ]);
+
+    const stats = {
+      all: total,
+      job: 0,
+      haraj: 0,
+      general: 0,
+      service: 0
+    };
+
+    typeStats.forEach(stat => {
+      if (stats.hasOwnProperty(stat._id)) {
+        stats[stat._id] = stat.count;
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      query: searchText,
+      count: processedPosts.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      stats,
+      posts: processedPosts
+    });
+  } catch (error) {
+    console.error('Search Error:', error);
+    next(error);
+  }
+};
+
+// @desc    Get search suggestions based on popular searches and categories
+// @route   GET /api/v1/posts/search/suggestions
+// @access  Public
+exports.getSearchSuggestions = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+
+    // الاقتراحات الافتراضية (الأكثر بحثاً)
+    const defaultSuggestions = [
+      'سائق خاص',
+      'طباخ ماهر',
+      'محاسب',
+      'مصمم جرافيك',
+      'سيارة للبيع',
+      'شقة للإيجار',
+      'خادمة منزلية',
+      'مندوب توصيل',
+      'مهندس برمجيات',
+      'معلم خصوصي'
+    ];
+
+    if (!q || q.trim() === '') {
+      return res.status(200).json({
+        success: true,
+        suggestions: defaultSuggestions
+      });
+    }
+
+    const searchText = q.trim();
+
+    // البحث عن اقتراحات من العناوين والتصنيفات الموجودة
+    const titleSuggestions = await Post.find({
+      status: 'approved',
+      title: { $regex: searchText, $options: 'i' }
+    })
+    .select('title')
+    .limit(5)
+    .lean();
+
+    const categorySuggestions = await Post.find({
+      status: 'approved',
+      category: { $regex: searchText, $options: 'i' }
+    })
+    .select('category')
+    .limit(5)
+    .lean();
+
+    // دمج الاقتراحات وإزالة التكرارات
+    const suggestions = new Set();
+    
+    titleSuggestions.forEach(post => {
+      if (post.title) suggestions.add(post.title);
+    });
+    
+    categorySuggestions.forEach(post => {
+      if (post.category) suggestions.add(post.category);
+    });
+
+    // إضافة الاقتراحات الافتراضية المطابقة
+    defaultSuggestions.forEach(suggestion => {
+      if (suggestion.toLowerCase().includes(searchText.toLowerCase())) {
+        suggestions.add(suggestion);
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      query: searchText,
+      suggestions: Array.from(suggestions).slice(0, 10)
+    });
+  } catch (error) {
+    console.error('Search Suggestions Error:', error);
+    next(error);
+  }
+};

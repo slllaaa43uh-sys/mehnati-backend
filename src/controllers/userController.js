@@ -647,3 +647,80 @@ exports.removeFcmToken = async (req, res, next) => {
     next(error);
   }
 };
+
+
+// ============================================
+// دالة البحث عن المستخدمين
+// ============================================
+
+// @desc    Search users by name
+// @route   GET /api/v1/users/search
+// @access  Public
+exports.searchUsers = async (req, res, next) => {
+  try {
+    const {
+      q, // نص البحث
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    // التحقق من وجود نص البحث
+    if (!q || q.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'يرجى إدخال نص للبحث'
+      });
+    }
+
+    const searchText = q.trim();
+
+    // بناء استعلام البحث
+    const query = {
+      isActive: { $ne: false },
+      isDeleted: { $ne: true },
+      $or: [
+        { name: { $regex: searchText, $options: 'i' } },
+        { bio: { $regex: searchText, $options: 'i' } }
+      ]
+    };
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const users = await User.find(query)
+      .select('name avatar bio isVerified country city followersCount')
+      .sort({ followersCount: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // إضافة عدد المنشورات لكل مستخدم
+    const usersWithPostCount = await Promise.all(
+      users.map(async (user) => {
+        const postsCount = await Post.countDocuments({ 
+          user: user._id, 
+          status: 'approved' 
+        });
+        return {
+          ...user,
+          postsCount,
+          followersCount: user.followersCount || 0
+        };
+      })
+    );
+
+    const total = await User.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      query: searchText,
+      count: usersWithPostCount.length,
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      users: usersWithPostCount
+    });
+  } catch (error) {
+    console.error('Search Users Error:', error);
+    next(error);
+  }
+};

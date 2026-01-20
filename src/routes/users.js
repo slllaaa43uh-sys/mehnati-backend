@@ -19,7 +19,8 @@ const {
   getTotalLikes,
   deleteAccount,
   saveFcmToken,
-  removeFcmToken
+  removeFcmToken,
+  searchUsers
 } = require('../controllers/userController');
 const { protect, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -45,6 +46,9 @@ router.delete('/me/notifications/:id', protect, deleteNotification);
 router.get('/sections', protect, getSections);
 router.post('/sections', protect, createSection);
 router.delete('/sections/:sectionId', protect, deleteSection);
+
+// Search users (must be before /:id to avoid conflicts)
+router.get('/search', optionalAuth, searchUsers);
 
 // Suggested users
 router.get('/suggested', protect, getSuggestedUsers);
