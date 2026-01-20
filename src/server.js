@@ -78,46 +78,22 @@ setInterval(logMemoryUsage, 3 * 60 * 1000);
 logMemoryUsage();
 
 // ============================================
-// ✅ CORS مضبوط لتطبيق Capacitor
+// 🔓 CORS مفتوح - يسمح لجميع المصادر
 // ============================================
-const allowedOrigins = [
-  'https://localhost',
-  'capacitor://localhost'
-];
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    // السماح للطلبات بدون origin (مثل السيرفر-تو-سيرفر أو Postman)
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error('Not allowed by CORS'));
-  },
+app.use(cors({
+  origin: true, // السماح لجميع المصادر
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-};
-
-app.use(cors(corsOptions));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
 
 // معالج OPTIONS لجميع المسارات - متوافق مع Express 5
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
-    const origin = req.headers.origin;
-
-    if (origin && allowedOrigins.includes(origin)) {
-      res.header('Access-Control-Allow-Origin', origin);
-    }
-
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
     res.header('Access-Control-Allow-Credentials', 'true');
-
     return res.status(204).send();
   }
   next();
