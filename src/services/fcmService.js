@@ -73,7 +73,11 @@ const CATEGORY_TO_TOPIC_MAP = {
   'jobs': 'jobs_all',
   'haraj': 'haraj_all',
   'general': 'general',
-  'عام': 'general'
+  'عام': 'general',
+  
+  // ============ URGENT JOBS TOPIC ============
+  'urgent-jobs': 'urgent_jobs',
+  'urgent_jobs': 'urgent_jobs'
 };
 
 /**
@@ -173,7 +177,12 @@ const CATEGORY_TO_CHANNEL_MAP = {
   'story': 'general_stories',
   'video': 'general_videos',
   'shorts': 'general_shorts',
-  'general': 'general_posts'
+  'general': 'general_posts',
+  
+  // ============ URGENT JOBS CHANNEL ============
+  'urgent-jobs': 'urgent_jobs',
+  'urgent_jobs': 'urgent_jobs',
+  'urgent': 'urgent_jobs'
 };
 
 /**
@@ -195,7 +204,9 @@ const getDeepLinkData = (options = {}) => {
   
   // Determine the main content type
   let contentType = 'post';
-  if (displayPage === 'jobs' || type === 'job' || (category && CATEGORY_TO_TOPIC_MAP[category]?.startsWith('jobs_'))) {
+  if (displayPage === 'urgent') {
+    contentType = 'urgent_job';
+  } else if (displayPage === 'jobs' || type === 'job' || (category && CATEGORY_TO_TOPIC_MAP[category]?.startsWith('jobs_'))) {
     contentType = 'job';
   } else if (displayPage === 'haraj' || type === 'market' || (category && CATEGORY_TO_TOPIC_MAP[category]?.startsWith('haraj_'))) {
     contentType = 'market';
@@ -236,10 +247,12 @@ const getDeepLinkData = (options = {}) => {
   }
   
   // Get Android notification channel
-  let channel = CATEGORY_TO_CHANNEL_MAP[category] || CATEGORY_TO_CHANNEL_MAP[englishCategory];
+  let channel = CATEGORY_TO_CHANNEL_MAP[category] || CATEGORY_TO_CHANNEL_MAP[englishCategory] || (displayPage === 'urgent' ? 'urgent_jobs' : null);
   if (!channel) {
     // Generate channel based on content type
-    if (contentType === 'job') {
+    if (contentType === 'urgent_job') {
+      channel = 'urgent_jobs';
+    } else if (contentType === 'job') {
       channel = 'jobs_other';
     } else if (contentType === 'market') {
       channel = 'market_other';
@@ -674,9 +687,23 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     let targetTopic = topic;
     
     // ============================================
+    // URGENT JOBS: Send to urgent_jobs topic directly
+    // ============================================
+    // If displayPage is 'urgent', send to urgent_jobs topic regardless of category
+    // This ensures urgent job posts go to a separate notification channel
+    // ============================================
+    const displayPage = additionalData.displayPage || 'home';
+    
+    if (displayPage === 'urgent') {
+      targetTopic = 'urgent_jobs';
+      console.log('   🚨 URGENT JOB DETECTED!');
+      console.log('   📤 Sending to URGENT JOBS channel: urgent_jobs');
+      console.log('   📝 Original category was:', category);
+    }
+    // ============================================
     // JOBS: Determine the specific topic
     // ============================================
-    if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
+    else if (topic.startsWith('jobs_') && topic !== 'jobs_all') {
       // Determine job type from post title
       const postTitle = additionalData.postTitle || '';
       
