@@ -53,6 +53,70 @@ ${APP_KNOWLEDGE}
 `;
 
 // ============================================
+// 📝 System Prompt لإنشاء السيرة الذاتية
+// ============================================
+const CV_SYSTEM_PROMPT = `أنت خبير في كتابة السير الذاتية الاحترافية.
+مهمتك: إنشاء سيرة ذاتية احترافية ومنظمة بناءً على المعلومات المقدمة.
+
+القواعد:
+1. اكتب السيرة الذاتية بأسلوب احترافي ومنظم.
+2. استخدم اللغة العربية الفصحى.
+3. نظم المعلومات في أقسام واضحة.
+4. أضف عبارات احترافية لتحسين المحتوى.
+5. إذا كانت بعض المعلومات ناقصة، اقترح إضافتها.
+
+الأقسام المطلوبة:
+- الملخص المهني
+- المعلومات الشخصية
+- الخبرات العملية
+- المؤهلات التعليمية
+- المهارات
+- اللغات
+- معلومات التواصل
+
+أعد السيرة الذاتية بتنسيق JSON بالشكل التالي:
+{
+  "summary": "الملخص المهني",
+  "personalInfo": {
+    "name": "الاسم",
+    "title": "المسمى الوظيفي",
+    "nationality": "الجنسية",
+    "dateOfBirth": "تاريخ الميلاد",
+    "maritalStatus": "الحالة الاجتماعية"
+  },
+  "contact": {
+    "email": "البريد الإلكتروني",
+    "phone": "رقم الهاتف",
+    "address": "العنوان",
+    "linkedin": "رابط لينكد إن"
+  },
+  "experience": [
+    {
+      "title": "المسمى الوظيفي",
+      "company": "اسم الشركة",
+      "period": "الفترة",
+      "description": "وصف المهام"
+    }
+  ],
+  "education": [
+    {
+      "degree": "الدرجة العلمية",
+      "institution": "المؤسسة التعليمية",
+      "year": "سنة التخرج",
+      "field": "التخصص"
+    }
+  ],
+  "skills": ["المهارة 1", "المهارة 2"],
+  "languages": [
+    {
+      "language": "اللغة",
+      "level": "المستوى"
+    }
+  ],
+  "suggestions": ["اقتراح 1 لتحسين السيرة الذاتية"]
+}`;
+
+// ============================================
 // 🛡️ فلاتر الأمان (Regex)
 // ============================================
 function isCreatorQuestion(message) {
@@ -183,6 +247,231 @@ exports.chatWithAI = async (req, res) => {
   } catch (error) {
     console.error('Chat Handler Error:', error);
     res.status(500).end();
+  }
+};
+
+// ============================================
+// 📝 إنشاء السيرة الذاتية بالذكاء الاصطناعي
+// ============================================
+exports.generateCV = async (req, res) => {
+  try {
+    console.log('📝 [CV Generator] Starting CV generation...');
+    
+    const { userData } = req.body;
+
+    if (!userData) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرجاء إدخال بيانات السيرة الذاتية'
+      });
+    }
+
+    // التحقق من وجود API Key
+    if (!OPENAI_API_KEY) {
+      console.error('❌ [CV Generator] OpenAI API Key is missing');
+      return res.status(503).json({
+        success: false,
+        message: 'خدمة الذكاء الاصطناعي غير متوفرة حالياً'
+      });
+    }
+
+    // تحويل بيانات المستخدم إلى نص
+    const userDataText = `
+الاسم: ${userData.name || 'غير محدد'}
+المسمى الوظيفي: ${userData.title || 'غير محدد'}
+الجنسية: ${userData.nationality || 'غير محدد'}
+تاريخ الميلاد: ${userData.dateOfBirth || 'غير محدد'}
+الحالة الاجتماعية: ${userData.maritalStatus || 'غير محدد'}
+البريد الإلكتروني: ${userData.email || 'غير محدد'}
+رقم الهاتف: ${userData.phone || 'غير محدد'}
+العنوان: ${userData.address || 'غير محدد'}
+
+الخبرات العملية:
+${userData.experience || 'لا توجد خبرات مدخلة'}
+
+المؤهلات التعليمية:
+${userData.education || 'لا توجد مؤهلات مدخلة'}
+
+المهارات:
+${userData.skills || 'لا توجد مهارات مدخلة'}
+
+اللغات:
+${userData.languages || 'لا توجد لغات مدخلة'}
+
+معلومات إضافية:
+${userData.additional || 'لا توجد معلومات إضافية'}
+`;
+
+    console.log('📋 [CV Generator] User data received:', userData.name);
+
+    // إعداد الرسائل لـ OpenAI
+    const messages = [
+      { role: 'system', content: CV_SYSTEM_PROMPT },
+      { role: 'user', content: `أنشئ سيرة ذاتية احترافية بناءً على المعلومات التالية:\n\n${userDataText}` }
+    ];
+
+    // الاتصال بـ OpenAI API
+    const response = await axios.post(
+      `${OPENAI_BASE_URL}/chat/completions`,
+      {
+        model: OPENAI_MODEL,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const aiResponse = response.data.choices[0].message.content;
+    console.log('✅ [CV Generator] AI response received');
+
+    // محاولة تحليل الرد كـ JSON
+    let cvData;
+    try {
+      // البحث عن JSON في الرد
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cvData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found in response');
+      }
+    } catch (parseError) {
+      console.log('⚠️ [CV Generator] Could not parse JSON, returning raw response');
+      cvData = {
+        rawContent: aiResponse,
+        parseError: true
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إنشاء السيرة الذاتية بنجاح',
+      cv: cvData
+    });
+
+  } catch (error) {
+    console.error('❌ [CV Generator] Error:', error.message);
+    
+    if (error.response) {
+      console.error('   - Status:', error.response.status);
+      console.error('   - Data:', error.response.data);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء إنشاء السيرة الذاتية',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// 📝 تحسين السيرة الذاتية بالذكاء الاصطناعي
+// ============================================
+exports.improveCV = async (req, res) => {
+  try {
+    console.log('✨ [CV Improver] Starting CV improvement...');
+    
+    const { cvData, improvementType } = req.body;
+
+    if (!cvData) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرجاء إدخال بيانات السيرة الذاتية'
+      });
+    }
+
+    // التحقق من وجود API Key
+    if (!OPENAI_API_KEY) {
+      console.error('❌ [CV Improver] OpenAI API Key is missing');
+      return res.status(503).json({
+        success: false,
+        message: 'خدمة الذكاء الاصطناعي غير متوفرة حالياً'
+      });
+    }
+
+    // تحديد نوع التحسين
+    let improvementPrompt = '';
+    switch (improvementType) {
+      case 'summary':
+        improvementPrompt = 'حسّن الملخص المهني ليكون أكثر جاذبية واحترافية.';
+        break;
+      case 'experience':
+        improvementPrompt = 'حسّن وصف الخبرات العملية باستخدام أفعال قوية ونتائج قابلة للقياس.';
+        break;
+      case 'skills':
+        improvementPrompt = 'اقترح مهارات إضافية مناسبة للمجال الوظيفي.';
+        break;
+      case 'full':
+      default:
+        improvementPrompt = 'حسّن السيرة الذاتية بالكامل لتكون أكثر احترافية وجاذبية.';
+    }
+
+    const messages = [
+      { role: 'system', content: CV_SYSTEM_PROMPT },
+      { 
+        role: 'user', 
+        content: `${improvementPrompt}\n\nالسيرة الذاتية الحالية:\n${JSON.stringify(cvData, null, 2)}` 
+      }
+    ];
+
+    const response = await axios.post(
+      `${OPENAI_BASE_URL}/chat/completions`,
+      {
+        model: OPENAI_MODEL,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    const aiResponse = response.data.choices[0].message.content;
+    console.log('✅ [CV Improver] AI response received');
+
+    // محاولة تحليل الرد كـ JSON
+    let improvedCV;
+    try {
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        improvedCV = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON found in response');
+      }
+    } catch (parseError) {
+      console.log('⚠️ [CV Improver] Could not parse JSON, returning raw response');
+      improvedCV = {
+        rawContent: aiResponse,
+        parseError: true
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحسين السيرة الذاتية بنجاح',
+      cv: improvedCV
+    });
+
+  } catch (error) {
+    console.error('❌ [CV Improver] Error:', error.message);
+    
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء تحسين السيرة الذاتية',
+      error: error.message
+    });
   }
 };
 

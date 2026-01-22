@@ -420,21 +420,45 @@ exports.createPost = async (req, res, next) => {
         }
       }
       
-      // إنشاء عنوان ونص الإشعار - يظهر نوع الوظيفة وجزء من النص
-      const notificationTitle = `إعلان جديد - ${simplifiedCategory}`;
+      // ============================================
+      // إشعارات مخصصة للوظائف المستعجلة
+      // ============================================
+      let notificationTitle = '';
+      let notificationBody = '';
       
       // استخراج جزء من النص للإشعار (أول 80 حرف)
       const contentPreview = finalContent ? finalContent.substring(0, 80).trim() : '';
       
-      // بناء نص الإشعار
-      let notificationBody = '';
-      if (jobTypeText) {
-        // إذا كان منشور وظيفة: "أحمد يبحث عن وظيفة: نص المنشور..."
+      // التحقق من أن المنشور في صفحة المستعجل
+      if (displayPage === 'urgent' && specialTag) {
+        // ============================================
+        // إشعارات الوظائف المستعجلة مع specialTag
+        // ============================================
+        const urgentTagEmoji = {
+          'مطلوب الآن': '🔴',
+          'عقود مؤقتة': '📋',
+          'دفع يومي': '💰'
+        };
+        const emoji = urgentTagEmoji[specialTag] || '⚡';
+        
+        notificationTitle = `${emoji} وظيفة مستعجلة - ${specialTag}`;
+        notificationBody = contentPreview 
+          ? `${userName} ينشر فرصة عمل (${specialTag}): ${contentPreview}${finalContent.length > 80 ? '...' : ''}`
+          : `${userName} ينشر فرصة عمل مستعجلة (${specialTag})`;
+        
+        console.log('🚨 URGENT JOB NOTIFICATION:');
+        console.log('   - Special Tag:', specialTag);
+        console.log('   - Title:', notificationTitle);
+        console.log('   - Body:', notificationBody);
+      } else if (jobTypeText) {
+        // إذا كان منشور وظيفة عادية: "أحمد يبحث عن وظيفة: نص المنشور..."
+        notificationTitle = `إعلان جديد - ${simplifiedCategory}`;
         notificationBody = contentPreview 
           ? `${userName} ${jobTypeText}: ${contentPreview}${finalContent.length > 80 ? '...' : ''}`
           : `${userName} ${jobTypeText}`;
       } else {
         // إذا لم يكن وظيفة: "أحمد: نص المنشور..."
+        notificationTitle = `إعلان جديد - ${simplifiedCategory}`;
         notificationBody = contentPreview 
           ? `${userName}: ${contentPreview}${finalContent.length > 80 ? '...' : ''}`
           : `${userName} نشر إعلان جديد`;
@@ -488,6 +512,7 @@ exports.createPost = async (req, res, next) => {
           postImage: postImage || '', // صورة المنشور
           postContent: postContentPreview, // جزء من النص
           category: category, // التصنيف
+          specialTag: specialTag || '', // نوع الوظيفة المستعجلة
           // ============================================
           // بيانات Deep Linking للتطبيق (Android/iOS)
           // ============================================

@@ -16,7 +16,9 @@ const {
   recordClick,
   getStats,
   fetchAndSaveJobs,
-  clearCache
+  clearCache,
+  refreshJobMedia,
+  refreshAllJobsMedia
 } = require('../services/externalJobsService');
 const { runManually } = require('../cron/externalJobsCron');
 
@@ -198,6 +200,43 @@ router.post('/admin/run-cron', async (req, res) => {
     });
 
     await runManually();
+    
+  } catch (error) {
+    console.error('[ExternalJobs Route] Error:', error.message);
+  }
+});
+
+/**
+ * @desc    تحديث وسائط وظيفة واحدة
+ * @route   POST /api/v1/external-jobs/:jobId/refresh-media
+ * @access  Public (يفضل حمايته لاحقاً)
+ */
+router.post('/:jobId/refresh-media', async (req, res) => {
+  try {
+    const result = await refreshJobMedia(req.params.jobId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('[ExternalJobs Route] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء تحديث الوسائط'
+    });
+  }
+});
+
+/**
+ * @desc    تحديث وسائط جميع الوظائف (لإصلاح الصور المفقودة)
+ * @route   POST /api/v1/external-jobs/admin/refresh-all-media
+ * @access  Public (يفضل حمايته لاحقاً)
+ */
+router.post('/admin/refresh-all-media', async (req, res) => {
+  try {
+    res.status(202).json({
+      success: true,
+      message: 'تم بدء تحديث الوسائط في الخلفية'
+    });
+
+    await refreshAllJobsMedia();
     
   } catch (error) {
     console.error('[ExternalJobs Route] Error:', error.message);

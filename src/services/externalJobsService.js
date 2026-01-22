@@ -22,7 +22,8 @@ const JSEARCH_CONFIG = {
 // إعدادات Pixabay API
 const PIXABAY_CONFIG = {
   API_KEY: '54217973-0197d2bcb30ad2fbff44689dc',
-  BASE_URL: 'https://pixabay.com/api/'
+  IMAGE_URL: 'https://pixabay.com/api/',
+  VIDEO_URL: 'https://pixabay.com/api/videos/'
 };
 
 // كاش للوسائط
@@ -68,11 +69,11 @@ const fetchFromJSearch = async (query = 'وظائف في السعودية', page
 };
 
 /**
- * جلب صورة من Pixabay
+ * جلب صورة من Pixabay (محسّن)
  */
 const fetchPixabayImage = async (searchTerm) => {
   try {
-    const cacheKey = searchTerm;
+    const cacheKey = `img_${searchTerm}`;
     
     if (mediaCache.has(cacheKey)) {
       const cached = mediaCache.get(cacheKey);
@@ -81,8 +82,9 @@ const fetchPixabayImage = async (searchTerm) => {
     }
 
     const searchTerms = extractSearchTerms(searchTerm);
+    console.log('[Pixabay Image] Searching for:', searchTerms.join('+'));
 
-    const response = await axios.get(PIXABAY_CONFIG.BASE_URL, {
+    const response = await axios.get(PIXABAY_CONFIG.IMAGE_URL, {
       params: {
         key: PIXABAY_CONFIG.API_KEY,
         q: searchTerms.join('+'),
@@ -90,22 +92,54 @@ const fetchPixabayImage = async (searchTerm) => {
         image_type: 'photo',
         orientation: 'horizontal',
         safesearch: true,
-        per_page: 10
+        per_page: 15,
+        editors_choice: false
       },
-      timeout: 5000
+      timeout: 10000
     });
 
     const hits = response.data?.hits || [];
+    console.log(`[Pixabay Image] Found ${hits.length} images`);
 
     if (hits.length === 0) {
-      return getDefaultImage();
+      // محاولة ثانية بكلمات بحث عامة
+      console.log('[Pixabay Image] No results, trying fallback search...');
+      const fallbackResponse = await axios.get(PIXABAY_CONFIG.IMAGE_URL, {
+        params: {
+          key: PIXABAY_CONFIG.API_KEY,
+          q: 'business+office+work',
+          lang: 'en',
+          image_type: 'photo',
+          orientation: 'horizontal',
+          safesearch: true,
+          per_page: 10
+        },
+        timeout: 10000
+      });
+      
+      const fallbackHits = fallbackResponse.data?.hits || [];
+      if (fallbackHits.length === 0) {
+        return getDefaultImage();
+      }
+      
+      const formattedMedia = fallbackHits.map(hit => ({
+        type: 'image',
+        url: hit.largeImageURL || hit.webformatURL,
+        thumbnail: hit.previewURL || hit.webformatURL,
+        source: 'pixabay',
+        pixabayId: hit.id
+      }));
+      
+      const randomIndex = Math.floor(Math.random() * formattedMedia.length);
+      return formattedMedia[randomIndex];
     }
 
     const formattedMedia = hits.map(hit => ({
       type: 'image',
       url: hit.largeImageURL || hit.webformatURL,
-      thumbnail: hit.previewURL,
-      source: 'pixabay'
+      thumbnail: hit.previewURL || hit.webformatURL,
+      source: 'pixabay',
+      pixabayId: hit.id
     }));
 
     mediaCache.set(cacheKey, formattedMedia);
@@ -114,54 +148,176 @@ const fetchPixabayImage = async (searchTerm) => {
     return formattedMedia[randomIndex];
 
   } catch (error) {
-    console.error('[Pixabay] Error:', error.message);
+    console.error('[Pixabay Image] Error:', error.message);
+    if (error.response) {
+      console.error('[Pixabay Image] Status:', error.response.status);
+      console.error('[Pixabay Image] Data:', error.response.data);
+    }
     return getDefaultImage();
   }
 };
 
 /**
- * صورة افتراضية
+ * جلب فيديو من Pixabay
  */
-const getDefaultImage = () => ({
-  type: 'image',
-  url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
-  thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200',
-  source: 'default'
-});
+const fetchPixabayVideo = async (searchTerm) => {
+  try {
+    const cacheKey = `vid_${searchTerm}`;
+    
+    if (mediaCache.has(cacheKey)) {
+      const cached = mediaCache.get(cacheKey);
+      const randomIndex = Math.floor(Math.random() * cached.length);
+      return cached[randomIndex];
+    }
+
+    const searchTerms = extractSearchTerms(searchTerm);
+    console.log('[Pixabay Video] Searching for:', searchTerms.join('+'));
+
+    const response = await axios.get(PIXABAY_CONFIG.VIDEO_URL, {
+      params: {
+        key: PIXABAY_CONFIG.API_KEY,
+        q: searchTerms.join('+'),
+        lang: 'en',
+        safesearch: true,
+        per_page: 10
+      },
+      timeout: 10000
+    });
+
+    const hits = response.data?.hits || [];
+    console.log(`[Pixabay Video] Found ${hits.length} videos`);
+
+    if (hits.length === 0) {
+      return null; // سنستخدم صورة بدلاً من الفيديو
+    }
+
+    const formattedMedia = hits.map(hit => {
+      // اختيار أفضل جودة متاحة
+      const videoData = hit.videos?.medium || hit.videos?.small || hit.videos?.tiny;
+      return {
+        type: 'video',
+        url: videoData?.url,
+        thumbnail: videoData?.thumbnail || hit.videos?.large?.thumbnail,
+        source: 'pixabay',
+        pixabayId: hit.id,
+        duration: hit.duration
+      };
+    }).filter(v => v.url); // تصفية الفيديوهات بدون URL
+
+    if (formattedMedia.length === 0) {
+      return null;
+    }
+
+    mediaCache.set(cacheKey, formattedMedia);
+
+    const randomIndex = Math.floor(Math.random() * formattedMedia.length);
+    return formattedMedia[randomIndex];
+
+  } catch (error) {
+    console.error('[Pixabay Video] Error:', error.message);
+    return null;
+  }
+};
 
 /**
- * استخراج كلمات البحث
+ * جلب وسائط (صورة أو فيديو) من Pixabay
+ * يحاول جلب فيديو أولاً، ثم صورة إذا لم يجد
+ */
+const fetchPixabayMedia = async (searchTerm, preferVideo = false) => {
+  try {
+    // إذا كان المستخدم يفضل الفيديو، نحاول جلبه أولاً
+    if (preferVideo) {
+      const video = await fetchPixabayVideo(searchTerm);
+      if (video) {
+        console.log('[Pixabay] Returning video');
+        return video;
+      }
+    }
+
+    // جلب صورة
+    const image = await fetchPixabayImage(searchTerm);
+    return image;
+
+  } catch (error) {
+    console.error('[Pixabay Media] Error:', error.message);
+    return getDefaultImage();
+  }
+};
+
+/**
+ * صورة افتراضية (محسّنة مع عدة خيارات)
+ */
+const getDefaultImage = () => {
+  const defaultImages = [
+    {
+      url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
+      thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200'
+    },
+    {
+      url: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
+      thumbnail: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=200'
+    },
+    {
+      url: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800',
+      thumbnail: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=200'
+    }
+  ];
+  
+  const randomIndex = Math.floor(Math.random() * defaultImages.length);
+  return {
+    type: 'image',
+    url: defaultImages[randomIndex].url,
+    thumbnail: defaultImages[randomIndex].thumbnail,
+    source: 'default'
+  };
+};
+
+/**
+ * استخراج كلمات البحث (محسّن)
  */
 const extractSearchTerms = (title) => {
-  if (!title) return ['business', 'work'];
+  if (!title) return ['business', 'work', 'office'];
 
   const lowerTitle = title.toLowerCase();
 
   const searchMappings = {
-    'software': ['software', 'coding', 'programming'],
-    'developer': ['developer', 'coding', 'computer'],
+    'software': ['software', 'developer', 'coding'],
+    'developer': ['developer', 'programming', 'computer'],
     'engineer': ['engineer', 'engineering', 'technical'],
-    'manager': ['manager', 'business', 'office'],
-    'sales': ['sales', 'business', 'meeting'],
-    'marketing': ['marketing', 'business', 'advertising'],
-    'driver': ['driver', 'driving', 'car'],
-    'nurse': ['nurse', 'healthcare', 'medical'],
+    'manager': ['manager', 'business', 'leadership'],
+    'sales': ['sales', 'business', 'customer'],
+    'marketing': ['marketing', 'digital', 'advertising'],
+    'driver': ['driver', 'transportation', 'delivery'],
+    'nurse': ['nurse', 'healthcare', 'hospital'],
     'doctor': ['doctor', 'medical', 'healthcare'],
     'teacher': ['teacher', 'education', 'classroom'],
-    'accountant': ['accountant', 'finance', 'office'],
-    'chef': ['chef', 'cooking', 'kitchen'],
+    'accountant': ['accountant', 'finance', 'accounting'],
+    'chef': ['chef', 'cooking', 'restaurant'],
     'designer': ['designer', 'creative', 'design'],
-    'data': ['data', 'analytics', 'computer'],
-    'analyst': ['analyst', 'business', 'charts'],
-    'operations': ['operations', 'business', 'office'],
-    'hr': ['hr', 'human resources', 'office'],
-    'finance': ['finance', 'money', 'banking']
+    'data': ['data', 'analytics', 'technology'],
+    'analyst': ['analyst', 'business', 'research'],
+    'operations': ['operations', 'logistics', 'management'],
+    'hr': ['hr', 'recruitment', 'human resources'],
+    'finance': ['finance', 'banking', 'investment'],
+    'it': ['it', 'technology', 'computer'],
+    'admin': ['admin', 'office', 'administrative'],
+    'customer': ['customer', 'service', 'support'],
+    'security': ['security', 'guard', 'safety'],
+    'construction': ['construction', 'building', 'engineering'],
+    'retail': ['retail', 'store', 'shopping'],
+    'warehouse': ['warehouse', 'logistics', 'storage']
   };
 
   for (const [keyword, terms] of Object.entries(searchMappings)) {
     if (lowerTitle.includes(keyword)) {
       return terms;
     }
+  }
+
+  // استخراج كلمات من العنوان
+  const words = lowerTitle.split(/\s+/).filter(w => w.length > 3);
+  if (words.length > 0) {
+    return [words[0], 'business', 'professional'];
   }
 
   return ['business', 'professional', 'work'];
@@ -314,10 +470,16 @@ exports.getJobsLive = async (params = {}) => {
         // معالجة وتخزين الوظائف
         for (let i = 0; i < jsearchJobs.length; i++) {
           try {
-            const media = await fetchPixabayImage(jsearchJobs[i].job_title);
+            // جلب وسائط من Pixabay (صورة أو فيديو)
+            const media = await fetchPixabayMedia(jsearchJobs[i].job_title, i % 3 === 0);
             const formattedJob = formatJSearchJob(jsearchJobs[i], media);
             const result = await saveJobToDatabase(formattedJob);
             if (result !== 'error') savedCount++;
+            
+            // تأخير صغير لتجنب rate limiting
+            if (i < jsearchJobs.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
           } catch (err) {
             console.error(`[ExternalJobsService] Error processing job ${i}:`, err.message);
           }
@@ -341,8 +503,6 @@ exports.getJobsLive = async (params = {}) => {
         .lean(),
       ExternalJob.countDocuments({ isActive: true })
     ]);
-
-    console.log(`[ExternalJobsService] Returning ${jobs.length} jobs from database (total: ${total})`);
 
     return {
       success: true,
@@ -498,12 +658,17 @@ exports.fetchAndSaveJobs = async (query = 'jobs in Saudi Arabia') => {
 
     for (let i = 0; i < jobs.length; i++) {
       try {
-        const media = await fetchPixabayImage(jobs[i].job_title);
+        const media = await fetchPixabayMedia(jobs[i].job_title, i % 3 === 0);
         const formattedJob = formatJSearchJob(jobs[i], media);
         const result = await saveJobToDatabase(formattedJob);
         
         if (result === 'created') savedCount++;
         else if (result === 'updated') updatedCount++;
+        
+        // تأخير صغير
+        if (i < jobs.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       } catch (err) {
         // تجاهل الأخطاء الفردية
       }
@@ -578,4 +743,62 @@ exports.clearCache = () => {
   lastFetchTime = 0;
   mediaCache.clear();
   console.log('[ExternalJobsService] Cache cleared - next request will fetch fresh data');
+};
+
+/**
+ * تحديث وسائط وظيفة موجودة (لإصلاح الصور المفقودة)
+ */
+exports.refreshJobMedia = async (jobId) => {
+  try {
+    const job = await ExternalJob.findOne({ jobId });
+    if (!job) {
+      return { success: false, message: 'الوظيفة غير موجودة' };
+    }
+
+    const media = await fetchPixabayMedia(job.title, true);
+    
+    await ExternalJob.updateOne(
+      { jobId },
+      { $set: { media, lastFetchedAt: new Date() } }
+    );
+
+    return { success: true, media };
+  } catch (error) {
+    console.error('[ExternalJobsService] Error refreshing media:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * تحديث وسائط جميع الوظائف (للإصلاح الشامل)
+ */
+exports.refreshAllJobsMedia = async () => {
+  try {
+    console.log('[ExternalJobsService] Starting media refresh for all jobs...');
+    
+    const jobs = await ExternalJob.find({ isActive: true }).lean();
+    let updatedCount = 0;
+
+    for (const job of jobs) {
+      try {
+        const media = await fetchPixabayMedia(job.title, Math.random() > 0.7);
+        await ExternalJob.updateOne(
+          { jobId: job.jobId },
+          { $set: { media, lastFetchedAt: new Date() } }
+        );
+        updatedCount++;
+        
+        // تأخير لتجنب rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (err) {
+        console.error(`[ExternalJobsService] Error updating job ${job.jobId}:`, err.message);
+      }
+    }
+
+    console.log(`[ExternalJobsService] Refreshed media for ${updatedCount} jobs`);
+    return { success: true, updatedCount };
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in refreshAllJobsMedia:', error.message);
+    return { success: false, error: error.message };
+  }
 };

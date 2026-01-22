@@ -17,6 +17,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { setupCronJob } = require('./cron/recommendationCron');
 const { setupFeaturedCron } = require('./cron/featuredCron');
 const { startExternalJobsCron } = require('./cron/externalJobsCron');
+const { startGlobalJobsNotificationCron } = require('./cron/globalJobsNotificationCron');
 const { initializeB2 } = require('./services/storageService');
 const { initializeFirebase } = require('./config/firebase');
 const { initializeSocket } = require('./config/socket');
@@ -55,6 +56,7 @@ initializeFirebase();
 setupCronJob(120);
 setupFeaturedCron();
 startExternalJobsCron(); // External Jobs Cron - every 6 hours
+startGlobalJobsNotificationCron(); // Global Jobs Daily Notification - 9 AM Riyadh
 
 // مراقبة استخدام الذاكرة
 const logMemoryUsage = () => {
