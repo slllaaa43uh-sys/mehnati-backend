@@ -246,20 +246,42 @@ const fetchPixabayMedia = async (searchTerm, preferVideo = false) => {
 
 /**
  * صورة افتراضية (محسّنة مع عدة خيارات)
+ * تستخدم صور من Pixabay مباشرة (مجانية وموثوقة)
  */
 const getDefaultImage = () => {
+  // صور من Pixabay - مجانية ولا تحتاج API key للعرض
   const defaultImages = [
     {
-      url: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800',
-      thumbnail: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=200'
+      url: 'https://cdn.pixabay.com/photo/2015/01/09/11/08/startup-594090_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2015/01/09/11/08/startup-594090_640.jpg'
     },
     {
-      url: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
-      thumbnail: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=200'
+      url: 'https://cdn.pixabay.com/photo/2017/10/31/09/55/dream-job-2904780_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2017/10/31/09/55/dream-job-2904780_640.jpg'
     },
     {
-      url: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800',
-      thumbnail: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=200'
+      url: 'https://cdn.pixabay.com/photo/2015/07/17/22/43/student-849822_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2015/07/17/22/43/student-849822_640.jpg'
+    },
+    {
+      url: 'https://cdn.pixabay.com/photo/2016/11/19/14/00/code-1839406_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2016/11/19/14/00/code-1839406_640.jpg'
+    },
+    {
+      url: 'https://cdn.pixabay.com/photo/2015/01/08/18/29/entrepreneur-593358_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2015/01/08/18/29/entrepreneur-593358_640.jpg'
+    },
+    {
+      url: 'https://cdn.pixabay.com/photo/2017/07/31/11/21/people-2557396_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2017/07/31/11/21/people-2557396_640.jpg'
+    },
+    {
+      url: 'https://cdn.pixabay.com/photo/2015/01/09/11/11/office-594132_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2015/01/09/11/11/office-594132_640.jpg'
+    },
+    {
+      url: 'https://cdn.pixabay.com/photo/2016/03/09/09/22/workplace-1245776_1280.jpg',
+      thumbnail: 'https://cdn.pixabay.com/photo/2016/03/09/09/22/workplace-1245776_640.jpg'
     }
   ];
   
@@ -268,7 +290,7 @@ const getDefaultImage = () => {
     type: 'image',
     url: defaultImages[randomIndex].url,
     thumbnail: defaultImages[randomIndex].thumbnail,
-    source: 'default'
+    source: 'pixabay_default'
   };
 };
 
@@ -799,6 +821,69 @@ exports.refreshAllJobsMedia = async () => {
     return { success: true, updatedCount };
   } catch (error) {
     console.error('[ExternalJobsService] Error in refreshAllJobsMedia:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * تحديث الوظائف التي لا تحتوي على صور فقط
+ * هذه الدالة تبحث عن الوظائف بدون صور وتضيف لها صور افتراضية
+ */
+exports.fixJobsWithoutMedia = async () => {
+  try {
+    console.log('[ExternalJobsService] Finding jobs without media...');
+    
+    // البحث عن الوظائف بدون صور
+    const jobsWithoutMedia = await ExternalJob.find({
+      isActive: true,
+      $or: [
+        { 'media.url': null },
+        { 'media.url': '' },
+        { 'media.url': { $exists: false } },
+        { media: null },
+        { media: { $exists: false } }
+      ]
+    }).lean();
+    
+    console.log(`[ExternalJobsService] Found ${jobsWithoutMedia.length} jobs without media`);
+    
+    if (jobsWithoutMedia.length === 0) {
+      return { success: true, updatedCount: 0, message: 'All jobs have media' };
+    }
+    
+    let updatedCount = 0;
+    
+    for (const job of jobsWithoutMedia) {
+      try {
+        // محاولة جلب صورة من Pixabay أولاً
+        let media = await fetchPixabayImage(job.title);
+        
+        // إذا فشلت، استخدم الصورة الافتراضية
+        if (!media || !media.url) {
+          media = getDefaultImage();
+        }
+        
+        await ExternalJob.updateOne(
+          { jobId: job.jobId },
+          { $set: { media, lastFetchedAt: new Date() } }
+        );
+        
+        updatedCount++;
+        console.log(`[ExternalJobsService] Fixed media for job: ${job.title?.substring(0, 30)}...`);
+        
+        // تأخير لتجنب rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (err) {
+        console.error(`[ExternalJobsService] Error fixing job ${job.jobId}:`, err.message);
+      }
+    }
+    
+    console.log(`[ExternalJobsService] Fixed media for ${updatedCount} jobs`);
+    return { success: true, updatedCount };
+    
+  } catch (error) {
+    console.error('[ExternalJobsService] Error in fixJobsWithoutMedia:', error.message);
     return { success: false, error: error.message };
   }
 };

@@ -18,7 +18,8 @@ const {
   fetchAndSaveJobs,
   clearCache,
   refreshJobMedia,
-  refreshAllJobsMedia
+  refreshAllJobsMedia,
+  fixJobsWithoutMedia
 } = require('../services/externalJobsService');
 const { runManually } = require('../cron/externalJobsCron');
 
@@ -237,6 +238,28 @@ router.post('/admin/refresh-all-media', async (req, res) => {
     });
 
     await refreshAllJobsMedia();
+    
+  } catch (error) {
+    console.error('[ExternalJobs Route] Error:', error.message);
+  }
+});
+
+/**
+ * @desc    إصلاح الوظائف التي لا تحتوي على صور
+ * @route   POST /api/v1/external-jobs/admin/fix-missing-media
+ * @access  Public (يفضل حمايته لاحقاً)
+ */
+router.post('/admin/fix-missing-media', async (req, res) => {
+  try {
+    console.log('[ExternalJobs Route] Starting fix for jobs without media...');
+    
+    res.status(202).json({
+      success: true,
+      message: 'تم بدء إصلاح الوظائف بدون صور في الخلفية'
+    });
+
+    const result = await fixJobsWithoutMedia();
+    console.log('[ExternalJobs Route] Fix result:', result);
     
   } catch (error) {
     console.error('[ExternalJobs Route] Error:', error.message);
