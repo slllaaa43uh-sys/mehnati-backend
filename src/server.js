@@ -37,6 +37,8 @@ const paymentRoutes = require('./routes/payment');
 const locationRoutes = require('./routes/location');
 const externalJobsRoutes = require('./routes/externalJobs');
 const aiRoutes = require('./routes/ai');
+const notificationLogsRoutes = require('./routes/notificationLogs');
+const testNotificationRoutes = require('./routes/testNotification');
 
 // Initialize express app
 const app = express();
@@ -131,6 +133,8 @@ app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/location', locationRoutes);
 app.use('/api/v1/external-jobs', externalJobsRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/notification-logs', notificationLogsRoutes);
+app.use('/api/v1/test-notification', testNotificationRoutes);
 
 // Share pages
 app.use('/share', shareRoutes);

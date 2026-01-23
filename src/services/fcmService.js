@@ -1,6 +1,13 @@
 const { getFirebaseAdmin, isFirebaseReady } = require('../config/firebase');
-
 const User = require('../models/User');
+const { 
+  logInfo, 
+  logSuccess, 
+  logError, 
+  logWarning,
+  logNotificationSent, 
+  logSubscription 
+} = require('./notificationLogger');
 
 /**
  * ============================================
@@ -430,6 +437,12 @@ const categoryToTopic = (category, type = null) => {
  */
 const sendNotificationToTopic = async (topic, title, body, data = {}) => {
   try {
+    logInfo('FCM_TOPIC_SEND', 'Starting notification send to topic', {
+      topic,
+      title,
+      bodyPreview: body.substring(0, 50)
+    });
+    
     console.log('========================================');
     console.log('🔔 FCM NOTIFICATION DEBUG - START');
     console.log('========================================');
@@ -444,7 +457,9 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     console.log('🔥 Firebase Ready Status:', firebaseReady);
     
     if (!firebaseReady) {
-      console.error('❌ Firebase غير جاهز. لن يتم إرسال الإشعار.');
+      const errorMsg = 'Firebase غير جاهز. لن يتم إرسال الإشعار.';
+      logError('FCM_TOPIC_SEND', errorMsg, { topic });
+      console.error('❌', errorMsg);
       console.log('💡 تأكد من إضافة إعدادات Firebase في متغيرات البيئة أو ملف firebase-service-account.json');
       console.log('========================================');
       return { success: false, error: 'Firebase not initialized' };
@@ -452,6 +467,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
 
     // التحقق من البيانات المطلوبة
     if (!topic || !title || !body) {
+      const errorMsg = 'Missing required parameters';
+      logError('FCM_TOPIC_SEND', errorMsg, {
+        hasTopic: !!topic,
+        hasTitle: !!title,
+        hasBody: !!body
+      });
       console.error('❌ Missing required parameters:');
       console.error('   - topic:', topic ? '✓' : '✗ MISSING');
       console.error('   - title:', title ? '✓' : '✗ MISSING');
@@ -488,7 +509,13 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     
     console.log('🔗 Deep Link Data:', JSON.stringify(deepLinkData, null, 2));
     
-    // إنشاء رسالة الإشعار
+    // ============================================
+    // إنشاء رسالة الإشعار - محدثة للتوافق مع Android
+    // ============================================
+    // ملاحظة: يجب أن يتطابق channelId مع القناة المنشأة في التطبيق
+    // الواجهة الأمامية تستخدم: mehnati_pro_channel_v7
+    // يمكن أيضاً استخدام: mehnati_notifications (حسب إعدادات التطبيق)
+    // ============================================
     const message = {
       notification: {
         title: title,
@@ -514,14 +541,21 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
         // بيانات صورة المستخدم للإشعار (مثل واتساب)
         userAvatar: userAvatar || '',
         userInitial: userInitial,
-        userName: userName
+        userName: userName,
+        // بيانات الصوت والقناة للتطبيق (للتوافق مع data-only messages)
+        sound: 'notify',
+        android_channel_id: 'mehnati_notifications'
       },
       topic: cleanTopic,
-      // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
+      // ============================================
+      // إعدادات Android - محدثة
+      // ============================================
       android: {
         priority: 'high',
         notification: {
-          channelId: 'mehnati_pro_channel_v7',
+          // القناة الأساسية - يجب أن تتطابق مع التطبيق
+          channelId: 'mehnati_notifications',
+          // الصوت المخصص - بدون امتداد .mp3
           sound: 'notify',
           priority: 'high',
           clickAction: 'FCM_PLUGIN_ACTIVITY',
@@ -534,7 +568,7 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
       apns: {
         payload: {
           aps: {
-            sound: 'default',
+            sound: 'notify.mp3',
             badge: 1,
             'mutable-content': 1 // لدعم الإشعارات الغنية على iOS
           }
@@ -551,6 +585,8 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     console.log('   - User Initial:', userInitial || 'NONE');
     console.log('   - User Name:', userName || 'NONE');
     console.log('   - URL:', url || 'NONE');
+    console.log('   - Android Channel ID:', message.android.notification.channelId);
+    console.log('   - Sound:', message.android.notification.sound);
 
     console.log('📦 Message Payload:');
     console.log(JSON.stringify(message, null, 2));
@@ -561,6 +597,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     // إرسال الإشعار
     const response = await admin.messaging().send(message);
 
+    // تسجيل النجاح
+    logNotificationSent('topic', cleanTopic, title, body, { 
+      success: true, 
+      messageId: response 
+    });
+    
     console.log('✅ Notification sent successfully! Response:', response);
     console.log('📱 Message ID:', response);
     console.log('========================================');
@@ -575,6 +617,12 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
     };
 
   } catch (error) {
+    // تسجيل الخطأ
+    logNotificationSent('topic', topic, title, body, { 
+      success: false, 
+      error: error.message 
+    });
+    
     console.error('========================================');
     console.error('❌ Error sending notification:', error);
     console.error('========================================');
@@ -649,6 +697,12 @@ const sendNotificationToMultipleTopics = async (topics, title, body, data = {}) 
  */
 const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => {
   try {
+    logInfo('FCM_DEVICE_SEND', 'Starting notification send to device', {
+      tokenPreview: deviceToken ? deviceToken.substring(0, 20) + '...' : 'MISSING',
+      title,
+      bodyPreview: body.substring(0, 50)
+    });
+    
     console.log('========================================');
     console.log('🔔 FCM DEVICE NOTIFICATION DEBUG - START');
     console.log('========================================');
@@ -658,11 +712,19 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     console.log('   - Body:', body);
     
     if (!isFirebaseReady()) {
-      console.error('❌ Firebase غير جاهز. لن يتم إرسال الإشعار.');
+      const errorMsg = 'Firebase غير جاهز. لن يتم إرسال الإشعار.';
+      logError('FCM_DEVICE_SEND', errorMsg, { deviceToken: deviceToken?.substring(0, 20) });
+      console.error('❌', errorMsg);
       return { success: false, error: 'Firebase not initialized' };
     }
 
     if (!deviceToken || !title || !body) {
+      const errorMsg = 'Missing required parameters';
+      logError('FCM_DEVICE_SEND', errorMsg, {
+        hasToken: !!deviceToken,
+        hasTitle: !!title,
+        hasBody: !!body
+      });
       console.error('❌ Missing required parameters');
       throw new Error('يجب توفير deviceToken و title و body');
     }
@@ -688,6 +750,9 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     
     console.log('🔗 Deep Link Data:', JSON.stringify(deepLinkData, null, 2));
     
+    // ============================================
+    // إنشاء رسالة الإشعار - محدثة للتوافق مع Android
+    // ============================================
     const message = {
       notification: {
         title: title,
@@ -711,17 +776,25 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
         // بيانات صورة المستخدم للإشعار (مثل واتساب)
         userAvatar: userAvatar || '',
         userInitial: userInitial,
-        userName: userName
+        userName: userName,
+        // بيانات الصوت والقناة للتطبيق
+        sound: 'notify',
+        android_channel_id: 'mehnati_notifications'
       },
       token: deviceToken,
-      // إعدادات Android - مطابقة لقناة التطبيق مع دعم الصور
+      // ============================================
+      // إعدادات Android - محدثة
+      // ============================================
       android: {
         priority: 'high',
         notification: {
-          channelId: 'mehnati_pro_channel_v7',
+          // القناة الأساسية - يجب أن تتطابق مع التطبيق
+          channelId: 'mehnati_notifications',
+          // الصوت المخصص - بدون امتداد .mp3
           sound: 'notify',
           priority: 'high',
           clickAction: 'FCM_PLUGIN_ACTIVITY',
+          defaultVibrateTimings: true,
           // إضافة الصورة للإشعارات الغنية على Android
           ...(postImage && { imageUrl: postImage })
         }
@@ -729,7 +802,7 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
       apns: {
         payload: {
           aps: {
-            sound: 'default',
+            sound: 'notify.mp3',
             badge: 1,
             'mutable-content': 1 // لدعم الإشعارات الغنية على iOS
           }
@@ -741,9 +814,18 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
       }
     };
 
+    console.log('   - Android Channel ID:', message.android.notification.channelId);
+    console.log('   - Sound:', message.android.notification.sound);
     console.log('🚀 Attempting to send notification to device...');
+    
     const response = await admin.messaging().send(message);
 
+    // تسجيل النجاح
+    logNotificationSent('device', deviceToken.substring(0, 20) + '...', title, body, { 
+      success: true, 
+      messageId: response 
+    });
+    
     console.log('✅ Notification sent successfully! Response:', response);
     console.log('========================================');
 
@@ -753,6 +835,12 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
     };
 
   } catch (error) {
+    // تسجيل الخطأ
+    logNotificationSent('device', deviceToken?.substring(0, 20) + '...', title, body, { 
+      success: false, 
+      error: error.message 
+    });
+    
     console.error('❌ Error sending notification:', error);
     console.error('   - Message:', error.message);
     console.error('   - Code:', error.code || 'N/A');
@@ -948,6 +1036,11 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
  */
 const subscribeToTopic = async (deviceToken, topic) => {
   try {
+    logInfo('FCM_SUBSCRIBE', 'Starting topic subscription', {
+      tokenPreview: deviceToken ? deviceToken.substring(0, 30) + '...' : 'MISSING',
+      topic
+    });
+    
     console.log('========================================');
     console.log('🔔 SUBSCRIBE TO TOPIC DEBUG - START');
     console.log('========================================');
@@ -956,7 +1049,9 @@ const subscribeToTopic = async (deviceToken, topic) => {
     console.log('   - Original Topic:', topic);
     
     if (!isFirebaseReady()) {
-      console.error('❌ Firebase not ready');
+      const errorMsg = 'Firebase not ready';
+      logError('FCM_SUBSCRIBE', errorMsg, { topic });
+      console.error('❌', errorMsg);
       return { success: false, error: 'Firebase not initialized' };
     }
 
@@ -969,23 +1064,37 @@ const subscribeToTopic = async (deviceToken, topic) => {
 
     const response = await admin.messaging().subscribeToTopic(deviceToken, cleanTopic);
 
-    console.log(`✅ تم اشتراك الجهاز في Topic: ${cleanTopic}`);
-    console.log(`📊 Success count: ${response.successCount}, Failure count: ${response.failureCount}`);
-    
-    if (response.failureCount > 0 && response.errors) {
-      console.error('❌ Subscription errors:', response.errors);
-    }
-    
-    console.log('========================================');
-
-    return {
+    const result = {
       success: response.successCount > 0,
       topic: cleanTopic,
       originalTopic: topic,
       response
     };
+    
+    // تسجيل النتيجة
+    logSubscription('subscribe', deviceToken, cleanTopic, result);
+
+    console.log(`✅ تم اشتراك الجهاز في Topic: ${cleanTopic}`);
+    console.log(`📊 Success count: ${response.successCount}, Failure count: ${response.failureCount}`);
+    
+    if (response.failureCount > 0 && response.errors) {
+      console.error('❌ Subscription errors:', response.errors);
+      logError('FCM_SUBSCRIBE', 'Subscription had failures', {
+        topic: cleanTopic,
+        errors: response.errors
+      });
+    }
+    
+    console.log('========================================');
+
+    return result;
 
   } catch (error) {
+    logSubscription('subscribe', deviceToken, topic, { 
+      success: false, 
+      error: error.message 
+    });
+    
     console.error('❌ خطأ في الاشتراك في Topic:', error.message);
     console.error('   - Code:', error.code || 'N/A');
     return {
