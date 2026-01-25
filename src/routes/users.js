@@ -18,6 +18,7 @@ const {
   deleteSection,
   getTotalLikes,
   deleteAccount,
+  requestDeleteAccount,
   saveFcmToken,
   removeFcmToken,
   searchUsers
@@ -28,6 +29,9 @@ const upload = require('../middleware/upload');
 // Current user routes
 router.get('/me', protect, getMe);
 router.put('/me', protect, upload.avatar, updateMe);
+
+// Account deletion routes (order matters - more specific first)
+router.post('/me/account/request-delete', protect, requestDeleteAccount);
 router.delete('/me/account', protect, deleteAccount);
 
 // FCM Token routes for push notifications

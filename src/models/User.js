@@ -127,7 +127,16 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   resetPasswordToken: String,
-  resetPasswordExpire: Date
+  resetPasswordExpire: Date,
+  // حقول رمز حذف الحساب
+  deleteAccountCode: {
+    type: String,
+    select: false
+  },
+  deleteAccountCodeExpire: {
+    type: Date,
+    select: false
+  }
 }, {
   timestamps: true
 });
@@ -183,6 +192,23 @@ userSchema.methods.getEmailVerificationCode = function() {
 
   // Set expire (10 minutes)
   this.emailVerificationExpire = Date.now() + 10 * 60 * 1000;
+
+  return code;
+};
+
+// Generate delete account verification code (6 digits)
+userSchema.methods.getDeleteAccountCode = function() {
+  // Generate 6 digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Hash code and set to deleteAccountCode field
+  this.deleteAccountCode = crypto
+    .createHash('sha256')
+    .update(code)
+    .digest('hex');
+
+  // Set expire (10 minutes)
+  this.deleteAccountCodeExpire = Date.now() + 10 * 60 * 1000;
 
   return code;
 };

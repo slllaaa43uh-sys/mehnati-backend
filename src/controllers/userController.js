@@ -2,6 +2,8 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 const { uploadAvatar } = require('../services/storageService');
+const crypto = require('crypto');
+const sendEmail = require('../config/email');
 
 // @desc    Get user by ID
 // @route   GET /api/v1/users/:id
@@ -472,12 +474,151 @@ exports.getTotalLikes = async (req, res, next) => {
   }
 };
 
-// @desc    Delete user account and all associated data
+// أيقونة التطبيق للبريد الإلكتروني
+const getAppLogoSVG = () => `
+<img src="https://mehnati-backend.onrender.com/assets/app-logo.jpg" alt="مهنتي لي" style="width: 80px; height: 80px; border-radius: 18px; object-fit: cover;">
+`;
+
+// قالب البريد الإلكتروني
+const getEmailTemplate = (title, subtitle, userName, content, footerText) => `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+    <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 30px; text-align: center;">
+      <div style="display: inline-block; margin-bottom: 15px;">
+        ${getAppLogoSVG()}
+      </div>
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px;">${title}</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">${subtitle}</p>
+    </div>
+    <div style="padding: 40px 30px;">
+      <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">مرحباً ${userName}،</h2>
+      ${content}
+    </div>
+    <div style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+      <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+        © ${new Date().getFullYear()} مهنتي لي. جميع الحقوق محفوظة.
+      </p>
+      ${footerText ? `<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0;">${footerText}</p>` : ''}
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+// @desc    Request account deletion (send verification code)
+// @route   POST /api/v1/users/me/account/request-delete
+// @access  Private
+exports.requestDeleteAccount = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // Generate delete account verification code
+    const verificationCode = user.getDeleteAccountCode();
+    await user.save({ validateBeforeSave: false });
+
+    // Email content for delete account verification
+    const emailContent = `
+      <p style="color: #6b7280; line-height: 1.8; margin: 0 0 25px 0;">
+        لقد طلبت حذف حسابك في مهنتي لي. استخدم الرمز التالي لتأكيد حذف حسابك:
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <div style="display: inline-block; background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; padding: 20px 40px; border-radius: 12px; font-size: 32px; font-weight: bold; letter-spacing: 8px;">
+          ${verificationCode}
+        </div>
+      </div>
+      <p style="color: #ef4444; font-size: 14px; line-height: 1.6; margin: 25px 0 15px 0; font-weight: bold;">
+        ⚠️ تحذير: حذف الحساب عملية لا يمكن التراجع عنها!
+      </p>
+      <p style="color: #9ca3af; font-size: 13px; line-height: 1.6; margin: 0;">
+        هذا الرمز صالح لمدة 10 دقائق فقط. إذا لم تطلب حذف حسابك، يمكنك تجاهل هذا البريد.
+      </p>
+    `;
+
+    const htmlMessage = getEmailTemplate(
+      'مهنتي لي',
+      'تأكيد حذف الحساب',
+      user.name,
+      emailContent,
+      'إذا لم تطلب هذا الإجراء، يرجى تجاهل هذا البريد وتأمين حسابك.'
+    );
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'رمز تأكيد حذف الحساب - مهنتي لي',
+        html: htmlMessage
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Verification code sent'
+      });
+    } catch (err) {
+      console.error('Email error:', err);
+      // Clear the code if email fails
+      user.deleteAccountCode = undefined;
+      user.deleteAccountCodeExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({
+        success: false,
+        message: 'فشل في إرسال رمز التحقق. يرجى المحاولة لاحقاً'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete user account and all associated data (with OTP verification)
 // @route   DELETE /api/v1/users/me/account
 // @access  Private
 exports.deleteAccount = async (req, res, next) => {
   try {
+    const { code } = req.body;
     const userId = req.user.id;
+
+    // Validate code is provided
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: 'رمز التحقق مطلوب'
+      });
+    }
+
+    // Hash the provided code
+    const hashedCode = crypto
+      .createHash('sha256')
+      .update(code)
+      .digest('hex');
+
+    // Find user with matching code and not expired
+    const user = await User.findOne({
+      _id: userId,
+      deleteAccountCode: hashedCode,
+      deleteAccountCodeExpire: { $gt: Date.now() }
+    }).select('+deleteAccountCode +deleteAccountCodeExpire');
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'رمز التحقق غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
     const Story = require('../models/Story');
     const Report = require('../models/Report');
 
@@ -539,18 +680,20 @@ exports.deleteAccount = async (req, res, next) => {
       { $pull: { views: { user: userId } } }
     );
 
-    // 11. تعطيل الحساب بدلاً من حذفه (للحفاظ على السجل)
+    // 11. تعطيل الحساب وحذف رمز التحقق
     await User.findByIdAndUpdate(userId, {
       isActive: false,
       isDeleted: true,
       deletedAt: new Date(),
-      email: `deleted_${userId}_${Date.now()}@deleted.com`, // تغيير الإيميل لمنع إعادة التسجيل
-      password: 'DELETED_ACCOUNT_' + Date.now() // تغيير كلمة المرور
+      email: `deleted_${userId}_${Date.now()}@deleted.com`,
+      password: 'DELETED_ACCOUNT_' + Date.now(),
+      deleteAccountCode: undefined,
+      deleteAccountCodeExpire: undefined
     });
 
     res.status(200).json({
       success: true,
-      message: 'تم حذف حسابك بنجاح. لا يمكنك الدخول إليه مرة أخرى.'
+      message: 'Account deleted successfully'
     });
   } catch (error) {
     next(error);
