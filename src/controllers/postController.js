@@ -45,6 +45,8 @@ exports.createPost = async (req, res, next) => {
       text, // الواجهة الأمامية ترسل text بدلاً من content
       type,
       category,
+      subcategory,
+      condition,
       scope,
       country,
       city,
@@ -59,6 +61,7 @@ exports.createPost = async (req, res, next) => {
       price,
       currency,
       jobDetails,
+      websiteLink,
       // حقول الشورتس الجديدة
       attractiveTitle,
       privacy,
@@ -131,6 +134,8 @@ exports.createPost = async (req, res, next) => {
       media,
       type: type || 'general',
       category,
+      subcategory,
+      condition,
       scope: scope || 'global',
       country: scope === 'local' ? country : null,
       city: scope === 'local' ? city : null,
@@ -144,7 +149,8 @@ exports.createPost = async (req, res, next) => {
       isShort: isShort || false,
       price,
       currency,
-      jobDetails
+      jobDetails,
+      websiteLink
     };
 
     // إضافة حقول الشورتس إذا كان المنشور فيديو قصير
@@ -737,9 +743,9 @@ exports.updatePost = async (req, res, next) => {
     }
 
     const allowedUpdates = [
-      'title', 'content', 'category', 'scope', 'country', 'city',
+      'title', 'content', 'category', 'subcategory', 'condition', 'scope', 'country', 'city',
       'location', 'contactEmail', 'contactPhone', 'contactMethods',
-      'isFeatured', 'displayPage', 'specialTag', 'price', 'currency', 'jobDetails'
+      'isFeatured', 'displayPage', 'specialTag', 'price', 'currency', 'jobDetails', 'websiteLink'
     ];
 
     allowedUpdates.forEach(field => {

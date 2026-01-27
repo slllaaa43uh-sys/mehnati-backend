@@ -54,6 +54,19 @@ const postSchema = new mongoose.Schema({
     default: null
   },
   
+  // التصنيف الفرعي (للحراج والوظائف)
+  subcategory: {
+    type: String,
+    default: null
+  },
+  
+  // حالة المنتج (للحراج)
+  condition: {
+    type: String,
+    enum: ['new', 'used_like_new', 'used_good', null],
+    default: null
+  },
+  
   // نطاق النشر (عالمي أو محلي)
   scope: {
     type: String,

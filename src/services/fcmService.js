@@ -52,6 +52,16 @@ const CATEGORY_TO_TOPIC_MAP = {
   'نقل عفش': 'haraj_moving',
   'أدوات أخرى': 'haraj_other',
   
+  // ============ NEW HARAJ CATEGORIES (from new frontend) ============
+  'عقارات وأراضي': 'haraj_realestate',
+  'سيارات ومركبات': 'haraj_cars',
+  'معدات ثقيلة وشاحنات': 'haraj_equipment',
+  'أعمال وتجارة': 'haraj_business',
+  'مقاولات وبناء': 'haraj_contracting',
+  'أجهزة وإلكترونيات': 'haraj_electronics',
+  'حقائب ومستلزمات': 'haraj_luggage',
+  'خدمات مهنية': 'haraj_services',
+  
   // ============ JOB CATEGORIES ============
   'سائق خاص': 'jobs_driver',
   'حارس أمن': 'jobs_security',
@@ -75,6 +85,22 @@ const CATEGORY_TO_TOPIC_MAP = {
   'حلاق / خياط': 'jobs_barber',
   'مزارع': 'jobs_farmer',
   'وظائف أخرى': 'jobs_other',
+  
+  // ============ NEW JOB CATEGORIES (from new frontend) ============
+  'برمجة وتقنية': 'jobs_tech',
+  'هندسة ومقاولات': 'jobs_engineering',
+  'إدارة ومحاسبة': 'jobs_admin',
+  'مبيعات وتسويق': 'jobs_marketing',
+  'طب وتمريض': 'jobs_medical',
+  'تعليم وتدريب': 'jobs_education',
+  'خدمات لوجستية': 'jobs_logistics',
+  'فنيين وحرفيين': 'jobs_technicians',
+  'تصميم وفنون': 'jobs_design',
+  'كتابة وترجمة': 'jobs_writing',
+  'سياحة وضيافة': 'jobs_hospitality',
+  'قانون ومحاماة': 'jobs_legal',
+  'موارد بشرية': 'jobs_hr',
+  'علوم وبيانات': 'jobs_data',
   
   // ============ GENERAL TOPICS ============
   'jobs': 'jobs_all',
