@@ -148,6 +148,7 @@ app.get('/reset-password/:token', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
+    greeting: 'وعليكم السلام ورحمة الله وبركاته',
     message: 'مرحباً بك في API مهنتي لي 🚀',
     version: '2.2.0',
     storage: 'Backblaze B2 with compression',
