@@ -84,21 +84,37 @@ const uploadImage = async (buffer, originalName, mimeType, options = {}) => {
  * @returns {Promise<Object>}
  */
 const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
+  console.log('========================================');
+  console.log('🎥 VIDEO UPLOAD SERVICE - STARTING');
+  console.log('========================================');
+  console.log('📋 Video Details:');
+  console.log('   - Original Name:', originalName);
+  console.log('   - MIME Type:', mimeType);
+  console.log('   - Buffer Size:', (buffer.length / 1024 / 1024).toFixed(2), 'MB');
+  console.log('   - Options:', JSON.stringify(options));
+  
   try {
     const { folder = FOLDERS.POSTS, generateThumbnail = true } = options;
     
+    console.log('🗜️ Starting video compression...');
     // ضغط الفيديو
     const compressed = await compressFile(buffer, mimeType);
+    console.log('✅ Video compression completed successfully');
     
     // توليد اسم الملف
     const fileName = generateFileName(folder, originalName, 'mp4');
+    console.log('📝 Generated File Name:', fileName);
     
+    console.log('☁️ Uploading video to Backblaze B2...');
     // رفع الفيديو إلى Backblaze B2
     const uploadResult = await uploadFile(
       compressed.buffer,
       fileName,
       'video/mp4'
     );
+    console.log('✅ Video uploaded to Backblaze successfully');
+    console.log('   - URL:', uploadResult.url);
+    console.log('   - File ID:', uploadResult.fileId);
     
     let thumbnailResult = null;
     
@@ -136,6 +152,17 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
       }
     };
   } catch (error) {
+    console.error('========================================');
+    console.error('❌ CRITICAL ERROR IN VIDEO UPLOAD');
+    console.error('========================================');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    console.error('Video Details:');
+    console.error('   - Original Name:', originalName);
+    console.error('   - MIME Type:', mimeType);
+    console.error('   - Buffer Size:', (buffer ? (buffer.length / 1024 / 1024).toFixed(2) : 'N/A'), 'MB');
+    console.error('========================================');
     console.error('❌ خطأ في رفع الفيديو:', error.message);
     throw error;
   }

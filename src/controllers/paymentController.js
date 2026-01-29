@@ -21,11 +21,22 @@ const OLD_PRICES = {
 // @access  Private
 exports.promotePost = async (req, res) => {
   try {
+    console.log('========================================');
+    console.log('🌟 POST PROMOTION - REQUEST RECEIVED');
+    console.log('========================================');
+    
     const { postId } = req.params;
     const { promotionType } = req.body; // 'free', 'weekly', 'monthly'
+    
+    console.log('📋 Promotion Details:');
+    console.log('   - Post ID:', postId);
+    console.log('   - Promotion Type:', promotionType);
+    console.log('   - User ID:', req.user?.id);
+    console.log('   - Request Time:', new Date().toISOString());
 
     // Validate promotion type
     if (!promotionType || !PROMOTION_DURATIONS[promotionType]) {
+      console.error('❌ Invalid promotion type:', promotionType);
       return res.status(400).json({
         success: false,
         message: 'نوع التمييز غير صالح'
@@ -35,16 +46,29 @@ exports.promotePost = async (req, res) => {
     // Find the post
     const post = await Post.findById(postId);
     if (!post) {
+      console.error('❌ Post not found:', postId);
       return res.status(404).json({ success: false, message: 'المنشور غير موجود' });
     }
+    
+    console.log('✅ Post found:', post.title?.substring(0, 50));
 
     // Check if user owns the post
     if (post.user.toString() !== req.user.id) {
+      console.error('❌ Unauthorized: User does not own post');
       return res.status(403).json({ success: false, message: 'غير مصرح لك بتمييز هذا المنشور' });
     }
 
-    // جميع التمييزات مجانية الآن - لا حاجة للتحقق من الدفع
-    const expiryDate = new Date(Date.now() + PROMOTION_DURATIONS[promotionType]);
+    // حساب تاريخ الانتهاء بشكل صحيح
+    const now = new Date();
+    const durationMs = PROMOTION_DURATIONS[promotionType];
+    const expiryDate = new Date(now.getTime() + durationMs);
+    
+    console.log('📅 Timing Details:');
+    console.log('   - Current Time:', now.toISOString());
+    console.log('   - Duration (ms):', durationMs);
+    console.log('   - Duration (hours):', (durationMs / (60 * 60 * 1000)).toFixed(2));
+    console.log('   - Expiry Date:', expiryDate.toISOString());
+    console.log('   - Days Until Expiry:', ((expiryDate - now) / (24 * 60 * 60 * 1000)).toFixed(2));
     
     // Update post with featured status
     post.isFeatured = true;
@@ -52,6 +76,13 @@ exports.promotePost = async (req, res) => {
     post.featuredExpiry = expiryDate;
     post.featuredType = promotionType;
     await post.save();
+    
+    console.log('✅ Post updated successfully');
+    console.log('📊 Final State:');
+    console.log('   - isFeatured:', post.isFeatured);
+    console.log('   - featuredType:', post.featuredType);
+    console.log('   - featuredUntil:', post.featuredUntil?.toISOString());
+    console.log('   - featuredExpiry:', post.featuredExpiry?.toISOString());
 
     // تحديد الرسالة بناءً على نوع التمييز
     let message = '';

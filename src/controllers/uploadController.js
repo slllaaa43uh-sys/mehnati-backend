@@ -59,19 +59,38 @@ exports.uploadMultiple = async (req, res, next) => {
 // @access  Private
 exports.uploadSingle = async (req, res, next) => {
   try {
+    console.log('========================================');
+    console.log('📤 UPLOAD SINGLE - REQUEST RECEIVED');
+    console.log('========================================');
+    console.log('📋 Request Details:');
+    console.log('   - User ID:', req.user?.id || 'N/A');
+    console.log('   - File Present:', !!req.file);
+    
     if (!req.file) {
+      console.error('❌ No file in request');
       return res.status(400).json({
         success: false,
         message: 'لم يتم رفع أي ملف'
       });
     }
+    
+    console.log('   - Original Name:', req.file.originalname);
+    console.log('   - MIME Type:', req.file.mimetype);
+    console.log('   - Size:', (req.file.size / 1024 / 1024).toFixed(2), 'MB');
+    console.log('   - Buffer Length:', req.file.buffer ? req.file.buffer.length : 'N/A');
 
+    console.log('🚀 Starting upload process...');
     // رفع الملف مع الضغط
     const result = await uploadMedia(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype
     );
+    
+    console.log('✅ Upload completed successfully');
+    console.log('   - File URL:', result.file.url);
+    console.log('   - File ID:', result.file.fileId);
+    console.log('========================================');
 
     res.status(200).json({
       success: true,
@@ -88,6 +107,19 @@ exports.uploadSingle = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('========================================');
+    console.error('❌ UPLOAD SINGLE - ERROR');
+    console.error('========================================');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    if (req.file) {
+      console.error('File Details:');
+      console.error('   - Original Name:', req.file.originalname);
+      console.error('   - MIME Type:', req.file.mimetype);
+      console.error('   - Size:', (req.file.size / 1024 / 1024).toFixed(2), 'MB');
+    }
+    console.error('========================================');
     next(error);
   }
 };

@@ -181,6 +181,12 @@ const compressImage = async (inputBuffer, options = {}) => {
  * @returns {Promise<{buffer: Buffer, info: Object}>}
  */
 const compressVideo = async (inputBuffer, options = {}) => {
+  console.log('========================================');
+  console.log('🎬 VIDEO COMPRESSION - STARTING');
+  console.log('========================================');
+  console.log('📊 Input Buffer Size:', (inputBuffer.length / 1024 / 1024).toFixed(2), 'MB');
+  console.log('⚙️ Options:', JSON.stringify(options));
+  
   const config = COMPRESSION_CONFIG.video;
   const {
     maxWidth = config.maxWidth,
@@ -194,39 +200,69 @@ const compressVideo = async (inputBuffer, options = {}) => {
   const inputPath = path.join(tempDir, `input_${uuidv4()}.mp4`);
   const outputPath = path.join(tempDir, `output_${uuidv4()}.mp4`);
   
+  console.log('📁 Temp Paths:');
+  console.log('   - Input:', inputPath);
+  console.log('   - Output:', outputPath);
+  
   try {
+    console.log('📝 Writing input buffer to temp file...');
     await fs.writeFile(inputPath, inputBuffer);
+    console.log('✅ Input file written successfully');
     inputBuffer = null;
     
     // أمر FFmpeg للضغط - صيغة مبسطة ومستقرة مع تحديد استخدام الذاكرة
     // إضافة -threads 1 لتقليل استخدام الذاكرة
     const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,format=${config.pixelFormat}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 1 -ar 22050 -movflags +faststart -y "${outputPath}"`;
     
+    console.log('🔧 FFmpeg Command:');
+    console.log('   ', ffmpegCommand);
+    
+    console.log('⏳ Executing FFmpeg compression...');
     await new Promise((resolve, reject) => {
       exec(ffmpegCommand, { 
         maxBuffer: 50 * 1024 * 1024,
         timeout: 300000
       }, (error, stdout, stderr) => {
         if (error) {
-          console.error('FFmpeg stderr:', stderr);
-          reject(error);
+          console.error('========================================');
+          console.error('❌ FFMPEG COMPRESSION ERROR');
+          console.error('========================================');
+          console.error('Error Message:', error.message);
+          console.error('Error Code:', error.code);
+          console.error('Error Signal:', error.signal);
+          console.error('FFmpeg STDERR:', stderr);
+          console.error('FFmpeg STDOUT:', stdout);
+          console.error('========================================');
+          reject(new Error(`فشل ضغط الفيديو: ${error.message}`));
         } else {
+          console.log('✅ FFmpeg compression completed successfully');
+          if (stdout) console.log('FFmpeg STDOUT:', stdout);
           resolve();
         }
       });
     });
     
+    console.log('📖 Reading compressed output...');
     const outputBuffer = await fs.readFile(outputPath);
+    console.log('✅ Output file read successfully');
     
     const inputStats = await fs.stat(inputPath);
     const originalSize = inputStats.size;
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
+    console.log('========================================');
+    console.log('📊 COMPRESSION RESULTS:');
+    console.log('   - Original Size:', (originalSize / 1024 / 1024).toFixed(2), 'MB');
+    console.log('   - Compressed Size:', (compressedSize / 1024 / 1024).toFixed(2), 'MB');
+    console.log('   - Compression Ratio:', compressionRatio, '%');
+    console.log('========================================');
     console.log(`🎬 ضغط محسن 720p للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
+    console.log('🧹 Cleaning up temp files...');
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
+    console.log('✅ Temp files cleaned up');
     
     return {
       buffer: outputBuffer,
@@ -238,6 +274,14 @@ const compressVideo = async (inputBuffer, options = {}) => {
       }
     };
   } catch (error) {
+    console.error('========================================');
+    console.error('❌ CRITICAL ERROR IN VIDEO COMPRESSION');
+    console.error('========================================');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
+    console.error('========================================');
+    
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     
