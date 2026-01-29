@@ -729,6 +729,7 @@ exports.getPost = async (req, res, next) => {
     postObj.commentsCount = post.comments ? post.comments.length : 0;
     
     // إضافة image و video للتوافق مع Frontend
+    // ملاحظة: بعض المنشورات قد تحتوي على URLs نسبية، نحتاج التأكد من إضافة البادئة الصحيحة
     if (postObj.media && postObj.media.length > 0) {
       const firstImage = postObj.media.find(m => m.type === 'image');
       if (firstImage) {

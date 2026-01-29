@@ -3,6 +3,58 @@ const crypto = require('crypto');
 const sendEmail = require('../config/email');
 const { isDisposableEmail } = require('../utils/disposableEmails');
 
+// دالة التحقق من قوة كلمة السر
+// - يجب أن تكون 8 أحرف على الأقل
+// - تحتوي على حرف كبير (A-Z)
+// - تحتوي على حرف صغير (a-z)
+// - تحتوي على رقم (0-9)
+// - تحتوي على رمز خاص (@, #, $, %, ^, &, *, etc.)
+// - لا تحتوي على أحرف عربية
+// - لا تحتوي على أرقام عربية
+const validatePasswordStrength = (password) => {
+  const errors = [];
+
+  // التحقق من الطول
+  if (!password || password.length < 8) {
+    errors.push('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+  }
+
+  // التحقق من وجود حرف كبير
+  if (!/[A-Z]/.test(password)) {
+    errors.push('يجب أن تحتوي كلمة المرور على حرف كبير واحد على الأقل (A-Z)');
+  }
+
+  // التحقق من وجود حرف صغير
+  if (!/[a-z]/.test(password)) {
+    errors.push('يجب أن تحتوي كلمة المرور على حرف صغير واحد على الأقل (a-z)');
+  }
+
+  // التحقق من وجود رقم إنجليزي
+  if (!/[0-9]/.test(password)) {
+    errors.push('يجب أن تحتوي كلمة المرور على رقم واحد على الأقل (0-9)');
+  }
+
+  // التحقق من وجود رمز خاص
+  if (!/[@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    errors.push('يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل');
+  }
+
+  // التحقق من عدم وجود أحرف عربية
+  if (/[\u0600-\u06FF]/.test(password)) {
+    errors.push('لا يمكن استخدام أحرف عربية في كلمة المرور');
+  }
+
+  // التحقق من عدم وجود أرقام عربية (٠١٢٣٤٥٦٧٨٩)
+  if (/[\u0660-\u0669]/.test(password)) {
+    errors.push('لا يمكن استخدام أرقام عربية في كلمة المرور');
+  }
+
+  return {
+    isStrong: errors.length === 0,
+    errors: errors
+  };
+};
+
 // أيقونة التطبيق SVG (الحقيبة) - مرسومة بـ CSS/SVG
 const getAppLogoSVG = () => `
 <img src="https://mehnati-backend.onrender.com/assets/app-logo.jpg" alt="مهنتي لي" style="width: 80px; height: 80px; border-radius: 18px; object-fit: cover;">
@@ -523,10 +575,14 @@ exports.resetPassword = async (req, res, next) => {
     // Validate new password
     const { password } = req.body;
 
-    if (!password || password.length < 6) {
+    // التحقق من قوة كلمة السر
+    const passwordValidation = validatePasswordStrength(password);
+    
+    if (!passwordValidation.isStrong) {
       return res.status(400).json({
         success: false,
-        message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'
+        message: 'كلمة المرور ضعيفة جداً. متطلبات القوة:',
+        errors: passwordValidation.errors
       });
     }
 
