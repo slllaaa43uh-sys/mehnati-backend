@@ -653,16 +653,34 @@ exports.getPosts = async (req, res, next) => {
 
     // التحقق من صلاحية التمييز في الوقت الفعلي (احتياطي إضافي)
     const processedPosts = checkFeaturedExpiryBatch(posts);
+    
+    // إضافة حقول التوافق مع Frontend لكل منشور
+    const formattedPosts = processedPosts.map(post => {
+      const formattedPost = { ...post };
+      
+      // Frontend يستخدم text بدلاً من content
+      formattedPost.text = formattedPost.content;
+      
+      // إضافة image (أول صورة من media) للتوافق مع Frontend
+      if (formattedPost.media && formattedPost.media.length > 0) {
+        const firstImage = formattedPost.media.find(m => m.type === 'image');
+        if (firstImage) {
+          formattedPost.image = firstImage.url;
+        }
+      }
+      
+      return formattedPost;
+    });
 
     const total = await Post.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      count: processedPosts.length,
+      count: formattedPosts.length,
       total,
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
-      posts: processedPosts
+      posts: formattedPosts
     });
   } catch (error) {
     next(error);
@@ -699,8 +717,19 @@ exports.getPost = async (req, res, next) => {
 
     // تحويل المنشور لكائن وإضافة حقول إضافية للتوافق مع الواجهة الأمامية
     const postObj = post.toObject();
+    
+    // إضافة حقول التوافق مع Frontend
+    postObj.text = postObj.content; // Frontend يستخدم text بدلاً من content
     postObj.likes = post.reactions ? post.reactions.length : 0;
     postObj.commentsCount = post.comments ? post.comments.length : 0;
+    
+    // إضافة image (أول صورة من media) للتوافق مع Frontend
+    if (postObj.media && postObj.media.length > 0) {
+      const firstImage = postObj.media.find(m => m.type === 'image');
+      if (firstImage) {
+        postObj.image = firstImage.url;
+      }
+    }
 
     // إضافة حقول إعدادات الشورتس بشكل صريح إذا كان المنشور شورتس
     if (postObj.isShort) {
