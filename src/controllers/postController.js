@@ -661,11 +661,16 @@ exports.getPosts = async (req, res, next) => {
       // Frontend يستخدم text بدلاً من content
       formattedPost.text = formattedPost.content;
       
-      // إضافة image (أول صورة من media) للتوافق مع Frontend
+      // إضافة image و video للتوافق مع Frontend
       if (formattedPost.media && formattedPost.media.length > 0) {
         const firstImage = formattedPost.media.find(m => m.type === 'image');
         if (firstImage) {
           formattedPost.image = firstImage.url;
+        }
+        
+        const firstVideo = formattedPost.media.find(m => m.type === 'video');
+        if (firstVideo) {
+          formattedPost.video = firstVideo.url;
         }
       }
       
@@ -723,11 +728,16 @@ exports.getPost = async (req, res, next) => {
     postObj.likes = post.reactions ? post.reactions.length : 0;
     postObj.commentsCount = post.comments ? post.comments.length : 0;
     
-    // إضافة image (أول صورة من media) للتوافق مع Frontend
+    // إضافة image و video للتوافق مع Frontend
     if (postObj.media && postObj.media.length > 0) {
       const firstImage = postObj.media.find(m => m.type === 'image');
       if (firstImage) {
         postObj.image = firstImage.url;
+      }
+      
+      const firstVideo = postObj.media.find(m => m.type === 'video');
+      if (firstVideo) {
+        postObj.video = firstVideo.url;
       }
     }
 
