@@ -619,6 +619,7 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
 
     console.log('🚀 Attempting to send notification to topic:', cleanTopic);
     console.log('⏳ Sending...');
+    console.log('📡 FCM Admin Messaging object exists:', !!admin.messaging);
 
     // إرسال الإشعار
     const response = await admin.messaging().send(message);
@@ -629,8 +630,11 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
       messageId: response 
     });
     
-    console.log('✅ Notification sent successfully! Response:', response);
+    console.log('✅✅✅ NOTIFICATION SENT SUCCESSFULLY! ✅✅✅');
     console.log('📱 Message ID:', response);
+    console.log('📊 Topic:', cleanTopic);
+    console.log('📝 Title:', title);
+    console.log('📄 Body:', body.substring(0, 100));
     console.log('========================================');
     console.log('🔔 FCM NOTIFICATION DEBUG - END (SUCCESS)');
     console.log('========================================');
@@ -969,39 +973,19 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     console.log('📋 Final Topic to send (SINGLE):', uniqueTopics);
 
     // ============================================
-    // EXCLUDE CREATOR FROM NOTIFICATION
+    // SIMPLIFIED: Send to Topic WITHOUT excluding creator
     // ============================================
-    // If creatorId is provided, we need to:
-    // 1. Get creator's FCM tokens
-    // 2. Temporarily unsubscribe them from topics
-    // 3. Send notifications
-    // 4. Re-subscribe them
+    // The creator will receive notification but frontend can filter it
+    // This is much faster and more reliable than unsubscribe/resubscribe
     // ============================================
     const creatorId = additionalData.creatorId;
-    let creatorTokens = [];
     
     if (creatorId) {
-      try {
-        const creator = await User.findById(creatorId).select('fcmTokens');
-        if (creator && creator.fcmTokens && creator.fcmTokens.length > 0) {
-          creatorTokens = creator.fcmTokens.map(t => t.token);
-          console.log(`🚫 Found ${creatorTokens.length} FCM tokens for creator to exclude`);
-          
-          // Unsubscribe creator from all topics temporarily
-          const admin = getFirebaseAdmin();
-          for (const topic of uniqueTopics) {
-            try {
-              await admin.messaging().unsubscribeFromTopic(creatorTokens, topic);
-              console.log(`   ✔️ Temporarily unsubscribed creator from: ${topic}`);
-            } catch (unsubErr) {
-              console.warn(`   ⚠️ Could not unsubscribe from ${topic}:`, unsubErr.message);
-            }
-          }
-        }
-      } catch (userErr) {
-        console.warn('⚠️ Could not fetch creator tokens:', userErr.message);
-      }
+      console.log(`ℹ️ Creator ID: ${creatorId} - Will receive notification (frontend will filter)`);
     }
+    
+    // ADD creator ID to notification data so frontend can filter it
+    additionalData.creatorId = creatorId || '';
 
     // Send to all relevant topics
     const results = await Promise.allSettled(
@@ -1011,21 +995,6 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
       }))
     );
 
-    // ============================================
-    // RE-SUBSCRIBE CREATOR TO TOPICS
-    // ============================================
-    if (creatorId && creatorTokens.length > 0) {
-      const admin = getFirebaseAdmin();
-      for (const topic of uniqueTopics) {
-        try {
-          await admin.messaging().subscribeToTopic(creatorTokens, topic);
-          console.log(`   ✔️ Re-subscribed creator to: ${topic}`);
-        } catch (resubErr) {
-          console.warn(`   ⚠️ Could not re-subscribe to ${topic}:`, resubErr.message);
-        }
-      }
-    }
-
     const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
     const failed = results.length - successful;
 
@@ -1034,13 +1003,12 @@ const sendNotificationByCategory = async (category, title, body, additionalData 
     console.log('   - Total:', results.length);
     console.log('   - Successful:', successful);
     console.log('   - Failed:', failed);
-    console.log('   - Creator excluded:', creatorId ? 'YES' : 'NO');
+    console.log('   - Creator ID passed to frontend:', creatorId || 'NONE');
     console.log('========================================');
 
     return {
       success: successful > 0,
       topics: uniqueTopics,
-      creatorExcluded: !!creatorId,
       results: results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: r.reason })
     };
 
