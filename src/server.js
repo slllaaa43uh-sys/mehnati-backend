@@ -143,13 +143,14 @@ app.use((req, res, next) => {
   const origin = req.headers.origin || '';
   const isDev = (process.env.NODE_ENV !== 'production');
   const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+  const allowLocalhostOrigins = process.env.ALLOW_LOCALHOST_ORIGINS === 'true';
 
-  const isMobileOrigin = origin.startsWith('capacitor://') || origin.startsWith('ionic://') || origin.startsWith('file://');
+  const isMobileOrigin = origin.startsWith('capacitor://') || origin.startsWith('ionic://') || origin.startsWith('file://') || origin === 'https://localhost' || origin === 'http://localhost';
   const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
   const allow = (
     !origin ||
     isMobileOrigin ||
-    (isDev && isLocalhost) ||
+    ((isDev || allowLocalhostOrigins) && isLocalhost) ||
     allowedEnv.length === 0 ||
     allowedEnv.includes(origin)
   );
@@ -174,9 +175,10 @@ const corsOptions = {
   origin: (origin, callback) => {
     const isDev = (process.env.NODE_ENV !== 'production');
     const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+    const allowLocalhostOrigins = process.env.ALLOW_LOCALHOST_ORIGINS === 'true';
     if (!origin) return callback(null, true);
-    if (origin.startsWith('file://') || origin.startsWith('capacitor://') || origin.startsWith('ionic://')) return callback(null, true);
-    if (isDev && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return callback(null, true);
+    if (origin.startsWith('file://') || origin.startsWith('capacitor://') || origin.startsWith('ionic://') || origin === 'https://localhost' || origin === 'http://localhost') return callback(null, true);
+    if ((isDev || allowLocalhostOrigins) && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return callback(null, true);
     if (allowedEnv.length === 0) return callback(null, true);
     if (allowedEnv.includes(origin)) return callback(null, true);
     console.warn(`⚠️ CORS: طلب مرفوض من: ${origin}`);
