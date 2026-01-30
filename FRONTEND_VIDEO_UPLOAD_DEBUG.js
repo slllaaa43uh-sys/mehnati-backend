@@ -336,13 +336,13 @@ const commonMistakes = {
   
   mistake1: {
     description: 'استخدام object بدلاً من FormData',
-    ❌: `
+    "❌": `
       const data = { file: videoFile, content: 'text' };
       fetch('/api/v1/upload/single', { 
         body: JSON.stringify(data)  // ❌ خطأ
       });
     `,
-    ✅: `
+    "✅": `
       const formData = new FormData();
       formData.append('file', videoFile);
       fetch('/api/v1/upload/single', { 
@@ -353,12 +353,12 @@ const commonMistakes = {
 
   mistake2: {
     description: 'نسيان إضافة الملف في FormData',
-    ❌: `
+    "❌": `
       const formData = new FormData();
       formData.append('content', contentText);
       // نسيان: formData.append('file', videoFile);
     `,
-    ✅: `
+    "✅": `
       const formData = new FormData();
       formData.append('file', videoFile);  // ✅ أضف الملف
       formData.append('content', contentText);
@@ -367,7 +367,7 @@ const commonMistakes = {
 
   mistake3: {
     description: 'إضافة Content-Type للـ headers',
-    ❌: `
+    "❌": `
       fetch('/api/v1/upload/single', {
         headers: {
           'Content-Type': 'multipart/form-data'  // ❌ لا تضيفها
@@ -375,7 +375,7 @@ const commonMistakes = {
         body: formData
       });
     `,
-    ✅: `
+    "✅": `
       fetch('/api/v1/upload/single', {
         headers: {
           'Authorization': 'Bearer token'
@@ -388,11 +388,11 @@ const commonMistakes = {
 
   mistake4: {
     description: 'استخدام اسم حقل غير صحيح',
-    ❌: `
+    "❌": `
       formData.append('video', videoFile);  // ❌ اسم خاطئ
       formData.append('media', videoFile);  // ❌ قد يكون خاطئ أيضاً
     `,
-    ✅: `
+    "✅": `
       formData.append('file', videoFile);  // ✅ الاسم الصحيح
     `
   }
