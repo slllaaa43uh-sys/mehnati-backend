@@ -236,7 +236,7 @@ const compressVideo = async (inputBuffer, options = {}) => {
     // أخيراً يفرض تنسيق البكسل yuv420p للتوافق الواسع
     const vfFilter = `scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2:(ow-iw)/2:(oh-ih)/2,format=${config.pixelFormat}`;
     // إضافة -threads 1 لتقليل استخدام الذاكرة
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "${vfFilter}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 1 -ar 22050 -movflags +faststart -y "${outputPath}"`;
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "${vfFilter}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -movflags +faststart -y "${outputPath}"`;
     
     console.log('🔧 FFmpeg Command:');
     console.log('   ', ffmpegCommand);
@@ -276,11 +276,31 @@ const compressVideo = async (inputBuffer, options = {}) => {
     const compressedSize = outputBuffer.length;
     const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
+    // Probe durations using ffprobe
+    const probeDuration = async (filePath) => {
+      try {
+        return await new Promise((resolve) => {
+          exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, { timeout: 5000 }, (err, stdout) => {
+            if (err) return resolve(null);
+            const val = parseFloat(String(stdout).trim());
+            resolve(Number.isFinite(val) ? val : null);
+          });
+        });
+      } catch {
+        return null;
+      }
+    };
+
+    const inputDuration = await probeDuration(inputPath);
+    const outputDuration = await probeDuration(outputPath);
+
     console.log('========================================');
     console.log('📊 COMPRESSION RESULTS:');
     console.log('   - Original Size:', (originalSize / 1024 / 1024).toFixed(2), 'MB');
     console.log('   - Compressed Size:', (compressedSize / 1024 / 1024).toFixed(2), 'MB');
     console.log('   - Compression Ratio:', compressionRatio, '%');
+    if (inputDuration != null) console.log('   - Input Duration:', inputDuration.toFixed(2), 's');
+    if (outputDuration != null) console.log('   - Output Duration:', outputDuration.toFixed(2), 's');
     console.log('========================================');
     console.log(`🎬 ضغط محسن 720p للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
@@ -295,7 +315,9 @@ const compressVideo = async (inputBuffer, options = {}) => {
         originalSize,
         compressedSize,
         compressionRatio: parseFloat(compressionRatio),
-        format: 'mp4'
+        format: 'mp4',
+        inputDuration,
+        outputDuration
       }
     };
   } catch (error) {

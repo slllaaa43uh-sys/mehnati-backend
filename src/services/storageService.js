@@ -151,6 +151,7 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
         originalSize: compressed.info.originalSize,
         compressedSize: compressed.info.compressedSize,
         compressionRatio: compressed.info.compressionRatio,
+        duration: compressed.info.outputDuration || null,
         thumbnail: thumbnailResult ? {
           url: thumbnailResult.url,
           fileId: thumbnailResult.fileId
