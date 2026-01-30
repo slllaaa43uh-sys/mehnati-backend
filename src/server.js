@@ -163,6 +163,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Expose-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
+    console.log(`[CORS] OPTIONS origin: ${origin || 'N/A'} → ${allow ? 'allow' : 'deny'}`);
     return res.status(204).end();
   }
   next();

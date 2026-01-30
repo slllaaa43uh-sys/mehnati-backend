@@ -13,6 +13,18 @@ PORT=3000
 -------------------------------------------------------------------
 
 -------------------------------------------------------------------
+# CORS Allowed Origins
+# أضف جميع الأصول المسموح بها (Origins) مفصولة بفواصل.
+# للإنتاج: استخدم دومينات الويب الفعلية فقط.
+# للتجربة على الهاتف/المحاكي: أضف origins الموبايل.
+# أمثلة:
+# ALLOWED_ORIGINS=https://mihnt.netlify.app,https://mehnati-api.xyz
+# للتجربة (Android/Capacitor):
+# ALLOWED_ORIGINS=capacitor://localhost,ionic://localhost,https://localhost,http://localhost
+ALLOWED_ORIGINS=
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME=dkj9e4low
 CLOUDINARY_API_KEY=<استبدل_بالمفتاح_من_لوحة_التحكم>
