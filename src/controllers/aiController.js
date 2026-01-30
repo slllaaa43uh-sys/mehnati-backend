@@ -37,7 +37,6 @@ const APP_KNOWLEDGE = `
 // ============================================
 // 🧠 الشخصية الذكية (System Prompt) - محدّث
 // ============================================
-const SYSTEM_PROMPT = `أنت مساعد ذكي لتطبيق "مهنتي لي".
 const SYSTEM_PROMPT_AR = `أنت مساعد ذكي لتطبيق "مهنتي لي".
 مهمتك: مساعدة المستخدمين والإجابة على استفساراتهم بناءً على "دليل التطبيق" المرفق.
 
@@ -99,7 +98,6 @@ function isForbiddenRequest(message) {
 // ============================================
 exports.chatWithAI = async (req, res) => {
   try {
-    let { message, conversationHistory } = req.body;
     let { message, conversationHistory, lang } = req.body;
 
     if (!message || !String(message).trim()) {
