@@ -155,10 +155,13 @@ app.use((req, res, next) => {
     allowedEnv.includes(origin)
   );
 
-  if (allow && origin) {
-    res.header('Access-Control-Allow-Origin', origin);
+  if (allow) {
+    // If origin is missing (some Android WebViews), fall back to first allowed origin or * when not using credentials
+    const fallbackOrigin = origin || allowedEnv[0] || '*';
+    res.header('Access-Control-Allow-Origin', fallbackOrigin);
   }
-  res.header('Access-Control-Allow-Credentials', 'true');
+  // Using bearer tokens, not cookies → no need for credentials
+  res.header('Access-Control-Allow-Credentials', 'false');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.header('Access-Control-Expose-Headers', 'Content-Type, Authorization');
@@ -184,7 +187,7 @@ const corsOptions = {
     console.warn(`⚠️ CORS: طلب مرفوض من: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
-  credentials: true,
+  credentials: false,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
