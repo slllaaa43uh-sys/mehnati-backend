@@ -81,6 +81,14 @@ const logMemoryUsage = () => {
 setInterval(logMemoryUsage, 3 * 60 * 1000);
 logMemoryUsage();
 
+// Normalize duplicate /api prefix (e.g., /api/api/v1/* → /api/v1/*)
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace(/^\/api\/api\//, '/api/');
+  }
+  next();
+});
+
 // ============================================
 // 🔓 CORS الإعداد الصحيح: OPTIONS → cors() → helmet()
 // ============================================
