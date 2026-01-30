@@ -96,10 +96,12 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
   try {
     const { folder = FOLDERS.POSTS, generateThumbnail = true } = options;
     
+    const disableCompression = process.env.DISABLE_VIDEO_COMPRESSION === 'true';
+    console.log('🪫 DISABLE_VIDEO_COMPRESSION:', disableCompression ? 'ON' : 'OFF');
     console.log('🗜️ Starting video compression...');
-    // ضغط الفيديو
+    // ضغط الفيديو (أو تخطيه عند التعطيل)
     const compressed = await compressFile(buffer, mimeType);
-    console.log('✅ Video compression completed successfully');
+    console.log(disableCompression ? '⏩ Skipped compression, using original buffer' : '✅ Video compression completed successfully');
     
     // توليد اسم الملف
     const fileName = generateFileName(folder, originalName, 'mp4');
@@ -110,7 +112,7 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
     const uploadResult = await uploadFile(
       compressed.buffer,
       fileName,
-      'video/mp4'
+      compressed.contentType || 'video/mp4'
     );
     console.log('✅ Video uploaded to Backblaze successfully');
     console.log('   - URL:', uploadResult.url);
@@ -131,6 +133,7 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
         );
       } catch (thumbError) {
         console.warn('⚠️ فشل إنشاء الصورة المصغرة:', thumbError.message);
+        console.warn('   Stack:', thumbError.stack);
       }
     }
     

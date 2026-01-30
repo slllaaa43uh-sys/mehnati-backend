@@ -5,6 +5,10 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
+// Enable/disable video compression via environment variable
+// Set DISABLE_VIDEO_COMPRESSION=true to bypass FFmpeg and upload original video buffer
+const DISABLE_VIDEO_COMPRESSION = process.env.DISABLE_VIDEO_COMPRESSION === 'true';
+
 // إعدادات الضغط المحسنة - جودة متوازنة للصور (1080p) والفيديو (720p)
 // تم تحسينها لتوفير الذاكرة
 const COMPRESSION_CONFIG = {
@@ -186,6 +190,21 @@ const compressVideo = async (inputBuffer, options = {}) => {
   console.log('========================================');
   console.log('📊 Input Buffer Size:', (inputBuffer.length / 1024 / 1024).toFixed(2), 'MB');
   console.log('⚙️ Options:', JSON.stringify(options));
+  console.log('🪫 Compression Disabled Flag:', DISABLE_VIDEO_COMPRESSION ? 'ON' : 'OFF');
+
+  // If compression is disabled, return original buffer immediately
+  if (DISABLE_VIDEO_COMPRESSION) {
+    console.warn('⚠️ Video compression is DISABLED via env. Returning original buffer without FFmpeg.');
+    return {
+      buffer: inputBuffer,
+      info: {
+        originalSize: inputBuffer.length,
+        compressedSize: inputBuffer.length,
+        compressionRatio: 0,
+        format: 'mp4'
+      }
+    };
+  }
   
   const config = COMPRESSION_CONFIG.video;
   const {
@@ -304,6 +323,20 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
       contentType: `image/${result.info.format}`
     };
   } else if (isVideo) {
+    // Respect disable flag and preserve original mimeType
+    if (DISABLE_VIDEO_COMPRESSION) {
+      console.warn('⚠️ Disabling video compression in compressFile(). Returning original buffer.');
+      return {
+        buffer: inputBuffer,
+        info: {
+          originalSize: inputBuffer.length,
+          compressedSize: inputBuffer.length,
+          compressionRatio: 0,
+          format: mimeType.split('/')[1] || 'mp4'
+        },
+        contentType: mimeType
+      };
+    }
     const result = await compressVideo(inputBuffer, options);
     return {
       ...result,

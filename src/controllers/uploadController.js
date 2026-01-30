@@ -19,6 +19,15 @@ exports.uploadMultiple = async (req, res, next) => {
       });
     }
 
+    console.log('========================================');
+    console.log('📤 UPLOAD MULTIPLE - REQUEST RECEIVED');
+    console.log('========================================');
+    console.log('🪫 DISABLE_VIDEO_COMPRESSION:', process.env.DISABLE_VIDEO_COMPRESSION === 'true' ? 'ON' : 'OFF');
+    console.log('📦 Files Count:', req.files.length);
+    req.files.forEach((f, i) => {
+      console.log(`   [${i}] Name: ${f.originalname}, Type: ${f.mimetype}, Size: ${(f.size/1024/1024).toFixed(2)}MB, Field: ${f.fieldname}`);
+    });
+
     // رفع الملفات مع الضغط
     const results = await uploadMultipleMedia(req.files);
     
@@ -50,6 +59,12 @@ exports.uploadMultiple = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('========================================');
+    console.error('❌ UPLOAD MULTIPLE - ERROR');
+    console.error('========================================');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Stack:', error.stack);
     next(error);
   }
 };
