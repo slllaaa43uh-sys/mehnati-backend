@@ -82,27 +82,45 @@ setInterval(logMemoryUsage, 3 * 60 * 1000);
 logMemoryUsage();
 
 // ============================================
-// 🔓 CORS مفتوح - يسمح لجميع المصادر
+// 🔓 CORS الإعداد الصحيح: OPTIONS → cors() → helmet()
 // ============================================
-app.use(cors({
-  origin: true, // السماح لجميع المصادر
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
-}));
-
-// معالج OPTIONS لجميع المسارات - متوافق مع Express 5
+// 1) OPTIONS middleware أولاً (يعكس Origin ويسمح بالـ headers/methods)
 app.use((req, res, next) => {
+  const isDev = (process.env.NODE_ENV !== 'production');
+  const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+  const requestOrigin = req.headers.origin;
+  const effectiveOrigin = isDev ? requestOrigin : (allowedEnv.includes(requestOrigin) ? requestOrigin : (allowedEnv[0] || requestOrigin));
+
+  if (effectiveOrigin) {
+    res.header('Access-Control-Allow-Origin', effectiveOrigin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+
   if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    return res.status(204).send();
+    return res.status(204).end();
   }
   next();
 });
 
+// 2) ثم cors() بإعدادات ديناميكية للأصل والـ credentials/headers/methods
+const corsOptions = {
+  origin: (origin, callback) => {
+    const isDev = (process.env.NODE_ENV !== 'production');
+    const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (isDev) return callback(null, true);
+    if (!origin) return callback(null, true);
+    if (allowedEnv.length === 0) return callback(null, true);
+    return callback(null, allowedEnv.includes(origin));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+app.use(cors(corsOptions));
+
+// 3) Helmet بعد cors()
 // Helmet مع تعطيل القيود
 app.use(helmet({
   crossOriginResourcePolicy: false,
