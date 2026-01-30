@@ -183,7 +183,10 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
  * @returns {Promise<Object>}
  */
 const uploadMedia = async (buffer, originalName, mimeType, options = {}) => {
-  const isVideo = mimeType.startsWith('video/');
+  const lowerName = (originalName || '').toLowerCase();
+  const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.mpeg', '.mpg', '.3gp', '.ogg'];
+  const hasVideoExtension = videoExtensions.some(ext => lowerName.endsWith(ext));
+  const isVideo = mimeType.startsWith('video/') || hasVideoExtension;
   
   if (isVideo) {
     return uploadVideo(buffer, originalName, mimeType, options);

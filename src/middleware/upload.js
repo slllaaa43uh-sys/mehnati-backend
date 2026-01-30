@@ -14,7 +14,7 @@ const fileFilter = (req, file, cb) => {
   }
   
   // Enhanced video check - support various video formats and codecs
-  const mimeType = file.mimetype.toLowerCase();
+  const mimeType = (file.mimetype || '').toLowerCase();
   const isVideo = mimeType.startsWith('video/') || 
                   mimeType.includes('video/mp4') ||
                   mimeType.includes('video/webm') ||
@@ -23,10 +23,11 @@ const fileFilter = (req, file, cb) => {
                   mimeType.includes('video/mpeg') ||
                   mimeType.includes('video/ogg') ||
                   mimeType.includes('video/3gpp') ||
-                  mimeType.includes('video/x-matroska');
+                  mimeType.includes('video/x-matroska') ||
+                  mimeType === 'application/octet-stream';
   
   // Also check file extension as fallback
-  const fileName = file.originalname.toLowerCase();
+  const fileName = (file.originalname || '').toLowerCase();
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv', '.mpeg', '.mpg', '.3gp', '.ogg'];
   const hasVideoExtension = videoExtensions.some(ext => fileName.endsWith(ext));
   
