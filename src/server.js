@@ -94,17 +94,27 @@ app.use((req, res, next) => {
 // ============================================
 // 1) OPTIONS middleware أولاً (يعكس Origin ويسمح بالـ headers/methods)
 app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
   const isDev = (process.env.NODE_ENV !== 'production');
   const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
-  const requestOrigin = req.headers.origin;
-  const effectiveOrigin = isDev ? requestOrigin : (allowedEnv.includes(requestOrigin) ? requestOrigin : (allowedEnv[0] || requestOrigin));
 
-  if (effectiveOrigin) {
-    res.header('Access-Control-Allow-Origin', effectiveOrigin);
+  const isMobileOrigin = origin.startsWith('capacitor://') || origin.startsWith('ionic://') || origin.startsWith('file://');
+  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+  const allow = (
+    !origin ||
+    isMobileOrigin ||
+    (isDev && isLocalhost) ||
+    allowedEnv.length === 0 ||
+    allowedEnv.includes(origin)
+  );
+
+  if (allow && origin) {
+    res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Expose-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -117,10 +127,13 @@ const corsOptions = {
   origin: (origin, callback) => {
     const isDev = (process.env.NODE_ENV !== 'production');
     const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (isDev) return callback(null, true);
     if (!origin) return callback(null, true);
+    if (origin.startsWith('file://') || origin.startsWith('capacitor://') || origin.startsWith('ionic://')) return callback(null, true);
+    if (isDev && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return callback(null, true);
     if (allowedEnv.length === 0) return callback(null, true);
-    return callback(null, allowedEnv.includes(origin));
+    if (allowedEnv.includes(origin)) return callback(null, true);
+    console.warn(`⚠️ CORS: طلب مرفوض من: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
