@@ -257,6 +257,34 @@ app.get('/', (req, res) => {
   });
 });
 
+// CORS debug endpoint
+app.get('/api/v1/cors-debug', (req, res) => {
+  const origin = req.headers.origin || '';
+  const isDev = (process.env.NODE_ENV !== 'production');
+  const allowedEnv = (process.env.ALLOWED_ORIGINS || process.env.WEB_APP_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+  const allowLocalhostOrigins = process.env.ALLOW_LOCALHOST_ORIGINS === 'true';
+  const isMobileOrigin = origin.startsWith('capacitor://') || origin.startsWith('ionic://') || origin.startsWith('file://') || origin === 'https://localhost' || origin === 'http://localhost';
+  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+  const allow = (!origin || isMobileOrigin || ((isDev || allowLocalhostOrigins) && isLocalhost) || allowedEnv.length === 0 || allowedEnv.includes(origin));
+
+  res.json({
+    success: true,
+    origin,
+    decision: allow ? 'allow' : 'deny',
+    isDev,
+    isMobileOrigin,
+    isLocalhost,
+    allowLocalhostOrigins,
+    allowedEnv,
+    headersSent: {
+      'Access-Control-Allow-Origin': allow && origin ? origin : null,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin'
+    }
+  });
+});
+
 // Health check for deployment
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
