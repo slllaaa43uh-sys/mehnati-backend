@@ -268,13 +268,13 @@ const compressVideo = async (inputBuffer, options = {}) => {
     });
     
     console.log('📖 Reading compressed output...');
-    const outputBuffer = await fs.readFile(outputPath);
+    let outputBuffer = await fs.readFile(outputPath);
     console.log('✅ Output file read successfully');
     
     const inputStats = await fs.stat(inputPath);
-    const originalSize = inputStats.size;
-    const compressedSize = outputBuffer.length;
-    const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
+    let originalSize = inputStats.size;
+    let compressedSize = outputBuffer.length;
+    let compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
     // Probe durations using ffprobe
     const probeDuration = async (filePath) => {
@@ -293,6 +293,14 @@ const compressVideo = async (inputBuffer, options = {}) => {
 
     const inputDuration = await probeDuration(inputPath);
     const outputDuration = await probeDuration(outputPath);
+
+    // Fallback: if output duration is unexpectedly short, return original buffer
+    if (inputDuration && outputDuration && outputDuration < Math.max(2, inputDuration * 0.8)) {
+      console.warn(`⚠️ Output duration (${outputDuration.toFixed(2)}s) much shorter than input (${inputDuration.toFixed(2)}s). Returning original video without compression.`);
+      outputBuffer = await fs.readFile(inputPath);
+      compressedSize = outputBuffer.length;
+      compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
+    }
 
     console.log('========================================');
     console.log('📊 COMPRESSION RESULTS:');
