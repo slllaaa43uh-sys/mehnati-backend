@@ -3,6 +3,13 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Story = require('../models/Story');
 
+// Helper: detect if a text contains a timestamp-like pattern
+const containsTimestamp = (text) => {
+  const s = (text || '').toString();
+  // Match common patterns: YYYY-MM-DD, HH:MM, epoch-like 10-13 digit numbers
+  return /(\d{4}-\d{2}-\d{2})/.test(s) || /(\d{2}:\d{2})/.test(s) || /(\d{10,13})/.test(s);
+};
+
 // @desc    Create report
 // @route   POST /api/v1/reports
 // @access  Private
@@ -10,7 +17,7 @@ exports.createReport = async (req, res, next) => {
   try {
     const { reportType, targetId, reason, details, media } = req.body;
 
-    // Check for duplicate report
+    // Check for duplicate report (allow if reason differs or contains timestamp)
     const existingReport = await Report.findOne({
       reporter: req.user.id,
       reportType,
@@ -19,10 +26,15 @@ exports.createReport = async (req, res, next) => {
     });
 
     if (existingReport) {
-      return res.status(400).json({
-        success: false,
-        message: 'لقد قمت بالإبلاغ عن هذا المحتوى مسبقاً'
-      });
+      const sameReason = existingReport.reason && reason && existingReport.reason.trim() === reason.trim();
+      const hasTs = containsTimestamp(reason) || !!req.body.timestamp;
+      if (sameReason && !hasTs) {
+        return res.status(429).json({
+          success: false,
+          message: 'تم إرسال بلاغ سابقًا، الرجاء الانتظار'
+        });
+      }
+      // else proceed to create a new report (different reason or includes timestamp)
     }
 
     // Get target user info based on report type
@@ -134,7 +146,7 @@ exports.reportPost = async (req, res, next) => {
       });
     }
 
-    // Check for duplicate report
+    // Check for duplicate report (allow if reason differs or contains timestamp)
     const existingReport = await Report.findOne({
       reporter: req.user.id,
       reportType: 'post',
@@ -143,10 +155,15 @@ exports.reportPost = async (req, res, next) => {
     });
 
     if (existingReport) {
-      return res.status(400).json({
-        success: false,
-        message: 'لقد قمت بالإبلاغ عن هذا المنشور مسبقاً'
-      });
+      const sameReason = existingReport.reason && reason && existingReport.reason.trim() === reason.trim();
+      const hasTs = containsTimestamp(reason) || !!req.body.timestamp;
+      if (sameReason && !hasTs) {
+        return res.status(429).json({
+          success: false,
+          message: 'تم إرسال بلاغ سابقًا، الرجاء الانتظار'
+        });
+      }
+      // else proceed (different reason or includes timestamp)
     }
 
     const report = await Report.create({
