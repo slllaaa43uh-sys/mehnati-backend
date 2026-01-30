@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
+const { exec } = require('child_process');
 require('dotenv').config();
 
 // تفعيل garbage collector للتحكم اليدوي في الذاكرة
@@ -53,6 +54,51 @@ initializeB2().catch(err => {
 
 // Initialize Firebase Admin SDK for FCM
 initializeFirebase();
+
+// Startup health diagnostics for storage/compression libraries
+const logStartupHealth = () => {
+  console.log('========================================');
+  console.log('🩺 SYSTEM HEALTH CHECK - STARTUP');
+  console.log('========================================');
+  // Backblaze env presence
+  const hasB2KeyId = !!process.env.B2_APPLICATION_KEY_ID;
+  const hasB2Key = !!process.env.B2_APPLICATION_KEY;
+  const hasB2Bucket = !!process.env.B2_BUCKET_NAME;
+  console.log(`📦 B2_APPLICATION_KEY_ID: ${hasB2KeyId ? '✅ set' : '❌ missing'}`);
+  console.log(`📦 B2_APPLICATION_KEY: ${hasB2Key ? '✅ set' : '❌ missing'}`);
+  console.log(`📦 B2_BUCKET_NAME: ${hasB2Bucket ? '✅ set' : '❌ missing'}`);
+
+  // Compression flags
+  const videoDisabled = process.env.DISABLE_VIDEO_COMPRESSION === 'true';
+  const imageDisabled = process.env.DISABLE_IMAGE_COMPRESSION === 'true';
+  console.log(`🪫 DISABLE_VIDEO_COMPRESSION: ${videoDisabled ? 'ON' : 'OFF'}`);
+  console.log(`🪫 DISABLE_IMAGE_COMPRESSION: ${imageDisabled ? 'ON' : 'OFF'}`);
+
+  // Sharp version
+  try {
+    const sharpPkg = require('sharp/package.json');
+    console.log(`🖼️ Sharp version: ${sharpPkg.version}`);
+  } catch (e) {
+    console.warn('⚠️ Sharp not found or failed to resolve');
+  }
+
+  // FFmpeg availability
+  try {
+    exec('ffmpeg -version', { timeout: 3000 }, (err, stdout) => {
+      if (err) {
+        console.warn('⚠️ FFmpeg check failed:', err.message);
+      } else {
+        const firstLine = String(stdout).split('\n')[0];
+        console.log(`🎬 FFmpeg: ${firstLine || 'version found'}`);
+      }
+    });
+  } catch (e) {
+    console.warn('⚠️ Failed to execute FFmpeg version check:', e.message);
+  }
+  console.log('========================================');
+};
+
+logStartupHealth();
 
 // Setup cron jobs
 setupCronJob(120);

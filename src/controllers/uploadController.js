@@ -23,6 +23,7 @@ exports.uploadMultiple = async (req, res, next) => {
     console.log('📤 UPLOAD MULTIPLE - REQUEST RECEIVED');
     console.log('========================================');
     console.log('🪫 DISABLE_VIDEO_COMPRESSION:', process.env.DISABLE_VIDEO_COMPRESSION === 'true' ? 'ON' : 'OFF');
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', process.env.DISABLE_IMAGE_COMPRESSION === 'true' ? 'ON' : 'OFF');
     console.log('📦 Files Count:', req.files.length);
     req.files.forEach((f, i) => {
       console.log(`   [${i}] Name: ${f.originalname}, Type: ${f.mimetype}, Size: ${(f.size/1024/1024).toFixed(2)}MB, Field: ${f.fieldname}`);
@@ -80,6 +81,8 @@ exports.uploadSingle = async (req, res, next) => {
     console.log('📋 Request Details:');
     console.log('   - User ID:', req.user?.id || 'N/A');
     console.log('   - File Present:', !!req.file);
+    console.log('🪫 DISABLE_VIDEO_COMPRESSION:', process.env.DISABLE_VIDEO_COMPRESSION === 'true' ? 'ON' : 'OFF');
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', process.env.DISABLE_IMAGE_COMPRESSION === 'true' ? 'ON' : 'OFF');
     
     if (!req.file) {
       console.error('❌ No file in request');
@@ -144,6 +147,10 @@ exports.uploadSingle = async (req, res, next) => {
 // @access  Private
 exports.uploadAvatarImage = async (req, res, next) => {
   try {
+    console.log('========================================');
+    console.log('📤 UPLOAD AVATAR - REQUEST RECEIVED');
+    console.log('========================================');
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', process.env.DISABLE_IMAGE_COMPRESSION === 'true' ? 'ON' : 'OFF');
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -177,6 +184,11 @@ exports.uploadAvatarImage = async (req, res, next) => {
 // @access  Private
 exports.uploadStory = async (req, res, next) => {
   try {
+    console.log('========================================');
+    console.log('📤 UPLOAD STORY - REQUEST RECEIVED');
+    console.log('========================================');
+    console.log('🪫 DISABLE_VIDEO_COMPRESSION:', process.env.DISABLE_VIDEO_COMPRESSION === 'true' ? 'ON' : 'OFF');
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', process.env.DISABLE_IMAGE_COMPRESSION === 'true' ? 'ON' : 'OFF');
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -211,6 +223,10 @@ exports.uploadStory = async (req, res, next) => {
 // @access  Private
 exports.uploadCoverImage = async (req, res, next) => {
   try {
+    console.log('========================================');
+    console.log('📤 UPLOAD COVER - REQUEST RECEIVED');
+    console.log('========================================');
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', process.env.DISABLE_IMAGE_COMPRESSION === 'true' ? 'ON' : 'OFF');
     if (!req.file) {
       return res.status(400).json({
         success: false,
