@@ -2,6 +2,7 @@ const Report = require('../models/Report');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Story = require('../models/Story');
+const sendEmail = require('../config/email');
 
 // Helper: detect if a text contains a timestamp-like pattern
 const containsTimestamp = (text) => {
@@ -117,6 +118,30 @@ exports.createReport = async (req, res, next) => {
     await report.populate('reporter', 'name avatar');
     await report.populate('targetUser', 'name avatar');
 
+    // إرسال بريد تأكيد استلام البلاغ للمستخدم
+    try {
+      if (req.user && req.user.email) {
+        await sendEmail({
+          email: req.user.email,
+          subject: 'تم استلام بلاغك - مهنتي لي',
+          html: `
+            <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right;">
+              <h3>تم استلام بلاغك</h3>
+              <p>شكرًا لك على مساعدتنا في تحسين المجتمع.</p>
+              <p>لقد استلمنا بلاغك وسنقوم بمراجعته قريبًا.</p>
+              <p><strong>نوع البلاغ:</strong> ${reportType}</p>
+              ${targetId ? `<p><strong>المعرّف:</strong> ${targetId}</p>` : ''}
+              ${reason ? `<p><strong>السبب:</strong> ${reason}</p>` : ''}
+              <br/>
+              <p>مع التحية،<br/>فريق العمل - مهنتي لي</p>
+            </div>
+          `
+        });
+      }
+    } catch (mailErr) {
+      console.warn('⚠️ Failed to send report receipt email:', mailErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'تم إرسال البلاغ بنجاح. سيتم مراجعته قريباً',
@@ -179,6 +204,28 @@ exports.reportPost = async (req, res, next) => {
 
     await report.populate('reporter', 'name avatar');
     await report.populate('targetUser', 'name avatar');
+
+    // إرسال بريد تأكيد الاستلام
+    try {
+      if (req.user && req.user.email) {
+        await sendEmail({
+          email: req.user.email,
+          subject: 'تم استلام بلاغك - مهنتي لي',
+          html: `
+            <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right;">
+              <h3>تم استلام بلاغك</h3>
+              <p>شكرًا لك على تعاونك.</p>
+              <p>لقد استلمنا بلاغك عن المنشور وسنقوم بمراجعته.</p>
+              ${reason ? `<p><strong>السبب:</strong> ${reason}</p>` : ''}
+              <br/>
+              <p>مع التحية،<br/>فريق العمل - مهنتي لي</p>
+            </div>
+          `
+        });
+      }
+    } catch (mailErr) {
+      console.warn('⚠️ Failed to send report receipt email (post):', mailErr.message);
+    }
 
     res.status(201).json({
       success: true,

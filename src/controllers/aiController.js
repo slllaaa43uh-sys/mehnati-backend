@@ -8,6 +8,7 @@ const ExternalJob = require('../models/ExternalJob');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const { SUPPORTED_LANGUAGES, isLanguageSupported } = require('../services/translationService');
 
 console.log('🔧 [INIT] AI Configuration (OpenAI):');
 console.log(`   Model: ${OPENAI_MODEL}`);
@@ -37,6 +38,7 @@ const APP_KNOWLEDGE = `
 // 🧠 الشخصية الذكية (System Prompt) - محدّث
 // ============================================
 const SYSTEM_PROMPT = `أنت مساعد ذكي لتطبيق "مهنتي لي".
+const SYSTEM_PROMPT_AR = `أنت مساعد ذكي لتطبيق "مهنتي لي".
 مهمتك: مساعدة المستخدمين والإجابة على استفساراتهم بناءً على "دليل التطبيق" المرفق.
 
 القواعد الصارمة:
@@ -46,7 +48,7 @@ const SYSTEM_PROMPT = `أنت مساعد ذكي لتطبيق "مهنتي لي".
    - لا تبحث عن وظائف حقيقية (قل: "يمكنك تصفح قسم الوظائف").
    - لا تكتب أكواد برمجية.
    - لا تتحدث في السياسة أو الدين.
-4. **عن المطور:** إذا سُئلت، قل: "تم تطويري بواسطة فريق الأمل - بقيادة المطور صلاح مهدلي".
+4. **عن المطور:** إذا سُئلت، قل: "تم تطويري بواسطة فريق العمل - بقيادة المطور صلاح مهدلي".
 
 ## 📝 إنشاء السيرة الذاتية:
 إذا طلب المستخدم إنشاء سيرة ذاتية أو CV أو resume، ساعده بالتالي:
@@ -98,6 +100,7 @@ function isForbiddenRequest(message) {
 exports.chatWithAI = async (req, res) => {
   try {
     let { message, conversationHistory } = req.body;
+    let { message, conversationHistory, lang } = req.body;
 
     if (!message || !String(message).trim()) {
       return res.status(400).json({ success: false, message: 'الرجاء إدخال رسالة' });
@@ -113,7 +116,7 @@ exports.chatWithAI = async (req, res) => {
 
     // 1️⃣ الردود السريعة
     if (isCreatorQuestion(userMessage)) {
-      const reply = "تم تطويري بواسطة فريق الأمل - بقيادة المطور المبدع صلاح مهدلي 💻✨";
+      const reply = "تم تطويري بواسطة فريق العمل - بقيادة المطور المبدع صلاح مهدلي 💻✨";
       res.write(`data: ${JSON.stringify({ type: 'chunk', content: reply })}\n\n`);
       res.write(`data: ${JSON.stringify({ type: 'done', fullResponse: reply })}\n\n`);
       res.end();
@@ -129,7 +132,8 @@ exports.chatWithAI = async (req, res) => {
     }
 
     // 2️⃣ تجهيز الرسائل لـ OpenAI
-    const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+    const targetLang = (typeof lang === 'string' && isLanguageSupported(lang)) ? lang : 'ar';
+    const messages = [{ role: 'system', content: buildSystemPrompt(targetLang) }];
     
     if (conversationHistory && Array.isArray(conversationHistory)) {
       conversationHistory.slice(-6).forEach(m => {
@@ -219,3 +223,11 @@ exports.checkOllamaHealth = async (req, res) => {
     res.status(503).json({ success: false, status: 'API Key Missing' });
   }
 };
+
+// توليد برومبت ديناميكي حسب اللغة المطلوبة
+function buildSystemPrompt(langCode = 'ar') {
+  const languageName = SUPPORTED_LANGUAGES[langCode] || 'العربية';
+  const basePrompt = SYSTEM_PROMPT_AR;
+  const languageDirective = `\n\n[تعليمات اللغة]\nالرجاء الرد باللغة: ${languageName} (${langCode}).\nإذا كانت الرسالة بلغة أخرى، قم بالرد بنفس لغة الطلب.`;
+  return basePrompt + languageDirective;
+}

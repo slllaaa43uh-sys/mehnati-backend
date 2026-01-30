@@ -5,9 +5,11 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
-// Enable/disable video compression via environment variable
+// Enable/disable video/image compression via environment variables
 // Set DISABLE_VIDEO_COMPRESSION=true to bypass FFmpeg and upload original video buffer
+// Set DISABLE_IMAGE_COMPRESSION=true to upload original image buffer without Sharp
 const DISABLE_VIDEO_COMPRESSION = process.env.DISABLE_VIDEO_COMPRESSION === 'true';
+const DISABLE_IMAGE_COMPRESSION = process.env.DISABLE_IMAGE_COMPRESSION === 'true';
 
 // إعدادات الضغط المحسنة - جودة متوازنة للصور (1080p) والفيديو (720p)
 // تم تحسينها لتوفير الذاكرة
@@ -321,6 +323,20 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
   const isImage = mimeType.startsWith('image/');
   
   if (isImage) {
+    // Respect disable flag for images
+    if (DISABLE_IMAGE_COMPRESSION) {
+      console.warn('⚠️ Disabling image compression in compressFile(). Returning original buffer.');
+      return {
+        buffer: inputBuffer,
+        info: {
+          originalSize: inputBuffer.length,
+          compressedSize: inputBuffer.length,
+          compressionRatio: 0,
+          format: mimeType.split('/')[1] || 'jpeg'
+        },
+        contentType: mimeType
+      };
+    }
     const result = await compressImage(inputBuffer, options);
     return {
       ...result,

@@ -42,6 +42,9 @@ const uploadImage = async (buffer, originalName, mimeType, options = {}) => {
   try {
     const { folder = FOLDERS.POSTS, isAvatar = false, isStory = false } = options;
     
+    const disableImageCompression = process.env.DISABLE_IMAGE_COMPRESSION === 'true';
+    console.log('🪫 DISABLE_IMAGE_COMPRESSION:', disableImageCompression ? 'ON' : 'OFF');
+
     // ضغط الصورة
     const compressed = await compressFile(buffer, mimeType, { isAvatar, isStory });
     
