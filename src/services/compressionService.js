@@ -229,12 +229,16 @@ const compressVideo = async (inputBuffer, options = {}) => {
     console.log('✅ Input file written successfully');
     inputBuffer = null;
     
-    // أمر FFmpeg للضغط - صيغة مبسطة ومستقرة مع تحديد استخدام الذاكرة
+    // أمر FFmpeg للضغط مع ضمان أبعاد زوجية (عرض/ارتفاع يقبلها الترميز)
+    // يستخدم scale للحفاظ على نسبة الأبعاد داخل الحد الأقصى، ثم pad لرفع القيم إلى أقرب رقم زوجي
+    // أخيراً يفرض تنسيق البكسل yuv420p للتوافق الواسع
+    const vfFilter = `scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2:(ow-iw)/2:(oh-ih)/2,format=${config.pixelFormat}`;
     // إضافة -threads 1 لتقليل استخدام الذاكرة
-    const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,format=${config.pixelFormat}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 1 -ar 22050 -movflags +faststart -y "${outputPath}"`;
+    const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "${vfFilter}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -ac 1 -ar 22050 -movflags +faststart -y "${outputPath}"`;
     
     console.log('🔧 FFmpeg Command:');
     console.log('   ', ffmpegCommand);
+    console.log('   VF Filter:', vfFilter);
     
     console.log('⏳ Executing FFmpeg compression...');
     await new Promise((resolve, reject) => {
