@@ -546,6 +546,7 @@ const sendNotificationToTopic = async (topic, title, body, data = {}) => {
       notification: {
         title: title,
         body: body,
+        click_action: 'FCM_PLUGIN_ACTIVITY',
         // إضافة الصورة إلى الإشعار (مثل يوتيوب)
         ...(postImage && { imageUrl: postImage })
       },
@@ -787,6 +788,7 @@ const sendNotificationToDevice = async (deviceToken, title, body, data = {}) => 
       notification: {
         title: title,
         body: body,
+        click_action: 'FCM_PLUGIN_ACTIVITY',
         // إضافة الصورة إلى الإشعار (مثل يوتيوب)
         ...(postImage && { imageUrl: postImage })
       },
