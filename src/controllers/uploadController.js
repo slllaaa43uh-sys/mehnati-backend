@@ -68,16 +68,28 @@ exports.completeVideoUpload = async (req, res) => {
     if (chunkFiles.length === 0) {
       return res.status(400).json({ success: false, message: 'لا توجد أجزاء فيديو مرفوعة' });
     }
-    // دمج الأجزاء في ملف واحد مؤقت
+
+    // تحقق من عدم وجود أجزاء ناقصة
+    for (let i = 0; i < chunkFiles.length; i++) {
+      if (!chunkFiles[i] || !chunkFiles[i].startsWith(`chunk_${i}`)) {
+        return res.status(400).json({ success: false, message: `الجزء رقم ${i} مفقود أو غير مرتب بشكل صحيح` });
+      }
+    }
+
+    // دمج الأجزاء في ملف واحد مؤقت (appendFileSync لضمان الكتابة الثنائية الصحيحة)
     const tempVideoPath = path.join(uploadDir, 'merged_video');
-    const writeStream = fs.createWriteStream(tempVideoPath);
+    if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
     for (const chunkFile of chunkFiles) {
       const chunkPath = path.join(uploadDir, chunkFile);
       const data = fs.readFileSync(chunkPath);
-      writeStream.write(data);
+      fs.appendFileSync(tempVideoPath, data);
     }
-    writeStream.end();
-    await new Promise(resolve => writeStream.on('finish', resolve));
+
+    // تحقق من حجم الملف النهائي
+    const stats = fs.statSync(tempVideoPath);
+    if (stats.size === 0) {
+      return res.status(400).json({ success: false, message: 'الملف النهائي فارغ بعد التجميع' });
+    }
 
     // رفع الفيديو النهائي إلى التخزين
     const videoBuffer = fs.readFileSync(tempVideoPath);
