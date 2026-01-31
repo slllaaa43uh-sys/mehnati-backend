@@ -131,7 +131,7 @@ const postSchema = new mongoose.Schema({
   // نوع الاستعجال (للفرص الفورية)
   specialTag: {
     type: String,
-    enum: ['مطلوب الآن', 'عقود مؤقتة', 'دفع يومي', null],
+    enum: ['مطلوب الآن', 'عقود مؤقتة', 'دفع يومي', 'عقود معقدة', null],
     default: null
   },
   

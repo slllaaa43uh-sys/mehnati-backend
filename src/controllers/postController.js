@@ -126,6 +126,14 @@ exports.createPost = async (req, res, next) => {
       });
     }
 
+    // Validate: specialTag is required when displayPage is 'urgent'
+    if (displayPage === 'urgent' && !specialTag) {
+      return res.status(400).json({
+        success: false,
+        message: 'يجب اختيار نوع الاستعجال عند النشر في الصفحة المستعجلة'
+      });
+    }
+
     // إنشاء بيانات المنشور
     const postData = {
       user: req.user.id,
