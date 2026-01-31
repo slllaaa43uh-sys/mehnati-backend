@@ -87,11 +87,9 @@ const startExternalJobsCron = () => {
 
   console.log('[ExternalJobsCron] Scheduled to run every 6 hours (Riyadh timezone)');
 
-  // تشغيل فوري عند بدء الخادم (بعد 10 ثوانٍ فقط)
-  setTimeout(() => {
-    console.log('[ExternalJobsCron] Running initial fetch...');
-    fetchExternalJobs();
-  }, 10000); // تم تقليل الوقت من 30 ثانية إلى 10 ثوانٍ
+  // تم تعطيل التشغيل التلقائي الفوري لتجنب أخطاء 429 عند بدء التشغيل
+  // إذا تبغى تشغيل يدوي، استخدم: /api/v1/external-jobs/manual-fetch
+  console.log('[ExternalJobsCron] Initial auto-fetch disabled. Next run at scheduled time.');
 };
 
 /**

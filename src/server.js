@@ -101,9 +101,15 @@ const logStartupHealth = () => {
 logStartupHealth();
 
 // Setup cron jobs
+console.log('📅 Starting cron jobs...');
 setupCronJob(120);
 setupFeaturedCron();
-startExternalJobsCron(); // External Jobs Cron - every 6 hours
+
+// ExternalJobs Cron: تعطيل التشغيل التلقائي الفوري مؤقتاً لتجنب أخطاء 429/FFmpeg عند التشغيل
+// لتفعيله: احذف التعليق من السطر التالي
+// startExternalJobsCron(); 
+console.log('⏸️ External Jobs Cron: DISABLED (to avoid startup errors). Enable manually if needed.');
+
 startGlobalJobsNotificationCron(); // Global Jobs Daily Notification - 9 AM Riyadh
 
 // مراقبة استخدام الذاكرة

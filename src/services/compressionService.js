@@ -208,22 +208,8 @@ const compressImage = async (inputBuffer, options = {}) => {
  * @returns {Promise<{buffer: Buffer, info: Object}>}
  */
 const compressVideo = async (inputBuffer, options = {}) => {
-  console.log('========================================');
-  console.log('🎬 VIDEO COMPRESSION - STARTING');
-  console.log('========================================');
-  console.log('📊 Input Buffer Size:', ((inputBuffer?.length || 0) / 1024 / 1024).toFixed(2), 'MB');
-  console.log('⚙️ Options:', JSON.stringify(options));
-  console.log('🪫 Compression Disabled Flag:', DISABLE_VIDEO_COMPRESSION ? 'ON' : 'OFF');
-
-  if (!inputBuffer || !Buffer.isBuffer(inputBuffer) || inputBuffer.length === 0) {
-    const err = new Error('ملف الفيديو فارغ أو غير صالح (0 bytes).');
-    err.statusCode = 400;
-    throw err;
-  }
-
   // If compression is disabled, return original buffer immediately
   if (DISABLE_VIDEO_COMPRESSION) {
-    console.warn('⚠️ Video compression is DISABLED via env. Returning original buffer without FFmpeg.');
     return {
       buffer: inputBuffer,
       info: {
@@ -251,127 +237,37 @@ const compressVideo = async (inputBuffer, options = {}) => {
   const inputPath = path.join(tempDir, `input_${uuidv4()}.${inputExtension}`);
   const outputPath = path.join(tempDir, `output_${uuidv4()}.${outputExtension}`);
   
-  console.log('📁 Temp Paths:');
-  console.log('   - Input:', inputPath);
-  console.log('   - Output:', outputPath);
-  
   try {
-    console.log('📝 Writing input buffer to temp file...');
     await fs.writeFile(inputPath, inputBuffer);
-    console.log('✅ Input file written successfully');
     inputBuffer = null;
-
-    // Preflight validation: if ffprobe cannot read the input, it's usually an incomplete/corrupted upload.
-    const probeInput = async () => {
-      try {
-        return await new Promise((resolve) => {
-          exec(
-            `ffprobe -v error -show_entries format=format_name,duration -of default=noprint_wrappers=1:nokey=0 "${inputPath}"`,
-            { timeout: 8000 },
-            (err, stdout) => {
-              if (err) return resolve(null);
-              const out = String(stdout || '').trim();
-              resolve(out || null);
-            }
-          );
-        });
-      } catch {
-        return null;
-      }
-    };
-
-    const probeOut = await probeInput();
-    if (!probeOut) {
-      const err = new Error('ملف الفيديو غير صالح أو غير مكتمل (FFprobe فشل في قراءة الملف).');
-      err.statusCode = 400;
-      throw err;
-    }
     
-    // أمر FFmpeg للضغط مع ضمان أبعاد زوجية (عرض/ارتفاع يقبلها الترميز)
-    // يستخدم scale للحفاظ على نسبة الأبعاد داخل الحد الأقصى، ثم pad لرفع القيم إلى أقرب رقم زوجي
-    // أخيراً يفرض تنسيق البكسل yuv420p للتوافق الواسع
     const vfFilter = `scale=${maxWidth}:${maxHeight}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2:(ow-iw)/2:(oh-ih)/2,format=${config.pixelFormat}`;
-    // إضافة -threads 1 لتقليل استخدام الذاكرة
     const ffmpegCommand = `ffmpeg -i "${inputPath}" -threads 1 -vf "${vfFilter}" -c:v ${config.videoCodec} -profile:v ${config.profile} -level ${config.level} -crf ${crf} -preset ${preset} -c:a ${config.audioCodec} -b:a ${audioBitrate} -movflags +faststart -y "${outputPath}"`;
     
-    console.log('🔧 FFmpeg Command:');
-    console.log('   ', ffmpegCommand);
-    console.log('   VF Filter:', vfFilter);
-    
-    console.log('⏳ Executing FFmpeg compression...');
     await new Promise((resolve, reject) => {
       exec(ffmpegCommand, { 
         maxBuffer: 50 * 1024 * 1024,
         timeout: 300000
       }, (error, stdout, stderr) => {
         if (error) {
-          console.error('========================================');
-          console.error('❌ FFMPEG COMPRESSION ERROR');
-          console.error('========================================');
-          console.error('Error Message:', error.message);
-          console.error('Error Code:', error.code);
-          console.error('Error Signal:', error.signal);
-          console.error('FFmpeg STDERR:', stderr);
-          console.error('FFmpeg STDOUT:', stdout);
-          console.error('========================================');
           reject(new Error(`فشل ضغط الفيديو: ${error.message}`));
         } else {
-          console.log('✅ FFmpeg compression completed successfully');
-          if (stdout) console.log('FFmpeg STDOUT:', stdout);
           resolve();
         }
       });
     });
     
-    console.log('📖 Reading compressed output...');
     let outputBuffer = await fs.readFile(outputPath);
-    console.log('✅ Output file read successfully');
     
     const inputStats = await fs.stat(inputPath);
     let originalSize = inputStats.size;
     let compressedSize = outputBuffer.length;
     let compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
     
-    // Probe durations using ffprobe
-    const probeDuration = async (filePath) => {
-      try {
-        return await new Promise((resolve) => {
-          exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, { timeout: 5000 }, (err, stdout) => {
-            if (err) return resolve(null);
-            const val = parseFloat(String(stdout).trim());
-            resolve(Number.isFinite(val) ? val : null);
-          });
-        });
-      } catch {
-        return null;
-      }
-    };
-
-    const inputDuration = await probeDuration(inputPath);
-    const outputDuration = await probeDuration(outputPath);
-
-    // Fallback: if output duration is unexpectedly short, return original buffer
-    if (inputDuration && outputDuration && outputDuration < Math.max(2, inputDuration * 0.8)) {
-      console.warn(`⚠️ Output duration (${outputDuration.toFixed(2)}s) much shorter than input (${inputDuration.toFixed(2)}s). Returning original video without compression.`);
-      outputBuffer = await fs.readFile(inputPath);
-      compressedSize = outputBuffer.length;
-      compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
-    }
-
-    console.log('========================================');
-    console.log('📊 COMPRESSION RESULTS:');
-    console.log('   - Original Size:', (originalSize / 1024 / 1024).toFixed(2), 'MB');
-    console.log('   - Compressed Size:', (compressedSize / 1024 / 1024).toFixed(2), 'MB');
-    console.log('   - Compression Ratio:', compressionRatio, '%');
-    if (inputDuration != null) console.log('   - Input Duration:', inputDuration.toFixed(2), 's');
-    if (outputDuration != null) console.log('   - Output Duration:', outputDuration.toFixed(2), 's');
-    console.log('========================================');
-    console.log(`🎬 ضغط محسن 720p للفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
-    
-    console.log('🧹 Cleaning up temp files...');
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
-    console.log('✅ Temp files cleaned up');
+    
+    console.log(`🎬 ضغط الفيديو: ${(originalSize / 1024 / 1024).toFixed(2)}MB → ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${compressionRatio}% توفير)`);
     
     return {
       buffer: outputBuffer,
@@ -379,20 +275,10 @@ const compressVideo = async (inputBuffer, options = {}) => {
         originalSize,
         compressedSize,
         compressionRatio: parseFloat(compressionRatio),
-        format: 'mp4',
-        inputDuration,
-        outputDuration
+        format: 'mp4'
       }
     };
   } catch (error) {
-    console.error('========================================');
-    console.error('❌ CRITICAL ERROR IN VIDEO COMPRESSION');
-    console.error('========================================');
-    console.error('Error Type:', error.constructor.name);
-    console.error('Error Message:', error.message);
-    console.error('Error Stack:', error.stack);
-    console.error('========================================');
-    
     await fs.unlink(inputPath).catch(() => {});
     await fs.unlink(outputPath).catch(() => {});
     

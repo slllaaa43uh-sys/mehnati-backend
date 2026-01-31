@@ -6,9 +6,7 @@ const {
   uploadAvatarImage,
   uploadStory,
   uploadCoverImage,
-  deleteFile,
-  uploadVideoChunk,
-  completeVideoUpload
+  deleteFile
 } = require('../controllers/uploadController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -87,12 +85,5 @@ router.post('/cover', protect, extendTimeout, upload.cover, handleMulterErrors, 
 
 // حذف ملف من Backblaze B2
 router.delete('/:fileId', protect, deleteFile);
-
-
-// رفع جزء من فيديو (chunk)
-router.post('/video/chunk', protect, extendTimeout, upload.chunk, handleMulterErrors, uploadVideoChunk);
-
-// إكمال رفع الفيديو وتجميع الأجزاء
-router.post('/video/complete', protect, extendTimeout, completeVideoUpload);
 
 module.exports = router;
