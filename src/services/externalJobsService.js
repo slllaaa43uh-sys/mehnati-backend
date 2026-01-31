@@ -505,6 +505,10 @@ exports.getJobsLive = async (params = {}) => {
     // الخطوة 1: جلب من JSearch وتخزين في قاعدة البيانات (إذا مر وقت كافي)
     if (shouldFetch) {
       console.log('[ExternalJobsService] Fetching fresh jobs from JSearch...');
+
+      // Mark fetch attempt start to avoid hammering the API on repeated client requests,
+      // especially during a rate-limit window.
+      lastFetchTime = now;
       
       const queries = [
         'jobs in Saudi Arabia',
@@ -542,7 +546,6 @@ exports.getJobsLive = async (params = {}) => {
         }
 
         console.log(`[ExternalJobsService] Saved ${savedCount} jobs to database`);
-        lastFetchTime = now;
       }
     } else {
       console.log('[ExternalJobsService] Using cached data (cooldown active)');
@@ -701,6 +704,9 @@ exports.recordClick = async (jobId) => {
 exports.fetchAndSaveJobs = async (query = 'jobs in Saudi Arabia') => {
   try {
     console.log('[ExternalJobsService] Cron: Starting job fetch...');
+
+    // Mark fetch attempt start to avoid repeated hits during rate limiting.
+    lastFetchTime = Date.now();
     
     const jobs = await fetchFromJSearch(query, 1, 3);
 
@@ -731,9 +737,6 @@ exports.fetchAndSaveJobs = async (query = 'jobs in Saudi Arabia') => {
     }
 
     console.log(`[ExternalJobsService] Cron: ${savedCount} new, ${updatedCount} updated`);
-    
-    // تحديث وقت آخر جلب
-    lastFetchTime = Date.now();
     
     return { success: true, count: savedCount + updatedCount, newJobs: savedCount, updatedJobs: updatedCount };
 

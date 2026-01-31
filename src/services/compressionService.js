@@ -211,9 +211,15 @@ const compressVideo = async (inputBuffer, options = {}) => {
   console.log('========================================');
   console.log('🎬 VIDEO COMPRESSION - STARTING');
   console.log('========================================');
-  console.log('📊 Input Buffer Size:', (inputBuffer.length / 1024 / 1024).toFixed(2), 'MB');
+  console.log('📊 Input Buffer Size:', ((inputBuffer?.length || 0) / 1024 / 1024).toFixed(2), 'MB');
   console.log('⚙️ Options:', JSON.stringify(options));
   console.log('🪫 Compression Disabled Flag:', DISABLE_VIDEO_COMPRESSION ? 'ON' : 'OFF');
+
+  if (!inputBuffer || !Buffer.isBuffer(inputBuffer) || inputBuffer.length === 0) {
+    const err = new Error('ملف الفيديو فارغ أو غير صالح (0 bytes).');
+    err.statusCode = 400;
+    throw err;
+  }
 
   // If compression is disabled, return original buffer immediately
   if (DISABLE_VIDEO_COMPRESSION) {
@@ -254,6 +260,32 @@ const compressVideo = async (inputBuffer, options = {}) => {
     await fs.writeFile(inputPath, inputBuffer);
     console.log('✅ Input file written successfully');
     inputBuffer = null;
+
+    // Preflight validation: if ffprobe cannot read the input, it's usually an incomplete/corrupted upload.
+    const probeInput = async () => {
+      try {
+        return await new Promise((resolve) => {
+          exec(
+            `ffprobe -v error -show_entries format=format_name,duration -of default=noprint_wrappers=1:nokey=0 "${inputPath}"`,
+            { timeout: 8000 },
+            (err, stdout) => {
+              if (err) return resolve(null);
+              const out = String(stdout || '').trim();
+              resolve(out || null);
+            }
+          );
+        });
+      } catch {
+        return null;
+      }
+    };
+
+    const probeOut = await probeInput();
+    if (!probeOut) {
+      const err = new Error('ملف الفيديو غير صالح أو غير مكتمل (FFprobe فشل في قراءة الملف).');
+      err.statusCode = 400;
+      throw err;
+    }
     
     // أمر FFmpeg للضغط مع ضمان أبعاد زوجية (عرض/ارتفاع يقبلها الترميز)
     // يستخدم scale للحفاظ على نسبة الأبعاد داخل الحد الأقصى، ثم pad لرفع القيم إلى أقرب رقم زوجي
@@ -432,9 +464,10 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
 /**
  * إنشاء صورة مصغرة للفيديو
  */
-const generateVideoThumbnail = async (videoBuffer) => {
+const generateVideoThumbnail = async (videoBuffer, mimeType = 'video/mp4') => {
   const tempDir = os.tmpdir();
-  const inputPath = path.join(tempDir, `thumb_input_${uuidv4()}.mp4`);
+  const inputExtension = getExtensionFromMime(mimeType);
+  const inputPath = path.join(tempDir, `thumb_input_${uuidv4()}.${inputExtension}`);
   const outputPath = path.join(tempDir, `thumb_output_${uuidv4()}.jpg`);
   
   try {

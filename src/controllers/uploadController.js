@@ -168,6 +168,20 @@ exports.uploadMultiple = async (req, res, next) => {
       });
     }
 
+    const emptyFiles = req.files.filter(f => !f.buffer || f.buffer.length === 0 || f.size === 0);
+    if (emptyFiles.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'بعض الملفات المرفوعة فارغة أو لم تُرسل بشكل صحيح (تأكد من multipart/form-data)',
+        files: emptyFiles.map(f => ({
+          originalname: f.originalname,
+          mimetype: f.mimetype,
+          size: f.size,
+          fieldname: f.fieldname
+        }))
+      });
+    }
+
     console.log('========================================');
     console.log('📤 UPLOAD MULTIPLE - REQUEST RECEIVED');
     console.log('========================================');
@@ -238,6 +252,16 @@ exports.uploadSingle = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'لم يتم رفع أي ملف'
+      });
+    }
+
+    // Some clients (especially WebView/Android) may send an empty multipart part.
+    // Fail fast with a clear message instead of sending empty data to FFmpeg.
+    if (!req.file.buffer || req.file.buffer.length === 0 || req.file.size === 0) {
+      console.error('❌ Empty file buffer received');
+      return res.status(400).json({
+        success: false,
+        message: 'الملف المرفوع فارغ أو لم يتم إرساله بشكل صحيح (تأكد من استخدام multipart/form-data وإرسال الحقل file)'
       });
     }
     

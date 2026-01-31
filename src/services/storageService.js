@@ -95,6 +95,12 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
   console.log('   - MIME Type:', mimeType);
   console.log('   - Buffer Size:', (buffer.length / 1024 / 1024).toFixed(2), 'MB');
   console.log('   - Options:', JSON.stringify(options));
+
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+    const err = new Error('الملف المرسل فارغ أو غير صالح (0 bytes). تأكد من أن الرفع يتم عبر multipart/form-data وأن الفيديو مكتمل قبل الإرسال.');
+    err.statusCode = 400;
+    throw err;
+  }
   
   try {
     const { folder = FOLDERS.POSTS, generateThumbnail = true } = options;
@@ -126,7 +132,7 @@ const uploadVideo = async (buffer, originalName, mimeType, options = {}) => {
     // إنشاء صورة مصغرة إذا طُلب
     if (generateThumbnail) {
       try {
-        const thumbnailBuffer = await generateVideoThumbnail(buffer);
+        const thumbnailBuffer = await generateVideoThumbnail(buffer, mimeType);
         const thumbnailFileName = generateFileName(FOLDERS.THUMBNAILS, originalName, 'webp');
         
         thumbnailResult = await uploadFile(
