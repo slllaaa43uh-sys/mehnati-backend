@@ -47,6 +47,27 @@ const COMPRESSION_CONFIG = {
   }
 };
 
+const MIME_EXTENSION_MAP = {
+  'video/mp4': 'mp4',
+  'video/mpeg': 'mpg',
+  'video/mp2t': 'ts',
+  'video/mp2ts': 'ts',
+  'video/MP2T': 'ts',
+  'video/quicktime': 'mov',
+  'video/x-matroska': 'mkv',
+  'video/webm': 'webm',
+  'video/ogg': 'ogv',
+  'video/x-msvideo': 'avi',
+  'video/msvideo': 'avi',
+  'video/avi': 'avi',
+  'video/3gpp': '3gp'
+};
+
+const getExtensionFromMime = (mime = '') => {
+  const lower = mime.toLowerCase();
+  return MIME_EXTENSION_MAP[lower] || 'mp4';
+};
+
 // تعطيل التخزين المؤقت في Sharp لتوفير الذاكرة
 sharp.cache(false);
 // تحديد عدد الخيوط المتزامنة
@@ -214,12 +235,15 @@ const compressVideo = async (inputBuffer, options = {}) => {
     maxHeight = config.maxHeight,
     crf = config.crf,
     preset = config.preset,
-    audioBitrate = config.audioBitrate
+    audioBitrate = config.audioBitrate,
+    mimeType
   } = options;
   
   const tempDir = os.tmpdir();
-  const inputPath = path.join(tempDir, `input_${uuidv4()}.mp4`);
-  const outputPath = path.join(tempDir, `output_${uuidv4()}.mp4`);
+  const inputExtension = getExtensionFromMime(mimeType);
+  const outputExtension = config.format || 'mp4';
+  const inputPath = path.join(tempDir, `input_${uuidv4()}.${inputExtension}`);
+  const outputPath = path.join(tempDir, `output_${uuidv4()}.${outputExtension}`);
   
   console.log('📁 Temp Paths:');
   console.log('   - Input:', inputPath);
@@ -387,7 +411,7 @@ const compressFile = async (inputBuffer, mimeType, options = {}) => {
         contentType: mimeType
       };
     }
-    const result = await compressVideo(inputBuffer, options);
+    const result = await compressVideo(inputBuffer, { ...options, mimeType });
     return {
       ...result,
       contentType: 'video/mp4'

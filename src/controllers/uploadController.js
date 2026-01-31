@@ -2,44 +2,89 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { uploadVideo } = require('../services/storageService');
+const {
+  uploadVideo,
+  uploadMedia,
+  uploadAvatar,
+  uploadStoryMedia,
+  uploadCover,
+  deleteMedia,
+  uploadMultipleMedia
+} = require('../services/storageService');
 
 // مجلد مؤقت لتخزين الأجزاء
 const CHUNKS_DIR = path.join(os.tmpdir(), 'mehnati_video_chunks');
 if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
 
+const ensureDir = (dirPath) => {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+};
+
+const getUploadDir = (uploadId) => path.join(CHUNKS_DIR, uploadId);
+const getMetaPath = (uploadId) => path.join(getUploadDir(uploadId), 'meta.json');
+
+const readMetadata = (uploadId) => {
+  try {
+    const raw = fs.readFileSync(getMetaPath(uploadId), 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    return null;
+  }
+};
+
+const writeMetadata = (uploadId, data) => {
+  ensureDir(getUploadDir(uploadId));
+  fs.writeFileSync(getMetaPath(uploadId), JSON.stringify(data, null, 2), 'utf8');
+};
+
 // رفع جزء واحد من الفيديو
 exports.uploadVideoChunk = async (req, res) => {
   try {
-    // استخدم formidable أو multer memory
-    const uploadId = req.body.uploadId;
-    const chunkIndex = req.body.chunkIndex;
-    const totalChunks = req.body.totalChunks;
-    const chunkFile = req.files?.chunk || req.file || (req.body.chunk && req.body.chunk.buffer);
-    // دعم multer memory
-    let chunkBuffer;
-    if (chunkFile && chunkFile.buffer) {
-      chunkBuffer = chunkFile.buffer;
-    } else if (chunkFile && chunkFile.data) {
-      chunkBuffer = chunkFile.data;
-    } else if (req.file && req.file.buffer) {
-      chunkBuffer = req.file.buffer;
-    } else if (req.body.chunk && Buffer.isBuffer(req.body.chunk)) {
-      chunkBuffer = req.body.chunk;
-    } else {
-      return res.status(400).json({ success: false, message: 'لم يتم إرسال جزء الفيديو بشكل صحيح' });
+    const { uploadId, chunkIndex, totalChunks, originalName, mimeType } = req.body;
+
+    if (!uploadId || chunkIndex === undefined || totalChunks === undefined) {
+      return res.status(400).json({ success: false, message: 'بيانات الجزء ناقصة (uploadId أو chunkIndex أو totalChunks)' });
     }
 
-    if (!uploadId || chunkIndex === undefined || !totalChunks) {
-      return res.status(400).json({ success: false, message: 'بيانات chunk ناقصة' });
+    const parsedIndex = parseInt(chunkIndex, 10);
+    const parsedTotal = parseInt(totalChunks, 10);
+
+    if (Number.isNaN(parsedIndex) || Number.isNaN(parsedTotal)) {
+      return res.status(400).json({ success: false, message: 'قيم chunkIndex/totalChunks يجب أن تكون أرقاماً صحيحة' });
     }
 
-    const uploadDir = path.join(CHUNKS_DIR, uploadId);
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    const chunkPath = path.join(uploadDir, `chunk_${chunkIndex}`);
+    const chunkBuffer = req.file?.buffer;
+    if (!chunkBuffer || chunkBuffer.length === 0) {
+      return res.status(400).json({ success: false, message: 'الجزء المرسل فارغ أو مفقود' });
+    }
+
+    const uploadDir = getUploadDir(uploadId);
+    ensureDir(uploadDir);
+
+    const paddedIndex = parsedIndex.toString().padStart(6, '0');
+    const chunkPath = path.join(uploadDir, `chunk_${paddedIndex}`);
     fs.writeFileSync(chunkPath, chunkBuffer);
 
-    return res.status(200).json({ success: true, message: `تم رفع الجزء ${chunkIndex + 1} من ${totalChunks}` });
+    // تحديث بيانات التعريف
+    const existingMeta = readMetadata(uploadId) || { uploadId, receivedChunks: [] };
+    if (!existingMeta.receivedChunks.includes(parsedIndex)) {
+      existingMeta.receivedChunks.push(parsedIndex);
+    }
+    existingMeta.receivedChunks.sort((a, b) => a - b);
+    existingMeta.totalChunks = existingMeta.totalChunks || parsedTotal;
+    existingMeta.filename = originalName || existingMeta.filename;
+    existingMeta.mimeType = mimeType || existingMeta.mimeType;
+    existingMeta.updatedAt = new Date().toISOString();
+    writeMetadata(uploadId, existingMeta);
+
+    return res.status(200).json({
+      success: true,
+      message: `تم رفع الجزء ${parsedIndex + 1} من ${parsedTotal}`,
+      received: existingMeta.receivedChunks.length,
+      total: existingMeta.totalChunks
+    });
   } catch (error) {
     console.error('❌ خطأ في رفع جزء الفيديو:', error);
     return res.status(500).json({ success: false, message: 'فشل رفع جزء الفيديو', error: error.message });
@@ -49,15 +94,22 @@ exports.uploadVideoChunk = async (req, res) => {
 // تجميع الأجزاء ورفع الفيديو النهائي
 exports.completeVideoUpload = async (req, res) => {
   try {
-    const { uploadId, filename, mimetype } = req.body;
+    const { uploadId, filename, mimetype, totalChunks } = req.body;
     if (!uploadId) {
       return res.status(400).json({ success: false, message: 'معرف الرفع (uploadId) مفقود' });
     }
-    const uploadDir = path.join(CHUNKS_DIR, uploadId);
+
+    const uploadDir = getUploadDir(uploadId);
     if (!fs.existsSync(uploadDir)) {
       return res.status(400).json({ success: false, message: 'لم يتم العثور على أجزاء الفيديو' });
     }
-    // ترتيب الأجزاء وتجميعها
+
+    const metadata = readMetadata(uploadId);
+    const expectedChunks = parseInt(totalChunks, 10) || metadata?.totalChunks;
+    if (!expectedChunks || Number.isNaN(expectedChunks)) {
+      return res.status(400).json({ success: false, message: 'عدد الأجزاء المتوقع غير معروف' });
+    }
+
     const chunkFiles = fs.readdirSync(uploadDir)
       .filter(f => f.startsWith('chunk_'))
       .sort((a, b) => {
@@ -65,39 +117,37 @@ exports.completeVideoUpload = async (req, res) => {
         const bIdx = parseInt(b.split('_')[1]);
         return aIdx - bIdx;
       });
+
     if (chunkFiles.length === 0) {
       return res.status(400).json({ success: false, message: 'لا توجد أجزاء فيديو مرفوعة' });
     }
 
-    // تحقق من عدم وجود أجزاء ناقصة
-    for (let i = 0; i < chunkFiles.length; i++) {
-      if (!chunkFiles[i] || !chunkFiles[i].startsWith(`chunk_${i}`)) {
-        return res.status(400).json({ success: false, message: `الجزء رقم ${i} مفقود أو غير مرتب بشكل صحيح` });
-      }
+    if (chunkFiles.length !== expectedChunks) {
+      return res.status(400).json({
+        success: false,
+        message: `عدد الأجزاء المرفوعة (${chunkFiles.length}) لا يساوي العدد المتوقع (${expectedChunks})`
+      });
     }
 
-    // دمج الأجزاء في ملف واحد مؤقت (appendFileSync لضمان الكتابة الثنائية الصحيحة)
     const tempVideoPath = path.join(uploadDir, 'merged_video');
     if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath);
+
     for (const chunkFile of chunkFiles) {
       const chunkPath = path.join(uploadDir, chunkFile);
       const data = fs.readFileSync(chunkPath);
       fs.appendFileSync(tempVideoPath, data);
     }
 
-    // تحقق من حجم الملف النهائي
     const stats = fs.statSync(tempVideoPath);
     if (stats.size === 0) {
       return res.status(400).json({ success: false, message: 'الملف النهائي فارغ بعد التجميع' });
     }
 
-    // رفع الفيديو النهائي إلى التخزين
     const videoBuffer = fs.readFileSync(tempVideoPath);
-    const safeFilename = filename || `video_${uploadId}.mp4`;
-    const safeMimetype = mimetype || 'video/mp4';
+    const safeFilename = filename || metadata?.filename || `video_${uploadId}.mp4`;
+    const safeMimetype = mimetype || metadata?.mimeType || 'video/mp4';
     const result = await uploadVideo(videoBuffer, safeFilename, safeMimetype);
 
-    // حذف الأجزاء المؤقتة
     fs.rmSync(uploadDir, { recursive: true, force: true });
 
     return res.status(200).json({ success: true, message: 'تم رفع وتجميع الفيديو بنجاح', file: result.file });
@@ -106,15 +156,6 @@ exports.completeVideoUpload = async (req, res) => {
     return res.status(500).json({ success: false, message: 'فشل تجميع الفيديو', error: error.message });
   }
 };
-const {
-  uploadMedia,
-  uploadAvatar,
-  uploadStoryMedia,
-  uploadCover,
-  deleteMedia,
-  uploadMultipleMedia
-} = require('../services/storageService');
-
 // @desc    Upload multiple files with compression
 // @route   POST /api/v1/upload/multiple
 // @access  Private

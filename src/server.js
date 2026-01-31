@@ -203,12 +203,31 @@ app.use(helmet({
 }));
 
 app.use(morgan('dev'));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '100mb' })); // Increased for video uploads
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
+
+// ============================================
+// 📤 تسجيل تفصيلي لطلبات الرفع
+// ============================================
+app.use('/api/v1/upload', (req, res, next) => {
+  console.log('\n========================================');
+  console.log('🚨 INCOMING UPLOAD REQUEST');
+  console.log('========================================');
+  console.log(`📍 Method: ${req.method}`);
+  console.log(`📍 URL: ${req.url}`);
+  console.log(`📍 Path: ${req.path}`);
+  console.log(`📍 Origin: ${req.headers.origin || 'N/A'}`);
+  console.log(`📍 Content-Type: ${req.headers['content-type'] || 'N/A'}`);
+  console.log(`📍 Content-Length: ${req.headers['content-length'] || 'N/A'} bytes`);
+  console.log(`📍 Authorization: ${req.headers.authorization ? 'Present ✓' : 'Missing ✗'}`);
+  console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  console.log('========================================\n');
+  next();
+});
 
 // API Routes
 app.use('/api/v1/auth', authRoutes);

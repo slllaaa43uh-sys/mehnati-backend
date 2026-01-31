@@ -32,40 +32,74 @@ const mediaCache = new Map();
 // متغير لتتبع آخر جلب (لتجنب الطلبات المتكررة)
 let lastFetchTime = 0;
 const FETCH_COOLDOWN = 5 * 60 * 1000; // 5 دقائق
+let rateLimitResetAt = 0;
+const RATE_LIMIT_BACKOFF_MS = 60 * 1000; // دقيقة كحد أدنى
+const MAX_JSEARCH_RETRIES = 3;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * جلب الوظائف من JSearch API
  */
 const fetchFromJSearch = async (query = 'وظائف في السعودية', page = 1, numPages = 1) => {
-  try {
-    console.log('[JSearch] Fetching jobs with query:', query);
-
-    const response = await axios.get(JSEARCH_CONFIG.BASE_URL, {
-      headers: {
-        'X-RapidAPI-Key': JSEARCH_CONFIG.API_KEY,
-        'X-RapidAPI-Host': JSEARCH_CONFIG.HOST
-      },
-      params: {
-        query: query,
-        page: page.toString(),
-        num_pages: numPages.toString(),
-        date_posted: 'all'
-      },
-      timeout: 30000
-    });
-
-    const jobs = response.data?.data || [];
-    console.log(`[JSearch] Fetched ${jobs.length} jobs from API`);
-
-    return jobs;
-
-  } catch (error) {
-    console.error('[JSearch] Error fetching jobs:', error.message);
-    if (error.response) {
-      console.error('[JSearch] Response status:', error.response.status);
-    }
+  const now = Date.now();
+  if (now < rateLimitResetAt) {
+    const waitSeconds = Math.ceil((rateLimitResetAt - now) / 1000);
+    console.warn(`[JSearch] Skipping fetch (rate limited). Wait ${waitSeconds}s before next attempt.`);
     return [];
   }
+
+  for (let attempt = 1; attempt <= MAX_JSEARCH_RETRIES; attempt++) {
+    try {
+      console.log('[JSearch] Fetching jobs with query:', query, `attempt ${attempt}`);
+
+      const response = await axios.get(JSEARCH_CONFIG.BASE_URL, {
+        headers: {
+          'X-RapidAPI-Key': JSEARCH_CONFIG.API_KEY,
+          'X-RapidAPI-Host': JSEARCH_CONFIG.HOST
+        },
+        params: {
+          query: query,
+          page: page.toString(),
+          num_pages: numPages.toString(),
+          date_posted: 'all'
+        },
+        timeout: 30000
+      });
+
+      const jobs = response.data?.data || [];
+      console.log(`[JSearch] Fetched ${jobs.length} jobs from API`);
+      rateLimitResetAt = 0;
+      return jobs;
+
+    } catch (error) {
+      const status = error.response?.status;
+      console.error('[JSearch] Error fetching jobs:', error.message);
+      if (status) {
+        console.error('[JSearch] Response status:', status);
+      }
+
+      if (status === 429) {
+        const retryAfterHeader = error.response?.headers?.['retry-after'];
+        let retryAfterMs = parseFloat(retryAfterHeader) * 1000;
+        if (!Number.isFinite(retryAfterMs) || retryAfterMs <= 0) {
+          retryAfterMs = RATE_LIMIT_BACKOFF_MS * attempt;
+        }
+        rateLimitResetAt = Date.now() + retryAfterMs;
+        console.warn(`[JSearch] Rate limited. Retrying after ${Math.ceil(retryAfterMs / 1000)}s...`);
+        if (attempt === MAX_JSEARCH_RETRIES) {
+          return [];
+        }
+        await sleep(retryAfterMs);
+        continue;
+      }
+
+      // أخطاء أخرى - لا تحاول أكثر من مرة
+      return [];
+    }
+  }
+
+  return [];
 };
 
 /**

@@ -36,7 +36,7 @@ ALLOW_LOCALHOST_ORIGINS=false
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME=dkj9e4low
 CLOUDINARY_API_KEY=<استبدل_بالمفتاح_من_لوحة_التحكم>
-CLOUDINARY_API_SECRET=chGLiQqu345Xu9RBrX4vypxQ3kA
+CLOUDINARY_API_SECRET=<استبدل_بالسر_من_لوحة_التحكم>
 -------------------------------------------------------------------
 
 # Video Compression Control
@@ -64,8 +64,8 @@ DISABLE_IMAGE_COMPRESSION=false
    📍 المكان: Account Details → API Key
 
 3️⃣ CLOUDINARY_API_SECRET
-   ✓ القيمة: chGLiQqu345Xu9RBrX4vypxQ3kA
-   ✓ جاهزة للاستخدام
+   ⚠ يجب الحصول عليه من لوحة تحكم Cloudinary
+   ⚠ لا تضعه داخل المستودع (Git) — استخدمه فقط في ملف .env على الخادم
 
 ═══════════════════════════════════════════════════════════════
 

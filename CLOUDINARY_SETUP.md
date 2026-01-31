@@ -38,12 +38,14 @@
 
 ### 3. CLOUDINARY_API_SECRET
 **الوصف:** المفتاح السري للمصادقة  
-**مثال:** `CLOUDINARY_API_SECRET=chGLiQqu345Xu9RBrX4vypxQ3kA`  
+**مثال:** `CLOUDINARY_API_SECRET=<your_api_secret_here>`  
 **كيفية الحصول عليه:**
 - من نفس صفحة Dashboard
 - تحت "Account Details" → "API Secret"
 - انقر على "Reveal" لإظهار المفتاح
-- أو من الرابط الذي قدمته: `chGLiQqu345Xu9RBrX4vypxQ3kA`
+- أو من الرابط الذي قدمته: استخرج الجزء بين `:` و `@`
+
+⚠️ **تنبيه أمني:** لا تضع `CLOUDINARY_API_SECRET` داخل Git/GitHub. استخدمه فقط داخل ملف `.env` على الخادم.
 
 ---
 
@@ -74,7 +76,7 @@ cloudinary://<your_api_key>:<your_api_secret>@dkj9e4low
 # Cloudinary Configuration
 CLOUDINARY_CLOUD_NAME=dkj9e4low
 CLOUDINARY_API_KEY=<your_api_key_here>
-CLOUDINARY_API_SECRET=chGLiQqu345Xu9RBrX4vypxQ3kA
+CLOUDINARY_API_SECRET=<your_api_secret_here>
 ```
 
 ⚠️ **مهم:** استبدل `<your_api_key_here>` بالمفتاح الفعلي من لوحة التحكم.

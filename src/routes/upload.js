@@ -6,7 +6,9 @@ const {
   uploadAvatarImage,
   uploadStory,
   uploadCoverImage,
-  deleteFile
+  deleteFile,
+  uploadVideoChunk,
+  completeVideoUpload
 } = require('../controllers/uploadController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -88,9 +90,9 @@ router.delete('/:fileId', protect, deleteFile);
 
 
 // رفع جزء من فيديو (chunk)
-router.post('/video/chunk', extendTimeout, require('../controllers/uploadController').uploadVideoChunk);
+router.post('/video/chunk', protect, extendTimeout, upload.chunk, handleMulterErrors, uploadVideoChunk);
 
 // إكمال رفع الفيديو وتجميع الأجزاء
-router.post('/video/complete', extendTimeout, require('../controllers/uploadController').completeVideoUpload);
+router.post('/video/complete', protect, extendTimeout, completeVideoUpload);
 
 module.exports = router;

@@ -97,6 +97,16 @@ const coverUpload = multer({
   }
 });
 
+// Upload configuration for chunked video uploads (أجزاء صغيرة)
+const chunkUpload = multer({
+  storage: memoryStorage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per chunk حد أعلى للأمان
+    files: 1
+  }
+});
+
 // Export different upload configurations
 module.exports = {
   single: postUpload.single('file'),
@@ -104,5 +114,6 @@ module.exports = {
   avatar: avatarUpload.single('avatar'),
   media: postUpload.array('media', 5), // Max 5 files (تم تقليله من 10)
   storyMedia: storyUpload.single('file'),
-  cover: coverUpload.single('cover')
+  cover: coverUpload.single('cover'),
+  chunk: chunkUpload.single('chunk')
 };
