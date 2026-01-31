@@ -1,3 +1,99 @@
+// ================== رفع فيديو مجزأ (Chunked Video Upload) ==================
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { uploadVideo } = require('../services/storageService');
+
+// مجلد مؤقت لتخزين الأجزاء
+const CHUNKS_DIR = path.join(os.tmpdir(), 'mehnati_video_chunks');
+if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
+
+// رفع جزء واحد من الفيديو
+exports.uploadVideoChunk = async (req, res) => {
+  try {
+    // استخدم formidable أو multer memory
+    const uploadId = req.body.uploadId;
+    const chunkIndex = req.body.chunkIndex;
+    const totalChunks = req.body.totalChunks;
+    const chunkFile = req.files?.chunk || req.file || (req.body.chunk && req.body.chunk.buffer);
+    // دعم multer memory
+    let chunkBuffer;
+    if (chunkFile && chunkFile.buffer) {
+      chunkBuffer = chunkFile.buffer;
+    } else if (chunkFile && chunkFile.data) {
+      chunkBuffer = chunkFile.data;
+    } else if (req.file && req.file.buffer) {
+      chunkBuffer = req.file.buffer;
+    } else if (req.body.chunk && Buffer.isBuffer(req.body.chunk)) {
+      chunkBuffer = req.body.chunk;
+    } else {
+      return res.status(400).json({ success: false, message: 'لم يتم إرسال جزء الفيديو بشكل صحيح' });
+    }
+
+    if (!uploadId || chunkIndex === undefined || !totalChunks) {
+      return res.status(400).json({ success: false, message: 'بيانات chunk ناقصة' });
+    }
+
+    const uploadDir = path.join(CHUNKS_DIR, uploadId);
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const chunkPath = path.join(uploadDir, `chunk_${chunkIndex}`);
+    fs.writeFileSync(chunkPath, chunkBuffer);
+
+    return res.status(200).json({ success: true, message: `تم رفع الجزء ${chunkIndex + 1} من ${totalChunks}` });
+  } catch (error) {
+    console.error('❌ خطأ في رفع جزء الفيديو:', error);
+    return res.status(500).json({ success: false, message: 'فشل رفع جزء الفيديو', error: error.message });
+  }
+};
+
+// تجميع الأجزاء ورفع الفيديو النهائي
+exports.completeVideoUpload = async (req, res) => {
+  try {
+    const { uploadId, filename, mimetype } = req.body;
+    if (!uploadId) {
+      return res.status(400).json({ success: false, message: 'معرف الرفع (uploadId) مفقود' });
+    }
+    const uploadDir = path.join(CHUNKS_DIR, uploadId);
+    if (!fs.existsSync(uploadDir)) {
+      return res.status(400).json({ success: false, message: 'لم يتم العثور على أجزاء الفيديو' });
+    }
+    // ترتيب الأجزاء وتجميعها
+    const chunkFiles = fs.readdirSync(uploadDir)
+      .filter(f => f.startsWith('chunk_'))
+      .sort((a, b) => {
+        const aIdx = parseInt(a.split('_')[1]);
+        const bIdx = parseInt(b.split('_')[1]);
+        return aIdx - bIdx;
+      });
+    if (chunkFiles.length === 0) {
+      return res.status(400).json({ success: false, message: 'لا توجد أجزاء فيديو مرفوعة' });
+    }
+    // دمج الأجزاء في ملف واحد مؤقت
+    const tempVideoPath = path.join(uploadDir, 'merged_video');
+    const writeStream = fs.createWriteStream(tempVideoPath);
+    for (const chunkFile of chunkFiles) {
+      const chunkPath = path.join(uploadDir, chunkFile);
+      const data = fs.readFileSync(chunkPath);
+      writeStream.write(data);
+    }
+    writeStream.end();
+    await new Promise(resolve => writeStream.on('finish', resolve));
+
+    // رفع الفيديو النهائي إلى التخزين
+    const videoBuffer = fs.readFileSync(tempVideoPath);
+    const safeFilename = filename || `video_${uploadId}.mp4`;
+    const safeMimetype = mimetype || 'video/mp4';
+    const result = await uploadVideo(videoBuffer, safeFilename, safeMimetype);
+
+    // حذف الأجزاء المؤقتة
+    fs.rmSync(uploadDir, { recursive: true, force: true });
+
+    return res.status(200).json({ success: true, message: 'تم رفع وتجميع الفيديو بنجاح', file: result.file });
+  } catch (error) {
+    console.error('❌ خطأ في تجميع الفيديو:', error);
+    return res.status(500).json({ success: false, message: 'فشل تجميع الفيديو', error: error.message });
+  }
+};
 const {
   uploadMedia,
   uploadAvatar,
